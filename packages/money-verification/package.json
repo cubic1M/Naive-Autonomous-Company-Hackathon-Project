@@ -12,7 +12,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "fixture:exif": "node scripts/make-exif-fixture.mjs"
+    "fixture:exif": "node scripts/make-exif-fixture.mjs",
+    "import:notaries": "vite-node scripts/import-notaries.ts --"
   },
   "engines": {
     "node": ">=20"
