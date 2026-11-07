@@ -14,7 +14,7 @@ import { DEFAULTS, type Env } from '../src/env.js';
 import { findPeopleDetailed } from '../src/find.js';
 import { HttpMonid, type Monid } from '../src/monid.js';
 import { InMemoryRepo } from '../src/repo/memory.js';
-import { NaiveEmailSender, RecordingSender, type EmailSender } from '../src/senders.js';
+import { MonidEmailSender, NaiveEmailSender, RecordingSender, type EmailSender } from '../src/senders.js';
 import { FakeMonid } from '../test/helpers/fakeMonid.js';
 
 const e = process.env;
@@ -27,8 +27,10 @@ if (liveSearch && !monidKey) {
   console.error('LIVE_SEARCH=1 needs MONID_API_KEY. Run without LIVE_SEARCH for the free demo.');
   process.exit(1);
 }
-if (send && (!testEmail || !e.NAIVE_API_KEY || !e.NAIVE_OPS_IDENTITY_ID || !e.NAIVE_OPS_INBOX_ID)) {
-  console.error('SEND=1 needs TEST_EMAIL, NAIVE_API_KEY, NAIVE_OPS_IDENTITY_ID and NAIVE_OPS_INBOX_ID.');
+const agentmailInbox = e.AGENTMAIL_INBOX; // e.g. operis-ops@agentmail.to (sent through Monid)
+const naiveReady = Boolean(e.NAIVE_API_KEY && e.NAIVE_OPS_IDENTITY_ID && e.NAIVE_OPS_INBOX_ID);
+if (send && (!testEmail || !(naiveReady || (agentmailInbox && monidKey)))) {
+  console.error('SEND=1 needs TEST_EMAIL and either AGENTMAIL_INBOX + MONID_API_KEY, or NAIVE_API_KEY + NAIVE_OPS_IDENTITY_ID + NAIVE_OPS_INBOX_ID.');
   process.exit(1);
 }
 
@@ -84,9 +86,11 @@ function sampleMonid(): Monid {
 }
 const monid: Monid = liveSearch ? new HttpMonid(monidKey!, env.MONID_BASE_URL) : sampleMonid();
 const recorder = new RecordingSender();
-const email: EmailSender = send
-  ? new NaiveEmailSender({ apiKey: env.NAIVE_API_KEY!, baseUrl: env.NAIVE_BASE_URL, identityId: env.NAIVE_OPS_IDENTITY_ID!, inboxId: env.NAIVE_OPS_INBOX_ID! })
-  : recorder;
+const email: EmailSender = !send
+  ? recorder
+  : naiveReady
+    ? new NaiveEmailSender({ apiKey: env.NAIVE_API_KEY!, baseUrl: env.NAIVE_BASE_URL, identityId: env.NAIVE_OPS_IDENTITY_ID!, inboxId: env.NAIVE_OPS_INBOX_ID! })
+    : new MonidEmailSender(new HttpMonid(monidKey!, env.MONID_BASE_URL), agentmailInbox!);
 
 console.log(`\n== 1. find_people (${liveSearch ? 'LIVE Monid search' : 'saved sample data, free'}) ==`);
 const found = await findPeopleDetailed({ job_id: 'demo-job', limit: 10 }, { repo, monid, env });
