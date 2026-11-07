@@ -62,6 +62,7 @@ interface RawRun {
   providerResponse?: { httpStatus?: number };
   output?: unknown;
   cost?: { value?: number };
+  price?: { amount?: { value?: number } };
 }
 
 function toResult(raw: RawRun): MonidRunResult {
@@ -119,6 +120,19 @@ export class HttpMonid implements Monid {
       }
       await new Promise((r) => setTimeout(r, this.pollMs));
       raw = await this.request('GET', `/v1/runs/${encodeURIComponent(raw.runId)}`);
+    }
+    // A synchronous POST /v1/run response carries `billing`, not `cost`; the run record has the real charge.
+    // Fetch it (free) so spend caps are enforced on actual cost, never on $0.
+    if (raw.cost?.value === undefined && raw.runId) {
+      try {
+        const full = await this.request('GET', `/v1/runs/${encodeURIComponent(raw.runId)}`);
+        raw = { ...raw, cost: full.cost ?? raw.cost };
+      } catch {
+        // fall through: toResult uses the price estimate below
+      }
+    }
+    if (raw.cost?.value === undefined) {
+      raw = { ...raw, cost: { value: raw.price?.amount?.value ?? 0 } };
     }
     return toResult(raw);
   }

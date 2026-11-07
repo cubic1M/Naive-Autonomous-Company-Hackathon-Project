@@ -20,6 +20,20 @@ find.ts                              blast.ts
                          Human clicks link → apps/web (Dora) → accept → apps/api (Edwin)
 ```
 
+## Status (built)
+
+`find_people` and `send_blast` are implemented and tested (107 tests; Postgres tests run against a real DB with `TEST_DATABASE_URL`).
+
+```bash
+cd services/outreach && npm install && npm test
+MONID_API_KEY=... npx tsx scripts/find-live.ts   # real search for a sample YC job, capped at $0.10
+```
+
+- Live result for the sample job "Hold a sign near the YC office": real SF event-staffing businesses 0.2–2.4 km away, with emails found on their sites; ~$0.09 per call.
+- Email lookup order: crawl home, `/contact` and `/contact-us` ($0.001 each), then Hunter ($0.0245, published emails only). Known contacts are reused for free.
+- **Sending is dry-run by default** (`OUTREACH_LIVE=false`).
+- Naïve integration plan (awaiting approval): [`docs/NAIVE.md`](docs/NAIVE.md). Scraper catalog: [`docs/SOURCES.md`](docs/SOURCES.md).
+
 ---
 
 ## Tool 1: `find_people`

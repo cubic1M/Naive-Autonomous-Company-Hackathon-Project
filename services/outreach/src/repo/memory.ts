@@ -99,6 +99,11 @@ export class InMemoryRepo implements Repo {
     return ids.map((id) => this.people.get(id)).filter((p): p is Person => Boolean(p));
   }
 
+  async getByDedupeKeys(keys: string[]): Promise<Person[]> {
+    const set = new Set(keys);
+    return [...this.people.values()].filter((p) => set.has(p.dedupe_key));
+  }
+
   async findByContact(contact: { email?: string; phone?: string }): Promise<Person[]> {
     const email = normEmail(contact.email ?? null);
     const phone = toE164(contact.phone ?? null);

@@ -141,6 +141,14 @@ export class PostgresRepo implements Repo {
     return ids.map((id) => byId.get(id)).filter((p): p is Person => Boolean(p));
   }
 
+  async getByDedupeKeys(keys: string[]): Promise<Person[]> {
+    if (keys.length === 0) return [];
+    const rows = await this.sql<Row[]>`
+      select ${this.sql.unsafe(PERSON_COLS)} from workers w join worker_profiles p on p.worker_id = w.id
+      where p.dedupe_key in ${this.sql(keys)}`;
+    return rows.map(toPerson);
+  }
+
   async findByContact(contact: { email?: string; phone?: string }): Promise<Person[]> {
     const email = normEmail(contact.email ?? null);
     const phone = toE164(contact.phone ?? null);

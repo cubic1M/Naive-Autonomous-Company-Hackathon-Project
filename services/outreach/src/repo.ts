@@ -19,6 +19,9 @@ export interface Repo {
 
   getPeople(ids: string[]): Promise<Person[]>;
 
+  /** Already-saved people by dedupe key (lets find_people skip paid enrichment for known contacts). */
+  getByDedupeKeys(keys: string[]): Promise<Person[]>;
+
   /** People matching an email or phone (normalized). Used to handle inbound replies. */
   findByContact(contact: { email?: string; phone?: string }): Promise<Person[]>;
 
