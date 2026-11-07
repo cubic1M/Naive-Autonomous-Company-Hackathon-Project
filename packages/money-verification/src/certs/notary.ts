@@ -274,8 +274,11 @@ export interface VerifyNotaryInput {
   jobDate: Date;
 }
 
+/** verifyNotary always reaches a decision: 'pending' is not a possible outcome. */
+export type NotaryVerificationStatus = Exclude<VerificationStatus, 'pending'>;
+
 export interface VerifyNotaryResult {
-  status: VerificationStatus;
+  status: NotaryVerificationStatus;
   reasons: string[];
   record: NotaryRecord | null;
   nameMatch: NameMatch;
@@ -310,7 +313,7 @@ export async function verifyNotary(
   const commission = normalizeCommissionNumber(input.commissionNumber);
   const record = commission === '' ? null : await deps.repo.getNotary(commission);
 
-  let status: VerificationStatus;
+  let status: NotaryVerificationStatus;
   let reasons: string[];
   let nameMatch: NameMatch = 'none';
 
