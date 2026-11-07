@@ -1,0 +1,666 @@
+{
+  "search_metadata": {
+    "id": "c015bbf1b981cc8db43b3219",
+    "status": "Success",
+    "created_at": "2026-11-07 23:06:01 UTC",
+    "processed_at": "2026-11-07 23:06:03 UTC",
+    "total_time_taken": 1.801,
+    "google_maps_url": "https://www.google.com/maps/search/event%20staffing/@37.7749,-122.4194,13z/?hl=en"
+  },
+  "search_parameters": {
+    "q": "event staffing",
+    "type": "search",
+    "hl": "en",
+    "google_domain": "google.com",
+    "ll": "@37.7749,-122.4194,13z"
+  },
+  "search_information": {
+    "local_results_state": "Results for exact spelling",
+    "query_displayed": "event staffing"
+  },
+  "local_results": [
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 1,
+      "title": "Kinetic Events Staffing",
+      "place_id": "ChIJp_mzSX2AhYARGhtUhxWC-kw",
+      "data_id": "0x8085807d49b3f9a7:0x4cfa821587541b1a",
+      "data_cid": "5546888920036547354",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x8085807d49b3f9a7:0x4cfa821587541b1a",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.784219,-122.40617599999999,17z/data=!4m2!3m1!1s0x8085807d49b3f9a7%3A0x4cfa821587541b1a?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.784219,
+        "longitude": -122.40617599999999
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJp_mzSX2AhYARGhtUhxWC-kw",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/1tfch_0j",
+      "rating": 4.4,
+      "reviews": 35,
+      "type": "Event management company",
+      "types": [
+        "Event management company",
+        "Temp agency"
+      ],
+      "type_id": "event_management_company",
+      "type_ids": [
+        "event_management_company",
+        "temp_agency"
+      ],
+      "address": "845 Market St Ste 450, San Francisco, CA 94103",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "9 AM–6 PM",
+        "tuesday": "9 AM–6 PM",
+        "wednesday": "9 AM–6 PM",
+        "thursday": "9 AM–6 PM",
+        "friday": "9 AM–6 PM",
+        "saturday": "Closed",
+        "sunday": "Closed"
+      },
+      "phone": "(888) 351-4126",
+      "website": "https://kineticevents.com/?utm_source=sf&utm_medium=gmb&utm_campaign=gmb&utm_id=sf",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLe60BpqMHrqPtevtAv-FXvw5jt5Op9l9g0tNTTtUp0e8rl1vp764v1se8M-sE1INVNtJPpFRpw6BixoSFkXckxZfLkkbhcMgg3Sm9xna0MrUX2irrFK7Nyl3ZpYHvUI9VsHl0zYDLQU2eM=w129-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLe60BpqMHrqPtevtAv-FXvw5jt5Op9l9g0tNTTtUp0e8rl1vp764v1se8M-sE1INVNtJPpFRpw6BixoSFkXckxZfLkkbhcMgg3Sm9xna0MrUX2irrFK7Nyl3ZpYHvUI9VsHl0zYDLQU2eM=w129-h86-k-no",
+      "extensions": [
+        {
+          "accessibility": [
+            "Wheelchair accessible entrance"
+          ]
+        }
+      ],
+      "open_state": "Closed · Opens 9 AM Mon",
+      "hours": "Closed · Opens 9 AM Mon"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 2,
+      "title": "Julia Valler Event Staffing",
+      "place_id": "ChIJJZMPR5uBhYAR9GbPJJiHjYE",
+      "data_id": "0x8085819b470f9325:0x818d879824cf66f4",
+      "data_cid": "9335266690131257076",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x8085819b470f9325:0x818d879824cf66f4",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.787766999999995,-122.40612039999999,17z/data=!4m2!3m1!1s0x8085819b470f9325%3A0x818d879824cf66f4?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.787766999999995,
+        "longitude": -122.40612039999999
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJJZMPR5uBhYAR9GbPJJiHjYE",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11mc9y4krs",
+      "rating": 5,
+      "reviews": 5,
+      "type": "Temp agency",
+      "types": [
+        "Temp agency",
+        "Caterer",
+        "Event management company",
+        "Event planner",
+        "Marketing agency",
+        "Recruiter",
+        "Talent agency"
+      ],
+      "type_id": "temp_agency",
+      "type_ids": [
+        "temp_agency",
+        "caterer",
+        "event_management_company",
+        "event_planner",
+        "marketing_agency",
+        "recruiter",
+        "talent_agency"
+      ],
+      "address": "166 Geary St #1500, San Francisco, CA 94108",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "9 AM–5:30 PM",
+        "tuesday": "9:30 AM–5:30 PM",
+        "wednesday": "9 AM–5:30 PM",
+        "thursday": "9 AM–5:30 PM",
+        "friday": "9 AM–5:30 PM",
+        "saturday": "Closed",
+        "sunday": "Closed"
+      },
+      "phone": "(415) 967-6311",
+      "website": "https://juliavaller.com/san-francisco/event-staffing-sf?utm_source=gbp",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9u1pURGkhDE3AQRiRvsQlD5hX6ML-M0QDvqpMeazlixYdFf9d8RXw3dFxXR2ZcnrNlNOagOmabijEguVqd9PFKtGHOPNuF2lq7-ttwuoOWXMAdRI12EyayM0Z_FezpjVQXwHAx2jiOJ1C=w129-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9u1pURGkhDE3AQRiRvsQlD5hX6ML-M0QDvqpMeazlixYdFf9d8RXw3dFxXR2ZcnrNlNOagOmabijEguVqd9PFKtGHOPNuF2lq7-ttwuoOWXMAdRI12EyayM0Z_FezpjVQXwHAx2jiOJ1C=w129-h86-k-no",
+      "open_state": "Closed · Opens 9 AM Mon",
+      "hours": "Closed · Opens 9 AM Mon"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 3,
+      "title": "Premier Staff San Francisco | Event Staffing Agency",
+      "place_id": "ChIJxTzFvF2BhYARz2LAdqj_eiE",
+      "data_id": "0x8085815dbcc53cc5:0x217affa876c062cf",
+      "data_cid": "2412521649422230223",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x8085815dbcc53cc5:0x217affa876c062cf",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.7929116,-122.4052114,17z/data=!4m2!3m1!1s0x8085815dbcc53cc5%3A0x217affa876c062cf?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.7929116,
+        "longitude": -122.4052114
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJxTzFvF2BhYARz2LAdqj_eiE",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11xt3mwjkk",
+      "rating": 3,
+      "reviews": 2,
+      "type": "Event management company",
+      "types": [
+        "Event management company"
+      ],
+      "type_id": "event_management_company",
+      "type_ids": [
+        "event_management_company"
+      ],
+      "address": "650 California St 7th floor, San Francisco, CA 94108",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "9 AM–5:30 PM",
+        "tuesday": "9 AM–5:30 PM",
+        "wednesday": "9 AM–5:30 PM",
+        "thursday": "9 AM–5:30 PM",
+        "friday": "9 AM–5:30 PM",
+        "saturday": "9 AM–5:30 PM",
+        "sunday": "Closed"
+      },
+      "phone": "(212) 943-3333",
+      "website": "https://premierstaff.com/event-staffing-agency-san-francisco/",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeeYdCd_DgIwb3q3aRx77-W2IR9hwoYUlaxOaLLj70ibu_7xK-iR_8YiGO8rt2116OgZ_1iteaYPrXht5LU-eEJiaTZuE827NwnK4zcCCh8pYttq6E_Yp-BBI3qrTjlnbVNHoVGId2R02lh=w86-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeeYdCd_DgIwb3q3aRx77-W2IR9hwoYUlaxOaLLj70ibu_7xK-iR_8YiGO8rt2116OgZ_1iteaYPrXht5LU-eEJiaTZuE827NwnK4zcCCh8pYttq6E_Yp-BBI3qrTjlnbVNHoVGId2R02lh=w86-h86-k-no",
+      "open_state": "Open · Closes 5:30 PM",
+      "hours": "Open · Closes 5:30 PM"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 4,
+      "title": "Attack! Event Staffing, Field Support, & Guerrilla Services",
+      "place_id": "ChIJ0-bXTyh-j4AR9Bq_3DeLUSk",
+      "data_id": "0x808f7e284fd7e6d3:0x29518b37dcbf1af4",
+      "data_cid": "2977313900711582452",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x808f7e284fd7e6d3:0x29518b37dcbf1af4",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.7728616,-122.4099007,17z/data=!4m2!3m1!1s0x808f7e284fd7e6d3%3A0x29518b37dcbf1af4?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.7728616,
+        "longitude": -122.4099007
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJ0-bXTyh-j4AR9Bq_3DeLUSk",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/1tfd760q",
+      "rating": 4.6,
+      "reviews": 11,
+      "type": "Marketing agency",
+      "types": [
+        "Marketing agency"
+      ],
+      "type_id": "marketing_agency",
+      "type_ids": [
+        "marketing_agency"
+      ],
+      "address": "367 9th St Ste b, San Francisco, CA 94103",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "9 AM–5 PM",
+        "tuesday": "9 AM–5 PM",
+        "wednesday": "9 AM–5 PM",
+        "thursday": "9 AM–5 PM",
+        "friday": "9 AM–5 PM",
+        "saturday": "Closed",
+        "sunday": "Closed"
+      },
+      "phone": "(415) 433-1499",
+      "website": "http://attackmarketing.net/",
+      "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=74hi09i0ltMUXktsYrBq_A&cb_client=search.gws-prod.grass&w=86&h=86&yaw=243.83894&pitch=0&thumbfov=100",
+      "source_thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=74hi09i0ltMUXktsYrBq_A&cb_client=search.gws-prod.grass&w=86&h=86&yaw=243.83894&pitch=0&thumbfov=100",
+      "extensions": [
+        {
+          "accessibility": [
+            "Wheelchair accessible parking lot"
+          ]
+        }
+      ],
+      "open_state": "Closed · Opens 9 AM Mon",
+      "hours": "Closed · Opens 9 AM Mon",
+      "unclaimed_listing": true
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 5,
+      "title": "Leads Event Staffing",
+      "place_id": "ChIJM7dSEpCAhYAR7WPOaULvxLk",
+      "data_id": "0x808580901252b733:0xb9c4ef4269ce63ed",
+      "data_cid": "13386087060973970413",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x808580901252b733:0xb9c4ef4269ce63ed",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.7839135,-122.41398869999999,17z/data=!4m2!3m1!1s0x808580901252b733%3A0xb9c4ef4269ce63ed?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.7839135,
+        "longitude": -122.41398869999999
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJM7dSEpCAhYAR7WPOaULvxLk",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11b7kdsyry",
+      "reviews": 4,
+      "type": "Event management company",
+      "types": [
+        "Event management company"
+      ],
+      "type_id": "event_management_company",
+      "type_ids": [
+        "event_management_company"
+      ],
+      "address": "380 Eddy St, San Francisco, CA 94102",
+      "country": "United States",
+      "phone": "(415) 680-1316",
+      "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=uWRTeF2X6cwkPTcUxUzRtw&cb_client=search.gws-prod.grass&w=86&h=86&yaw=332.82883&pitch=0&thumbfov=100",
+      "source_thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=uWRTeF2X6cwkPTcUxUzRtw&cb_client=search.gws-prod.grass&w=86&h=86&yaw=332.82883&pitch=0&thumbfov=100"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 6,
+      "title": "Shift + Alt Events",
+      "place_id": "ChIJ3ezbZzOBhYARIt8TsrT6I6E",
+      "data_id": "0x8085813367dbecdd:0xa123fab4b213df22",
+      "data_cid": "11611399918279974690",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x8085813367dbecdd:0xa123fab4b213df22",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.7791187,-122.3971826,17z/data=!4m2!3m1!1s0x8085813367dbecdd%3A0xa123fab4b213df22?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.7791187,
+        "longitude": -122.3971826
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJ3ezbZzOBhYARIt8TsrT6I6E",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11lyz36fmd",
+      "rating": 5,
+      "reviews": 31,
+      "type": "Event planner",
+      "types": [
+        "Event planner"
+      ],
+      "type_id": "event_planner",
+      "type_ids": [
+        "event_planner"
+      ],
+      "address": "555 4th St, San Francisco, CA 94107",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "Open 24 hours",
+        "tuesday": "Open 24 hours",
+        "wednesday": "Open 24 hours",
+        "thursday": "Open 24 hours",
+        "friday": "Open 24 hours",
+        "saturday": "Open 24 hours",
+        "sunday": "Open 24 hours"
+      },
+      "phone": "(415) 910-4065",
+      "website": "https://www.shiftalt.events/",
+      "reserve_a_table": "https://calendly.com/v-errington-barnes/15_mins?rwg_token=ALcMQYZBvb34W7EQwayXbennGF-jWOcKyndY2lY7oI7nPx4_88RD5joM81P-NiA8r6Ija4hPMeeiAIk6yQvgSG-9Ss5O-XT5wg%3D%3D",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeI07hl1ZtqyGZIoXeAy8Jss5EcdFet76FF0POaOfDaf7c5UG26cSeRoaCStxVh_mFEhl7Xs2wtYki43kPKKBuNEhGdVnOmNTrAX8smr8-itWXWktkrhwaBdvLHnKnIfipIWvxvd5CnSduf=w128-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeI07hl1ZtqyGZIoXeAy8Jss5EcdFet76FF0POaOfDaf7c5UG26cSeRoaCStxVh_mFEhl7Xs2wtYki43kPKKBuNEhGdVnOmNTrAX8smr8-itWXWktkrhwaBdvLHnKnIfipIWvxvd5CnSduf=w128-h86-k-no",
+      "open_state": "Open",
+      "hours": "Open"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 7,
+      "title": "Sky Event Staffing",
+      "place_id": "ChIJHT74PdVXhYARA6dmBVOHPdQ",
+      "data_id": "0x808557d53df83e1d:0xd43d87530566a703",
+      "data_cid": "15293528700262721283",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x808557d53df83e1d:0xd43d87530566a703",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@34.23632,-107.5520708,17z/data=!4m2!3m1!1s0x808557d53df83e1d%3A0xd43d87530566a703?entry=photos",
+      "gps_coordinates": {
+        "latitude": 34.23632,
+        "longitude": -107.5520708
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJHT74PdVXhYARA6dmBVOHPdQ",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11b6hpxw61",
+      "reviews": 38,
+      "type": "Event management company",
+      "types": [
+        "Event management company",
+        "Employment agency",
+        "Service establishment",
+        "Event planner",
+        "Party planner",
+        "Temp agency"
+      ],
+      "type_id": "event_management_company",
+      "type_ids": [
+        "event_management_company",
+        "employment_agency",
+        "service_establishment",
+        "event_planner",
+        "party_planner",
+        "temp_agency"
+      ],
+      "operating_hours": {
+        "monday": "9 AM–6 PM",
+        "tuesday": "9 AM–6 PM",
+        "wednesday": "9 AM–6 PM",
+        "thursday": "9 AM–6 PM",
+        "friday": "9 AM–6 PM",
+        "saturday": "9 AM–6 PM",
+        "sunday": "9 AM–6 PM"
+      },
+      "phone": "(415) 347-1788",
+      "website": "http://www.skyeventstaffing.com/",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeDU-zAJ8DLVUrBOErehfadvi_efuuu5Hu3DVBzcVDNZ_P2rnIOejBz54VFWrQ78FKWTqPTozU9rQ9v98Tg-41JfHve-3DjbR6GbteWXXvfCH7ZiwFveqNKL6dUbLdoKLNPlABY=w128-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLeDU-zAJ8DLVUrBOErehfadvi_efuuu5Hu3DVBzcVDNZ_P2rnIOejBz54VFWrQ78FKWTqPTozU9rQ9v98Tg-41JfHve-3DjbR6GbteWXXvfCH7ZiwFveqNKL6dUbLdoKLNPlABY=w128-h86-k-no",
+      "open_state": "Open · Closes 6 PM",
+      "hours": "Open · Closes 6 PM"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 8,
+      "title": "Action Figures Convention",
+      "place_id": "ChIJA5OA_YWAhYARI-jtKlrq3cA",
+      "data_id": "0x80858085fd809303:0xc0ddea5a2aede823",
+      "data_cid": "13897521698123409443",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x80858085fd809303:0xc0ddea5a2aede823",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.7850854,-122.407624,17z/data=!4m2!3m1!1s0x80858085fd809303%3A0xc0ddea5a2aede823?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.7850854,
+        "longitude": -122.407624
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJA5OA_YWAhYARI-jtKlrq3cA",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/1thmfmgq",
+      "rating": 5,
+      "reviews": 2,
+      "type": "Temp agency",
+      "types": [
+        "Temp agency"
+      ],
+      "type_id": "temp_agency",
+      "type_ids": [
+        "temp_agency"
+      ],
+      "address": "870 Market St #917, San Francisco, CA 94102",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "Closed",
+        "tuesday": "Closed",
+        "wednesday": "Closed",
+        "thursday": "Closed",
+        "friday": "2:11 PM–2:25 AM",
+        "saturday": "2:11 PM–2:25 AM",
+        "sunday": "2:11 PM–2:25 AM"
+      },
+      "phone": "(415) 216-7521",
+      "website": "http://afstaffing.com/",
+      "thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=ySRUcqh0L8WmQWw0Cx9-zw&cb_client=search.gws-prod.grass&w=86&h=86&yaw=28.439104&pitch=0&thumbfov=100",
+      "source_thumbnail": "https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=ySRUcqh0L8WmQWw0Cx9-zw&cb_client=search.gws-prod.grass&w=86&h=86&yaw=28.439104&pitch=0&thumbfov=100",
+      "extensions": [
+        {
+          "accessibility": [
+            "Wheelchair accessible entrance"
+          ]
+        }
+      ],
+      "open_state": "Open · Closes 2:25 AM",
+      "hours": "Open · Closes 2:25 AM",
+      "unclaimed_listing": true
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 9,
+      "title": "Bay Area Event Staffing",
+      "place_id": "ChIJRUY4Dn6AhYARsE4ZlTtg5PA",
+      "data_id": "0x8085807e0e384645:0xf0e4603b95194eb0",
+      "data_cid": "17358104672813534896",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x8085807e0e384645:0xf0e4603b95194eb0",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.878637999999995,-122.42033749999999,17z/data=!4m2!3m1!1s0x8085807e0e384645%3A0xf0e4603b95194eb0?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.878637999999995,
+        "longitude": -122.42033749999999
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJRUY4Dn6AhYARsE4ZlTtg5PA",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11cjs_0119",
+      "rating": 4.3,
+      "reviews": 6,
+      "type": "Employment agency",
+      "types": [
+        "Employment agency",
+        "Catering food and drink supplier",
+        "Service establishment",
+        "Event management company"
+      ],
+      "type_id": "employment_agency",
+      "type_ids": [
+        "employment_agency",
+        "catering_food_and_drink_supplier",
+        "service_establishment",
+        "event_management_company"
+      ],
+      "operating_hours": {
+        "monday": "9 AM–9 PM",
+        "tuesday": "9 AM–9 PM",
+        "wednesday": "9 AM–9 PM",
+        "thursday": "9 AM–9 PM",
+        "friday": "9 AM–9 PM",
+        "saturday": "9 AM–9 PM",
+        "sunday": "9 AM–9 PM"
+      },
+      "phone": "(510) 410-1143",
+      "website": "https://www.bayareaeventstaffing.com/",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLdeqvqjVpb7W-Z60pn3UnsJrUJwtFw7mdrLrCAY-xT-LGwAdcKGTR4hoxV-LG0ceGpArGUJFvvsx8-E_gRHjXjo5ckOjoq8nsWD7wJgbOlxmblWOcnjyjp6bkp5VcxxNoljN6Eg=w152-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLdeqvqjVpb7W-Z60pn3UnsJrUJwtFw7mdrLrCAY-xT-LGwAdcKGTR4hoxV-LG0ceGpArGUJFvvsx8-E_gRHjXjo5ckOjoq8nsWD7wJgbOlxmblWOcnjyjp6bkp5VcxxNoljN6Eg=w152-h86-k-no",
+      "open_state": "Open · Closes 9 PM",
+      "hours": "Open · Closes 9 PM"
+    },
+    {
+      "business_status": "OPERATIONAL",
+      "permanently_closed": false,
+      "temporarily_closed": false,
+      "position": 10,
+      "title": "Legendary Event Staffing and Entertainment",
+      "place_id": "ChIJb17doTPLj4ARNTvP_Gbhcxs",
+      "data_id": "0x808fcb33a1dd5e6f:0x1b73e166fccf3b35",
+      "data_cid": "1978172493790133045",
+      "reviews_link": {
+        "endpoint": "/google/reviews",
+        "queryParams": {
+          "data_id": "0x808fcb33a1dd5e6f:0x1b73e166fccf3b35",
+          "hl": "en"
+        }
+      },
+      "photos_link": "https://www.google.com/maps/place/@37.3709785,-121.8944255,17z/data=!4m2!3m1!1s0x808fcb33a1dd5e6f%3A0x1b73e166fccf3b35?entry=photos",
+      "gps_coordinates": {
+        "latitude": 37.3709785,
+        "longitude": -121.8944255
+      },
+      "place_id_search": {
+        "endpoint": "/google/maps",
+        "queryParams": {
+          "place_id": "ChIJb17doTPLj4ARNTvP_Gbhcxs",
+          "google_domain": "google.com",
+          "hl": "en"
+        }
+      },
+      "provider_id": "/g/11c5f2wzw0",
+      "rating": 4.7,
+      "reviews": 55,
+      "type": "Temp agency",
+      "types": [
+        "Temp agency",
+        "Bartending school",
+        "Cooking class",
+        "Employment agency",
+        "Employment center",
+        "Event management company",
+        "Event planner",
+        "Party equipment rental service",
+        "Recruiter",
+        "Training center"
+      ],
+      "type_id": "temp_agency",
+      "type_ids": [
+        "temp_agency",
+        "bartending_school",
+        "cooking_class",
+        "employment_agency",
+        "employment_center",
+        "event_management_company",
+        "event_planner",
+        "party_equipment_rental_service",
+        "recruiter",
+        "training_center"
+      ],
+      "address": "848 E Gish Rd #1, San Jose, CA 95112",
+      "country": "United States",
+      "operating_hours": {
+        "monday": "Open 24 hours",
+        "tuesday": "Open 24 hours",
+        "wednesday": "Open 24 hours",
+        "thursday": "Open 24 hours",
+        "friday": "Open 24 hours",
+        "saturday": "Open 24 hours",
+        "sunday": "Open 24 hours"
+      },
+      "phone": "(408) 836-0180",
+      "website": "https://thelegendarystaff.com/",
+      "thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLdmlUYgIYX1_6VQ1cyvH5TkSCnZSpd-rrrFSIxusuQFhd-RSy6eWgMhrIkqMDyQuEqNcgDYv0V2zBrdI7yORUICqO5OJqfYuLWqfY0qPwBrjp90MPnrUXhuTsThjD9bCj3NIz0=w179-h86-k-no",
+      "source_thumbnail": "https://lh3.googleusercontent.com/grass-cs/AABkmLdmlUYgIYX1_6VQ1cyvH5TkSCnZSpd-rrrFSIxusuQFhd-RSy6eWgMhrIkqMDyQuEqNcgDYv0V2zBrdI7yORUICqO5OJqfYuLWqfY0qPwBrjp90MPnrUXhuTsThjD9bCj3NIz0=w179-h86-k-no",
+      "extensions": [
+        {
+          "accessibility": [
+            "Wheelchair accessible entrance",
+            "Wheelchair accessible parking lot"
+          ]
+        }
+      ],
+      "open_state": "Open",
+      "hours": "Open"
+    }
+  ],
+  "billed": true
+}

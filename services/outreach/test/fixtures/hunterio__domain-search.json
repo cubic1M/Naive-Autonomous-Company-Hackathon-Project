@@ -1,0 +1,184 @@
+{
+  "data": {
+    "domain": "kineticevents.com",
+    "disposable": false,
+    "webmail": false,
+    "accept_all": false,
+    "pattern": "{first}",
+    "organization": "Kinetic Events Staffing",
+    "linked_domains": [],
+    "emails": [
+      {
+        "value": "brian@kineticevents.com",
+        "type": "personal",
+        "source_type": "generated",
+        "provenance": "inferred",
+        "confidence": 98,
+        "sources": [
+          {
+            "domain": "linkedin.com",
+            "uri": "https://www.google.com/search?q=site:linkedin.com%20brian%20lillquist%20kineticevents",
+            "extracted_on": "2025-08-09",
+            "last_seen_on": "2026-09-04",
+            "still_on_page": true
+          },
+          {
+            "domain": "blog.iavm.org",
+            "uri": "https://blog.iavm.org/welcome-to-our-newest-members-49",
+            "extracted_on": "2026-06-01",
+            "last_seen_on": "2026-06-01",
+            "still_on_page": true
+          }
+        ],
+        "first_name": "Brian",
+        "last_name": "Lillquist",
+        "position": "Co-Founder",
+        "position_raw": "Co-Founder and President",
+        "seniority": "executive",
+        "department": "executive",
+        "decision_maker": true,
+        "linkedin": "https://www.linkedin.com/in/brianlillquist",
+        "twitter": null,
+        "phone_number": null,
+        "verification": {
+          "date": "2026-10-28",
+          "status": "valid"
+        }
+      },
+      {
+        "value": "kate@kineticevents.com",
+        "type": "personal",
+        "source_type": "generated",
+        "provenance": "inferred",
+        "confidence": 95,
+        "sources": [
+          {
+            "domain": "linkedin.com",
+            "uri": "https://www.google.com/search?q=site:linkedin.com%20kate%20schrodt%20kineticevents",
+            "extracted_on": "2026-04-29",
+            "last_seen_on": "2026-09-05",
+            "still_on_page": true
+          }
+        ],
+        "first_name": "Kate",
+        "last_name": "Schrodt",
+        "position": "Director of Operations",
+        "position_raw": "Director of Operations",
+        "seniority": "executive",
+        "department": "operations",
+        "decision_maker": true,
+        "linkedin": "https://www.linkedin.com/in/kate-schrodt-427790246",
+        "twitter": null,
+        "phone_number": null,
+        "verification": {
+          "date": "2026-10-19",
+          "status": "valid"
+        }
+      },
+      {
+        "value": "karen@kineticevents.com",
+        "type": "personal",
+        "source_type": "generated",
+        "provenance": "inferred",
+        "confidence": 95,
+        "sources": [
+          {
+            "domain": "linkedin.com",
+            "uri": "https://www.google.com/search?q=site:linkedin.com%20karen%20vistan%20kineticevents",
+            "extracted_on": "2026-10-29",
+            "last_seen_on": "2026-10-29",
+            "still_on_page": true
+          }
+        ],
+        "first_name": "Karen",
+        "last_name": "Vistan",
+        "position": "Accounts Payable Specialist",
+        "position_raw": "Accounts Payable & Receivables Specialist",
+        "seniority": "senior",
+        "department": "finance & accounting",
+        "decision_maker": false,
+        "linkedin": "https://www.linkedin.com/in/karen-vistan-9409055a",
+        "twitter": null,
+        "phone_number": null,
+        "verification": {
+          "date": null,
+          "status": null
+        }
+      },
+      {
+        "value": "joshua@kineticevents.com",
+        "type": "personal",
+        "source_type": "generated",
+        "provenance": "inferred",
+        "confidence": 95,
+        "sources": [
+          {
+            "domain": "linkedin.com",
+            "uri": "https://www.google.com/search?q=site:linkedin.com%20joshua%20silverstein%20kineticevents",
+            "extracted_on": "2026-10-01",
+            "last_seen_on": "2026-10-01",
+            "still_on_page": true
+          }
+        ],
+        "first_name": "Joshua",
+        "last_name": "Silverstein",
+        "position": "Project Manager",
+        "position_raw": "Project Manager",
+        "seniority": "senior",
+        "department": "operations",
+        "decision_maker": false,
+        "linkedin": "https://www.linkedin.com/in/joshua-silverstein-b41aba233",
+        "twitter": null,
+        "phone_number": null,
+        "verification": {
+          "date": null,
+          "status": null
+        }
+      },
+      {
+        "value": "john@kineticevents.com",
+        "type": "personal",
+        "source_type": "generated",
+        "provenance": "inferred",
+        "confidence": 95,
+        "sources": [
+          {
+            "domain": "linkedin.com",
+            "uri": "https://www.google.com/search?q=site:linkedin.com%20john%20kamps%20kineticevents",
+            "extracted_on": "2026-09-27",
+            "last_seen_on": "2026-09-27",
+            "still_on_page": true
+          }
+        ],
+        "first_name": "John",
+        "last_name": "Kamps",
+        "position": "Event Staff",
+        "position_raw": "Event Staff",
+        "seniority": null,
+        "department": "operations",
+        "decision_maker": false,
+        "linkedin": "https://www.linkedin.com/in/john-kamps-1166ba29b",
+        "twitter": null,
+        "phone_number": null,
+        "verification": {
+          "date": null,
+          "status": null
+        }
+      }
+    ]
+  },
+  "meta": {
+    "results": 11,
+    "results_approximate": false,
+    "limit": 5,
+    "offset": 0,
+    "params": {
+      "domain": "kineticevents.com",
+      "company": null,
+      "type": null,
+      "seniority": null,
+      "department": null,
+      "decision_maker": null
+    }
+  }
+}

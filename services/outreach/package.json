@@ -1,0 +1,28 @@
+{
+  "name": "@operis/outreach",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operis outreach: find_people (Monid scraping) and send_blast (email/SMS with signed job links). Owner: Andrew.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "find": "tsx scripts/find-live.ts"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "postgres": "^3.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

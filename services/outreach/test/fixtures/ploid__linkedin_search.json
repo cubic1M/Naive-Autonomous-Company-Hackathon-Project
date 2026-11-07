@@ -1,0 +1,22 @@
+{
+  "data": {
+    "items": [
+      {
+        "socialId": "c654464035",
+        "publicIdentifier": "notary-public-a9540934",
+        "profileUrl": "https://linkedin.com/in/notary-public-a9540934",
+        "fullName": "Notary Public",
+        "headline": "Notary Public — notary public",
+        "location": "San Francisco, California, United States",
+        "industry": null,
+        "profilePictureUrl": null,
+        "connectionDegree": null
+      }
+    ],
+    "cursor": null,
+    "total": 1
+  },
+  "meta": {
+    "cursor": null
+  }
+}
