@@ -37,7 +37,8 @@ export interface ContractTools {
   escalate(input: { job_id: string; proof_id: string; reason: string }): Promise<{ job_id: string; status: 'escalated' }>;
   capture_payment(input: { job_id: string }): Promise<{ job_id: string; captured_usd: number }>;
   payout(input: { job_id: string }): Promise<PayoutOut>;
-  refund(input: { job_id: string; reason: string }): Promise<{ job_id: string; status: 'refunded'; amount_usd: number }>;
+  /** released_hold is set when nothing had been captured yet and the authorization was cancelled instead. */
+  refund(input: { job_id: string; reason: string }): Promise<{ job_id: string; status: 'refunded'; amount_usd: number; released_hold?: true }>;
   ledger(input: { since?: string }): Promise<{ revenue_usd: number; payouts_usd: number; fees_usd: number; costs_usd: number; jobs_paid: number }>;
 }
 
@@ -122,6 +123,12 @@ export function createContractTools(deps: ToolDeps): ContractTools {
     },
 
     async refund({ job_id, reason }) {
+      // A rejected or expired job was never captured: release the hold. contracts/states.ts still ends it `refunded`.
+      const escrow = await deps.repo.getEscrow(job_id);
+      if (escrow && (escrow.status === 'pending' || escrow.status === 'authorized')) {
+        await tools.release_escrow({ job_id, reason });
+        return { job_id, status: 'refunded', amount_usd: usd(escrow.amount_cents), released_hold: true };
+      }
       const out = await tools.refund({ job_id, reason });
       return { job_id, status: 'refunded', amount_usd: usd(out.amount_cents) };
     },

@@ -97,6 +97,14 @@ The tool functions validate their own input, so register whatever schema shape y
 - `payout` answers `{ error: 'needs_bank_setup', onboarding_url }` or `{ error: 'over_limit' }`.
 - `ledger.revenue_usd` is everything captured from customers (payouts + fees); `fees_usd` is our share before costs.
 
+## Plugging into `apps/api` (Edwin's registry)
+
+`services/payments/index.ts` and `services/verify/index.ts` export real `ToolImpl`s (contracts/runtime.ts) backed by this package, so `apps/api/src/tools/registry.ts` picks them over the mocks with no other change: `check_proof`, `approve_proof`, `escalate`, `capture_payment`, `payout`, `refund`, `ledger`. `src/api-context.ts` does the binding: `depsFromApiContext(ctx)` builds the deps from the API's postgres.js client and `process.env`, and turns the hooks into `ctx.transition()` calls (`held`, `approved` / `escalated` / `rejected`, `paid`, `refunded`) while mirroring `proofs.status / verifier_score / verifier_notes / reviewed_by` and `workers.jobs_done`, as the mocks did. A refused transition is logged, never thrown.
+
+- `createHold(jobId)` (exported from `services/payments`) is what `request_human` calls through `registry.createHold`; it uses a process-wide Neon pool from `DATABASE_URL`.
+- `stripeWebhook(req, ctx)` (same file) is a drop-in body for `apps/api/src/app/webhooks/stripe/route.ts`: it verifies over the raw body, dedupes on event id, handles all seven events and moves the job to `held` with `stripe_payment_intent`, exactly as the current route does, plus the rest.
+- The shims import `../money-verification/src/index`, whose dependencies live in `services/money-verification/node_modules`: the install step must run `npm ci` there (as for `services/outreach`). They typecheck under bundler resolution; they have not yet been compiled inside the Next app.
+
 ## Hooks (Edwin wires these)
 
 This package never writes the `jobs` table or talks to Naïve. It fires these hooks; the API moves the job state and wakes the right agent.
@@ -147,7 +155,7 @@ No `drizzle-kit push`.
 - `jobs.accepted_at timestamptz`, set when the worker clicks Yes. Without it the capture-time check cannot bound the window and every proof escalates to a human.
 - `proofs.media` rows should carry `sha256` (hex of the file bytes) and `mime` next to `url` / `kind` / `exif` (Dora's upload endpoint can compute both). Without `sha256` the media-reuse check is skipped; without `mime` it is guessed.
 - One `ledger` definition in the repo: ours is a superset of the contract's. Proposal: replace the `ledger` block in `contracts/schema.sql` with the one in our migration, or drop it and let our migration create the table.
-- Register `createContractTools(deps)` for the seven contract names and `createTools(deps)` for the rest (`create_escrow`, `release_escrow`, `release_payout_large`, `settle_job`, `get_proof_review`, `verify_notary`, `check_eligibility`, `get_dispute`, `submit_dispute_evidence`); mount `createStripeWebhookHandler(deps)` at `/webhooks/stripe` with the raw body.
+- Delegate `apps/api/src/app/webhooks/stripe/route.ts` to `stripeWebhook(req, { sql, transition, baseUrl: baseUrl(), log: console.log })` from `@services/payments`, and add `npm ci` for `services/money-verification` to the install step. The seven contract tools are already exported from `services/payments` and `services/verify`; the rest (`create_escrow`, `release_escrow`, `release_payout_large`, `settle_job`, `get_proof_review`, `verify_notary`, `check_eligibility`, `get_dispute`, `submit_dispute_evidence`) are available through `createTools(depsFromApiContext(ctx))` when the registry grows.
 
 ## Stripe dashboard setup (test mode)
 

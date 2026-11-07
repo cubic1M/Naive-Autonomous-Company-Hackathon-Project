@@ -22,6 +22,7 @@ export * from './certs/names.js';
 export * from './certs/notary.js';
 export * from './tools.js';
 export * from './contract-tools.js';
+export * from './api-context.js';
 export type { Repo, LedgerQuery } from './repo.js';
 export { InMemoryRepo } from './repo/memory.js';
 export { PostgresRepo, type SqlClient } from './repo/postgres.js';
