@@ -36,7 +36,8 @@ export function envFromProcess(source: NodeJS.ProcessEnv = process.env): Env {
   return {
     PUBLIC_BASE_URL: PUBLIC_BASE_URL.replace(/\/+$/, ''),
     STRIPE_WEBHOOK_SECRET,
-    DAILY_ESCROW_CAP_CENTS: intOr(source.DAILY_ESCROW_CAP_CENTS, DEFAULT_DAILY_ESCROW_CAP_CENTS),
+    // DAILY_HOLD_CAP_CENTS is the name used in the build spec; the checkpoint's name wins, the alias is accepted.
+    DAILY_ESCROW_CAP_CENTS: intOr(source.DAILY_ESCROW_CAP_CENTS ?? source.DAILY_HOLD_CAP_CENTS, DEFAULT_DAILY_ESCROW_CAP_CENTS),
     PAYOUT_CAP_CENTS: intOr(source.PAYOUT_CAP_CENTS, DEFAULT_PAYOUT_CAP_CENTS),
     VERIFIER_BASE_URL: source.VERIFIER_BASE_URL,
     VERIFIER_API_KEY: source.VERIFIER_API_KEY,

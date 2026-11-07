@@ -33,6 +33,18 @@ const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v));
 const date = (v: unknown): Date | null => (v == null ? null : v instanceof Date ? v : new Date(String(v)));
 const json = <T>(v: unknown, fallback: T): T =>
   v == null ? fallback : typeof v === 'string' ? (JSON.parse(v) as T) : (v as T);
+/**
+ * `date` columns (no time zone). pg hands them back as LOCAL midnight Dates, so rebuild the calendar day as
+ * UTC midnight; a 'YYYY-MM-DD' string (some drivers) is parsed the same way. Keeps comparisons TZ-independent.
+ */
+const dateOnly = (v: unknown): Date | null => {
+  if (v == null) return null;
+  if (v instanceof Date) return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : date(v);
+};
+/** Send a calendar day as 'YYYY-MM-DD': pg would serialise a Date in local time and shift the day west of UTC. */
+const isoDay = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
 function mapJob(r: Row): Job {
   return {
@@ -128,7 +140,7 @@ function mapNotary(r: Row): NotaryRecord {
     county: r.county == null ? null : String(r.county),
     city: r.city == null ? null : String(r.city),
     business_name: r.business_name == null ? null : String(r.business_name),
-    commission_expires: date(r.commission_expires),
+    commission_expires: dateOnly(r.commission_expires),
     raw: json(r.raw, {}),
     imported_at: date(r.imported_at) ?? undefined,
   };
@@ -344,7 +356,7 @@ export class PostgresRepo implements Repo {
          full_name = excluded.full_name, name_normalized = excluded.name_normalized, county = excluded.county,
          city = excluded.city, business_name = excluded.business_name, commission_expires = excluded.commission_expires,
          raw = excluded.raw, imported_at = now()`,
-      [n.commission_number, n.full_name, n.name_normalized, n.county, n.city, n.business_name, n.commission_expires, JSON.stringify(n.raw)],
+      [n.commission_number, n.full_name, n.name_normalized, n.county, n.city, n.business_name, isoDay(n.commission_expires), JSON.stringify(n.raw)],
     );
   }
   async upsertNotaries(records: NotaryRecord[]) {
@@ -362,7 +374,7 @@ export class PostgresRepo implements Repo {
         values.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7}, $${b + 8}::jsonb)`);
         params.push(
           n.commission_number, n.full_name, n.name_normalized, n.county, n.city, n.business_name,
-          n.commission_expires, JSON.stringify(n.raw),
+          isoDay(n.commission_expires), JSON.stringify(n.raw),
         );
       });
       await this.sql.query(
