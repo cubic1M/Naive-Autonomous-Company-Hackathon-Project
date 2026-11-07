@@ -1,7 +1,9 @@
 # services/verify — Cameron
 
-Tools for the **Verifier** agent: `check_proof`, `approve_proof`, `escalate`. Shapes: [contracts/tools.ts](../../contracts/tools.ts).
+Implemented in [`services/money-verification`](../money-verification/README.md) (`src/proof/*`, `src/certs/*`).
 
-- `check_proof` returns **evidence** (GPS distance, timestamp, checklist + confidence). The agent decides.
-- `approve_proof` **enforces** the limits in code: score ≥ 0.85 and within `geofence_m`, else returns an error.
-- Approve → API moves job to `approved` and wakes Finance.
+Verifier tools: `check_proof` (runs the automated review and returns the evidence), `approve_proof`, `escalate`, `get_proof_review`, `verify_notary`, `check_eligibility`. Shapes: `src/tools/schemas.ts`; contract-shaped adapters for `contracts/tools.ts` in `src/contract-tools.ts`.
+
+- Checks in code: geofence (EXIF GPS, device GPS fallback), capture-time window, completeness, media reuse, vision confidence.
+- `approve_proof` enforces the limits: a proof outside the geofence or with reused media can never be approved; confidence < 0.85 needs `override` by a human.
+- Decision → `onProofDecision` → API moves the job and wakes Finance on approved.

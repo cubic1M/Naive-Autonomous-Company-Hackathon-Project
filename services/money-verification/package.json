@@ -1,5 +1,5 @@
 {
-  "name": "@standin/money-verification",
+  "name": "@operis/money-verification",
   "version": "0.1.0",
   "private": true,
   "type": "module",
