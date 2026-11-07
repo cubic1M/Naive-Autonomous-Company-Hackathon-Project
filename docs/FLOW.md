@@ -13,7 +13,7 @@ This document follows one job from request to payout. At each step it shows who 
 flowchart LR
     C["Customer agent<br/>(another autonomous company)"] -->|"MCP: request_human"| API
 
-    subgraph EDMOND["apps/api (Edmond)"]
+    subgraph EDWIN["apps/api (Edwin)"]
         API["MCP server + REST API"]
         WAKE["lib/naive.ts<br/>wake(agent, jobId)"]
         DB[("Postgres<br/>contracts/schema.sql")]
@@ -21,7 +21,7 @@ flowchart LR
         API --> WAKE
     end
 
-    subgraph NAIVE["Naïve (agents/, Edmond)"]
+    subgraph NAIVE["Naïve (agents/, Edwin)"]
         CEO["CEO"] --> OPS["Ops"]
         CEO --> VER["Verifier"]
         CEO --> FIN["Finance"]
@@ -59,18 +59,18 @@ flowchart LR
 
 | # | Step | What happens | Owner | Code lives in | Job status after | Wakes |
 |---|------|--------------|-------|---------------|------------------|-------|
-| 1 | **Request** | Customer agent calls `request_human` | Edmond | `apps/api/src/mcp/public.ts` | `requested` | none |
-| 2 | **Safety check** | Abuse filter rejects or flags the request; borderline cases → founder | Edmond | `apps/api/src/lib/safety.ts` | `requested` or `rejected` | none |
+| 1 | **Request** | Customer agent calls `request_human` | Edwin | `apps/api/src/mcp/public.ts` | `requested` | none |
+| 2 | **Safety check** | Abuse filter rejects or flags the request; borderline cases → founder | Edwin | `apps/api/src/lib/safety.ts` | `requested` or `rejected` | none |
 | 3 | **Hold payment** | Stripe Checkout with manual capture; the API returns `escrow_url` | Cameron | `services/payments/` | `held` (after the Stripe webhook) | **CEO** |
-| 4 | **Plan** | CEO puts a card on the board and assigns it to Ops | Edmond (prompt) | `agents/prompts/ceo.md` | `held` | **Ops** (via the board) |
+| 4 | **Plan** | CEO puts a card on the board and assigns it to Ops | Edwin (prompt) | `agents/prompts/ceo.md` | `held` | **Ops** (via the board) |
 | 5 | **Find people** | Ops calls `find_people(job_id)` → ranked candidates from public sources | Andrew | `services/outreach/find.ts` | `outreach` | none |
 | 6 | **Reach out** | Ops calls `send_blast(job_id, candidate_ids)` → email/SMS with a signed job link | Andrew | `services/outreach/blast.ts` | `outreach` | none |
 | 7 | **Job page** | The human opens the link and sees the task, pay and location; clicks Yes or No | Dora | `apps/web/` → `/j/[token]` | `accepted` (first yes wins) | **Ops** |
-| 8 | **Do the job + proof** | The human uploads photos, video or files with GPS and a timestamp | Dora (UI), Edmond (endpoint) | `apps/web/` → `/j/[token]/proof`, `apps/api/src/routes/proof.ts` | `proof_submitted` | **Verifier** |
-| 9 | **Verify** | Verifier calls `check_proof` → evidence; then decides `approve_proof` or `escalate` | Cameron (tools), Edmond (prompt) | `services/verify/`, `agents/prompts/verifier.md` | `approved` / `escalated` / `rejected` | **Finance** (if approved) |
+| 8 | **Do the job + proof** | The human uploads photos, video or files with GPS and a timestamp | Dora (UI), Edwin (endpoint) | `apps/web/` → `/j/[token]/proof`, `apps/api/src/routes/proof.ts` | `proof_submitted` | **Verifier** |
+| 9 | **Verify** | Verifier calls `check_proof` → evidence; then decides `approve_proof` or `escalate` | Cameron (tools), Edwin (prompt) | `services/verify/`, `agents/prompts/verifier.md` | `approved` / `escalated` / `rejected` | **Finance** (if approved) |
 | 10 | **Charge + pay** | Finance calls `capture_payment` then `payout`; the worker sets up a bank account on their first payout | Cameron (tools), Dora (payout screen) | `services/payments/`, `apps/web/` → `/payout` | `paid` | none |
-| 11 | **Report back** | The API calls the customer's `callback_url`; `get_job` returns the proof package | Edmond | `apps/api/src/lib/callbacks.ts` | `paid` | none |
-| 12 | **Book it** | CEO closes the card and books the margin; the daily report runs on a cron schedule | Edmond | `agents/prompts/ceo.md`, `agents/agents.json` | none | **CEO** (cron) |
+| 11 | **Report back** | The API calls the customer's `callback_url`; `get_job` returns the proof package | Edwin | `apps/api/src/lib/callbacks.ts` | `paid` | none |
+| 12 | **Book it** | CEO closes the card and books the margin; the daily report runs on a cron schedule | Edwin | `agents/prompts/ceo.md`, `agents/agents.json` | none | **CEO** (cron) |
 
 ---
 
@@ -80,7 +80,7 @@ flowchart LR
 sequenceDiagram
     autonumber
     participant C as Customer agent
-    participant API as apps/api (Edmond)
+    participant API as apps/api (Edwin)
     participant ST as Stripe (services/payments, Cameron)
     participant N as Naïve agents
     participant OUT as services/outreach (Andrew)
@@ -178,7 +178,7 @@ All wake-ups go through **one helper**, `apps/api/src/lib/naive.ts → wake(agen
 │   └── schema.sql               Postgres tables
 │
 ├── apps/
-│   ├── api/                   ← EDMOND
+│   ├── api/                   ← EDWIN
 │   │   └── src/
 │   │       ├── mcp/public.ts      request_human, get_job, cancel_job (customers)
 │   │       ├── mcp/internal.ts    registers tools from services/* (our agents)
@@ -196,7 +196,7 @@ All wake-ups go through **one helper**, `apps/api/src/lib/naive.ts → wake(agen
 │   ├── verify/                ← CAMERON  check_proof, approve_proof, escalate
 │   └── payments/              ← CAMERON  hold, capture, payout, refund, ledger
 │
-├── agents/                    ← EDMOND
+├── agents/                    ← EDWIN
 │   ├── agents.json              5 agents: model, budget, tools allowed/ask/deny
 │   ├── prompts/*.md             system prompt per agent
 │   └── skills/                  Naïve skills (tool owners write the "how to use my tool" part)
@@ -208,8 +208,8 @@ All wake-ups go through **one helper**, `apps/api/src/lib/naive.ts → wake(agen
 **How a service becomes an agent tool:**
 
 1. The owner implements the function in `services/<area>/`, matching its entry in `contracts/tools.ts`.
-2. Edmond registers it in `apps/api/src/mcp/internal.ts`. Every tool starts as a mock that returns contract-shaped fake data, so agents work from hour one.
-3. Edmond allows it on the right agent in `agents/agents.json`.
+2. Edwin registers it in `apps/api/src/mcp/internal.ts`. Every tool starts as a mock that returns contract-shaped fake data, so agents work from hour one.
+3. Edwin allows it on the right agent in `agents/agents.json`.
 4. The owner adds a call to `scripts/smoke.ts`.
 
 ---
@@ -218,8 +218,8 @@ All wake-ups go through **one helper**, `apps/api/src/lib/naive.ts → wake(agen
 
 | Tool | Called by | Owner | Folder | Naïve permission |
 |---|---|---|---|---|
-| `request_human` / `get_job` / `cancel_job` | Customer agents | Edmond | `apps/api/src/mcp/public.ts` | public |
-| `get_job`, `list_jobs` | All our agents | Edmond | `apps/api` | allow |
+| `request_human` / `get_job` / `cancel_job` | Customer agents | Edwin | `apps/api/src/mcp/public.ts` | public |
+| `get_job`, `list_jobs` | All our agents | Edwin | `apps/api` | allow |
 | `find_people` | Ops | Andrew | `services/outreach` | allow |
 | `send_blast` | Ops | Andrew | `services/outreach` | allow |
 | `check_proof` | Verifier | Cameron | `services/verify` | allow |
@@ -238,7 +238,7 @@ Numeric limits (geofence, $150 cap, confidence) are enforced **in the service co
 
 ```mermaid
 flowchart LR
-    A["1. Agree contracts/<br/>(all, 1h)"] --> B["2. API + mock tools<br/>deployed (Edmond)"]
+    A["1. Agree contracts/<br/>(all, 1h)"] --> B["2. API + mock tools<br/>deployed (Edwin)"]
     B --> C["3. Agents wired to mocks:<br/>full loop on fake data"]
     B --> D["Andrew: real find/blast"]
     B --> E["Cameron: real verify/pay"]

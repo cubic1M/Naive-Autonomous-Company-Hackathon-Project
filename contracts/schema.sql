@@ -38,7 +38,7 @@ create table jobs (
   status text not null default 'requested',
   worker_id uuid references workers,
   stripe_payment_intent text,
-  naive_session_id text,               -- reuse for follow-up wake-ups (Edmond)
+  naive_session_id text,               -- reuse for follow-up wake-ups (Edwin)
   callback_url text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -77,7 +77,7 @@ create table ledger (                   -- Cameron; CEO's P&L is a sum over this
   created_at timestamptz default now()
 );
 
-create table wake_events (              -- idempotent agent wake-ups (Edmond)
+create table wake_events (              -- idempotent agent wake-ups (Edwin)
   job_id uuid references jobs,
   event text,
   naive_session_id text,

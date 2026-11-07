@@ -81,7 +81,7 @@ Example request:
 | **Frontend** | Dora | The worker website: job page (description, pay, certification, Yes/No), upload forms, proof upload with GPS, payout setup screen, plus the live dashboard (map, live job, agent feed, money) |
 | **Scraping & outreach** | Andrew | Finding people near a location, extracting public contact info, sending the "blast" (email / SMS), first-yes-wins logic, the regulars list |
 | **Verification & payouts** | Cameron | Proof checks (GPS distance, timestamp, image/video review with a vision model), approve/escalate flow, Stripe hold → charge → payout to bank |
-| **Naïve agents & MCP** | Edmond | The MCP server and API, database, the five Naïve agents (prompts, budgets, tool permissions, team board), and wiring everything together |
+| **Naïve agents & MCP** | Edwin | The MCP server and API, database, the five Naïve agents (prompts, budgets, tool permissions, team board), and wiring everything together |
 
 **Shared contract:** everyone builds against the same `jobs` / `workers` / `proofs` tables and the job states below. Change them only after agreeing as a team.
 
