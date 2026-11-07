@@ -64,11 +64,11 @@ return { candidates: rank(people, job).slice(0, limit ?? 20) };
 **Output:** `{ sent, skipped_opted_out, outreach_ids }`
 
 1. Skip anyone with `opted_out = true`.
-2. Create a signed token per person and save it in `outreach.token`. The link is `/j/[token]`, which opens Dora's job page.
+2. Create a signed token per person with Edwin's `lib/links.ts` and save it in `outreach.token`. The link is `/j/[token]`, which opens Dora's job page.
 3. Send the message:
    > Hi! Paid gig near you: hold a sign near the YC office, 2 hours, $45. Interested? {link}. Reply STOP to never hear from us.
    - **Email** (from the Naïve `ops@` inbox) for people we found online.
-   - **SMS** (Twilio) **only** for regulars who opted in before.
+   - **SMS** via Edwin's `sendSms(to, body)` (`apps/api/src/lib/messaging.ts`: Mobilerun, falling back to Monid AgentLine) **only** for regulars who opted in before.
 4. Save a row in `outreach` per message: `channel`, `token`, `status = sent`.
 5. Return counts and ids.
 
@@ -87,11 +87,11 @@ return { candidates: rank(people, job).slice(0, limit ?? 20) };
 
 | Connector | Used for | Env var |
 |---|---|---|
-| Monid | All scraping | `MONID_API_KEY` |
+| Monid | All scraping; call Edwin's `monidRun(provider, endpoint, input)` in `lib/monid.ts` | `MONID_API_KEY` (shared by Edwin) |
 | Naïve email (`ops@`) | Outreach emails; replies wake Ops | set up by Edwin |
-| Twilio | SMS to opted-in regulars only | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
+| SMS (Mobilerun, fallback Monid AgentLine) | SMS to opted-in regulars only; call `sendSms()` | set up by Edwin |
 | Postgres | `workers`, `outreach` tables | `DATABASE_URL` |
-| Link signing | Signed `/j/[token]` links | `OUTREACH_TOKEN_SECRET` |
+| Link signing | Signed `/j/[token]` links via `lib/links.ts` | `LINK_SIGNING_SECRET` (Edwin) |
 
 Never commit keys. Put them in `.env` locally and in Vercel env vars for deploys.
 
@@ -100,17 +100,17 @@ Never commit keys. Put them in `.env` locally and in Vercel env vars for deploys
 1. **Public, work-related contact info only.** No buying or digging up personal data.
 2. **Never message anyone who opted out.** `STOP` sets `workers.opted_out = true` permanently.
 3. **Every message includes an opt-out.**
-4. **Don't cold-text strangers.** Email them; SMS is only for regulars who said yes. (US texting law and Twilio trial limits.)
+4. **Don't cold-text strangers.** Email them; SMS is only for regulars who said yes (US texting law).
 5. **Cap Monid spend per job.** Runs are paid per call or per result, so set `maxItems` and limit sources.
 6. **Short tool results** (under 8,000 characters).
 
 ## Build plan
 
-1. **Monid setup.** `npm i -g @monid-ai/cli`, then `monid keys add -k <key> -l main`. Pick real endpoints with `monid discover -q "craigslist gigs"` and `monid inspect -p <provider> -e <endpoint>`. Record the chosen endpoints and inputs in this README.
+1. **Monid setup.** `npm i -g @monid-ai/cli`, then `monid keys add -k <key> -l main` (Edwin shares the team key). Pick real endpoints with `monid discover -q "craigslist gigs"` and `monid inspect -p <provider> -e <endpoint>`. Record the chosen endpoints and inputs in this README.
 2. **Mock `find_people`** that returns fake candidates in the contract shape, so Edwin can wire Ops to it right away.
 3. **`send_blast` to yourself:** email your own address with a real signed link.
 4. **Real `find_people`:** regulars, then Monid sources, then clean, score and save.
-5. **Opt-out handling:** `STOP` replies set `opted_out`.
+5. **Opt-out handling:** Edwin's `/webhooks/mobilerun` sets `opted_out` on SMS `STOP`; handle email unsubscribes in `send_blast`'s link/footer.
 6. **Skill file** for Ops: `agents/skills/worker-sourcing/SKILL.md`.
 7. **Smoke test:** add `find_people` and `send_blast` calls to `scripts/smoke.ts`.
 8. **Seed regulars:** 5–10 friends near YC opted in, for fast demo replies.
@@ -122,7 +122,7 @@ services/outreach/
 ├── README.md     this file
 ├── find.ts       find_people
 ├── blast.ts      send_blast
-├── monid.ts      small Monid client (discover / run / poll)
-├── score.ts      ranking
-└── tokens.ts     signed job links
+└── score.ts      ranking
 ```
+
+Shared clients (`monid.ts`, `messaging.ts`, `links.ts`) live in `apps/api/src/lib/` and are owned by Edwin. See [`docs/plans/edwin.md`](../../docs/plans/edwin.md).
