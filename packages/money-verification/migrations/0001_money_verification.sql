@@ -17,7 +17,7 @@ create index if not exists escrows_status_idx on escrows (status);
 create table if not exists ledger (
   id uuid primary key,
   job_id uuid,
-  kind text not null check (kind in ('escrow_hold','escrow_capture','escrow_release','payout','fee','refund','stripe_cost','kyc_cost')),
+  kind text not null check (kind in ('escrow_hold','escrow_capture','escrow_release','payout','fee','refund','stripe_cost','kyc_cost','dispute_loss')),
   amount_cents integer not null,
   currency text not null default 'usd',
   stripe_ref text,
@@ -26,6 +26,11 @@ create table if not exists ledger (
 );
 create index if not exists ledger_created_at_idx on ledger (created_at);
 create index if not exists ledger_job_id_idx on ledger (job_id);
+create index if not exists ledger_stripe_ref_idx on ledger (stripe_ref);
+-- Re-assert the kind list so a database created from an earlier version of this file picks up new kinds.
+alter table ledger drop constraint if exists ledger_kind_check;
+alter table ledger add constraint ledger_kind_check
+  check (kind in ('escrow_hold','escrow_capture','escrow_release','payout','fee','refund','stripe_cost','kyc_cost','dispute_loss'));
 
 create table if not exists stripe_events (
   event_id text primary key,
@@ -67,3 +72,37 @@ create table if not exists notary_registry (
   imported_at timestamptz not null default now()
 );
 create index if not exists notary_registry_name_normalized_idx on notary_registry (name_normalized);
+
+-- One row per job. pending_onboarding = worker had no Connect account when the job settled; completed by account.updated.
+create table if not exists payouts (
+  job_id uuid primary key,
+  worker_id uuid not null,
+  amount_cents integer not null,
+  status text not null check (status in ('pending_onboarding','paid')),
+  stripe_transfer_id text,
+  stripe_connect_account text,
+  onboarding_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists payouts_worker_status_idx on payouts (worker_id, status);
+
+-- Stripe disputes (chargebacks) against captured charges; filled by charge.dispute.* webhooks.
+create table if not exists disputes (
+  id text primary key,                       -- Stripe dispute id (dp_...)
+  job_id uuid,                               -- references jobs(id) logically; no FK so Edmond's table can evolve
+  stripe_charge_id text not null,
+  stripe_payment_intent_id text,
+  amount_cents integer not null,
+  currency text not null default 'usd',
+  reason text,
+  status text not null,
+  evidence_due_by timestamptz,
+  evidence jsonb not null default '{}'::jsonb,
+  evidence_submitted_at timestamptz,
+  opened_at timestamptz not null default now(),
+  closed_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+create index if not exists disputes_job_id_idx on disputes (job_id);
+create index if not exists disputes_status_idx on disputes (status);

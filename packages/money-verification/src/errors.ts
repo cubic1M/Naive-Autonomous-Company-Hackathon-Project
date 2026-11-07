@@ -46,3 +46,10 @@ export class NotEligibleError extends MoneyVerificationError {
     this.reasons = reasons;
   }
 }
+
+/** Stripe-Signature header missing or does not match the raw body. The webhook handler answers 400. */
+export class WebhookSignatureError extends MoneyVerificationError {
+  constructor(message: string) {
+    super('webhook_signature', message);
+  }
+}

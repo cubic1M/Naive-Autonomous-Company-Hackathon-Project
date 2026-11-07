@@ -16,6 +16,10 @@ export interface Hooks {
   onProofDecision?: (jobId: string, proofId: string, decision: ProofDecision) => Promise<void> | void;
   /** Escrow released (PaymentIntent canceled) or refunded. */
   onEscrowReleased?: (jobId: string, kind: 'released' | 'refunded') => Promise<void> | void;
+  /** Transfer to the worker completed (payouts row = paid). Job should move approved -> paid. */
+  onWorkerPaid?: (jobId: string, workerId: string, transferId: string) => Promise<void> | void;
+  /** A Stripe dispute (chargeback) was opened against a job's charge. Wakes the Disputes agent. */
+  onDisputeOpened?: (disputeId: string, jobId: string | null) => Promise<void> | void;
 }
 
 export async function fire<K extends keyof Hooks>(

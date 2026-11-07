@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
+  Dispute,
   Escrow,
   EscrowStatus,
   Job,
   LedgerEntry,
   NewLedgerEntry,
   NotaryRecord,
+  Payout,
+  PayoutStatus,
   Proof,
   ProofReview,
   VerificationKind,
@@ -28,6 +31,8 @@ export class InMemoryRepo implements Repo {
   workerVerifications = new Map<string, WorkerVerification>();
   proofReviews = new Map<string, ProofReview>();
   notaries = new Map<string, NotaryRecord>();
+  payouts = new Map<string, Payout>();
+  disputes = new Map<string, Dispute>();
 
   constructor(private readonly now: () => Date = () => new Date()) {}
 
@@ -50,6 +55,9 @@ export class InMemoryRepo implements Repo {
   }
   async getWorker(id: string) {
     return this.workers.get(id) ?? null;
+  }
+  async getWorkerByConnectAccount(accountId: string) {
+    return [...this.workers.values()].find((w) => w.stripe_connect_account === accountId) ?? null;
   }
   async getProof(id: string) {
     return this.proofs.get(id) ?? null;
@@ -109,6 +117,9 @@ export class InMemoryRepo implements Repo {
   async getLedgerByKey(idempotencyKey: string) {
     return this.ledger.find((l) => l.idempotency_key === idempotencyKey) ?? null;
   }
+  async findLedgerByStripeRef(stripeRef: string) {
+    return this.ledger.filter((l) => l.stripe_ref === stripeRef);
+  }
   async listLedger(q: LedgerQuery) {
     return this.ledger.filter(
       (l) =>
@@ -154,10 +165,39 @@ export class InMemoryRepo implements Repo {
   async upsertNotary(record: NotaryRecord) {
     this.notaries.set(record.commission_number, { ...record, imported_at: record.imported_at ?? this.now() });
   }
+  async upsertNotaries(records: NotaryRecord[]) {
+    for (const r of records) await this.upsertNotary(r);
+  }
   async getNotary(commissionNumber: string) {
     return this.notaries.get(commissionNumber) ?? null;
   }
   async findNotariesByNormalizedName(nameNormalized: string) {
     return [...this.notaries.values()].filter((n) => n.name_normalized === nameNormalized);
+  }
+
+  async getPayout(jobId: string) {
+    return this.payouts.get(jobId) ?? null;
+  }
+  async listPayoutsByWorker(workerId: string, status?: PayoutStatus) {
+    return [...this.payouts.values()].filter((p) => p.worker_id === workerId && (!status || p.status === status));
+  }
+  async upsertPayout(p: Omit<Payout, 'created_at' | 'updated_at'>) {
+    const existing = this.payouts.get(p.job_id);
+    const t = this.now();
+    const row: Payout = { ...p, created_at: existing?.created_at ?? t, updated_at: t };
+    this.payouts.set(row.job_id, row);
+    return row;
+  }
+
+  async getDispute(id: string) {
+    return this.disputes.get(id) ?? null;
+  }
+  async listDisputesForJob(jobId: string) {
+    return [...this.disputes.values()].filter((d) => d.job_id === jobId);
+  }
+  async upsertDispute(d: Omit<Dispute, 'updated_at'>) {
+    const row: Dispute = { ...d, updated_at: this.now() };
+    this.disputes.set(row.id, row);
+    return row;
   }
 }

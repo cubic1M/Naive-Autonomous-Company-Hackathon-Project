@@ -125,9 +125,13 @@ export interface WorkerVerification {
 
 export type ProofDecision = 'approved' | 'escalated' | 'rejected';
 
+export type ProofCheckStatus = 'pass' | 'fail' | 'needs_review';
+
 export interface ProofCheck {
   name: string;
+  /** pass === (status === 'pass'); kept for dashboards that only know booleans. */
   pass: boolean;
+  status: ProofCheckStatus;
   detail: string;
 }
 
@@ -151,4 +155,51 @@ export interface NotaryRecord {
   commission_expires: Date | null;
   raw: Record<string, unknown>;
   imported_at?: Date;
+}
+
+export type PayoutStatus = 'pending_onboarding' | 'paid';
+
+/**
+ * One row per job, written by payouts.ts. A worker with no connected account gets a `pending_onboarding`
+ * row (plus an onboarding link); it completes when Stripe's account.updated reports payouts_enabled.
+ */
+export interface Payout {
+  job_id: string;
+  worker_id: string;
+  amount_cents: number;
+  status: PayoutStatus;
+  stripe_transfer_id: string | null;
+  stripe_connect_account: string | null;
+  onboarding_url: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/** Stripe dispute statuses as delivered by charge.dispute.* webhooks. */
+export type DisputeStatus =
+  | 'warning_needs_response'
+  | 'warning_under_review'
+  | 'warning_closed'
+  | 'needs_response'
+  | 'under_review'
+  | 'won'
+  | 'lost';
+
+export interface Dispute {
+  /** Stripe dispute id (dp_...). */
+  id: string;
+  job_id: string | null;
+  stripe_charge_id: string;
+  stripe_payment_intent_id: string | null;
+  amount_cents: number;
+  currency: string;
+  reason: string | null;
+  status: DisputeStatus;
+  evidence_due_by: Date | null;
+  /** Evidence drafted/submitted through submit_dispute_evidence (Stripe DisputeUpdateParams.Evidence shape). */
+  evidence: Record<string, unknown>;
+  evidence_submitted_at: Date | null;
+  opened_at: Date;
+  closed_at: Date | null;
+  updated_at: Date;
 }

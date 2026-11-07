@@ -1,4 +1,5 @@
 import type {
+  Dispute,
   Escrow,
   EscrowStatus,
   Job,
@@ -6,6 +7,8 @@ import type {
   LedgerKind,
   NewLedgerEntry,
   NotaryRecord,
+  Payout,
+  PayoutStatus,
   Proof,
   ProofReview,
   VerificationKind,
@@ -29,6 +32,8 @@ export interface Repo {
   // ---- teammates' tables (read) ----
   getJob(id: string): Promise<Job | null>;
   getWorker(id: string): Promise<Worker | null>;
+  /** Worker whose stripe_connect_account equals the given Connect account id (account.updated webhook). */
+  getWorkerByConnectAccount(accountId: string): Promise<Worker | null>;
   getProof(id: string): Promise<Proof | null>;
   getProofsForJob(jobId: string): Promise<Proof[]>;
   /** Proofs (any job) whose media array contains the given sha256. */
@@ -50,11 +55,18 @@ export interface Repo {
   /** Insert unless idempotency_key exists. Returns { inserted: false, entry } with the existing row on conflict. */
   insertLedger(entry: NewLedgerEntry): Promise<{ inserted: boolean; entry: LedgerEntry }>;
   getLedgerByKey(idempotencyKey: string): Promise<LedgerEntry | null>;
+  /** Ledger lines carrying this Stripe object id (e.g. a charge id -> its escrow_capture line). */
+  findLedgerByStripeRef(stripeRef: string): Promise<LedgerEntry[]>;
   listLedger(query: LedgerQuery): Promise<LedgerEntry[]>;
 
   // ---- stripe_events ----
   /** Record event id; false if it was already recorded (duplicate delivery). */
   markStripeEvent(eventId: string, type: string): Promise<boolean>;
+
+  // ---- payouts ----
+  getPayout(jobId: string): Promise<Payout | null>;
+  listPayoutsByWorker(workerId: string, status?: PayoutStatus): Promise<Payout[]>;
+  upsertPayout(payout: Omit<Payout, 'created_at' | 'updated_at'>): Promise<Payout>;
 
   // ---- worker_verifications ----
   getWorkerVerification(workerId: string, kind: VerificationKind): Promise<WorkerVerification | null>;
@@ -67,6 +79,13 @@ export interface Repo {
 
   // ---- notary_registry ----
   upsertNotary(record: NotaryRecord): Promise<void>;
+  /** Batch upsert for the CA Secretary of State listing (~150k rows); duplicates within the batch: last wins. */
+  upsertNotaries(records: NotaryRecord[]): Promise<void>;
   getNotary(commissionNumber: string): Promise<NotaryRecord | null>;
   findNotariesByNormalizedName(nameNormalized: string): Promise<NotaryRecord[]>;
+
+  // ---- disputes ----
+  getDispute(id: string): Promise<Dispute | null>;
+  listDisputesForJob(jobId: string): Promise<Dispute[]>;
+  upsertDispute(dispute: Omit<Dispute, 'updated_at'>): Promise<Dispute>;
 }

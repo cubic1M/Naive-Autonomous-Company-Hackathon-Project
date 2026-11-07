@@ -1,5 +1,6 @@
 import type { Env } from './env.js';
 import { InvalidStateError, NotFoundError, RequiresApprovalError } from './errors.js';
+import type { Hooks } from './hooks.js';
 import * as ledger from './ledger.js';
 import type { Repo } from './repo.js';
 import type { StripeClient } from './stripe-client.js';
@@ -10,6 +11,8 @@ export interface PayoutDeps {
   stripe: StripeClient;
   repo: Repo;
   env: Pick<Env, 'PUBLIC_BASE_URL' | 'PAYOUT_CAP_CENTS'>;
+  hooks?: Hooks;
+  now?: () => Date;
 }
 
 /** Express connected account (US, transfers capability). Persists the id on workers.stripe_connect_account. */
@@ -49,12 +52,21 @@ export async function isPayoutReady(deps: Pick<PayoutDeps, 'stripe'>, accountId:
   return Boolean(acct.payouts_enabled) && acct.capabilities?.transfers === 'active';
 }
 
-export interface PayWorkerResult {
-  transferId: string;
-  amountCents: number;
-  /** false if the payout already existed (idempotent repeat). */
-  transferred: boolean;
-}
+export type PayWorkerResult =
+  | {
+      status: 'paid';
+      transferId: string;
+      amountCents: number;
+      /** false if the payout already existed (idempotent repeat). */
+      transferred: boolean;
+    }
+  | {
+      /** Worker has no connected account yet: the payouts row is parked as pending_onboarding until account.updated. */
+      status: 'pending_onboarding';
+      accountId: string;
+      onboardingUrl: string;
+      amountCents: number;
+    };
 
 /**
  * Transfer worker_pay_cents to the worker's connected account.
@@ -68,7 +80,9 @@ export async function payWorker(
   opts: { allowLarge?: boolean } = {},
 ): Promise<PayWorkerResult> {
   const already = await deps.repo.getLedgerByKey(`payout:${jobId}`);
-  if (already) return { transferId: already.stripe_ref ?? '', amountCents: already.amount_cents, transferred: false };
+  if (already) {
+    return { status: 'paid', transferId: already.stripe_ref ?? '', amountCents: already.amount_cents, transferred: false };
+  }
 
   const job = await deps.repo.getJob(jobId);
   if (!job) throw new NotFoundError('job', jobId);
@@ -118,5 +132,16 @@ export async function payWorker(
     idempotencyKey: `fee:${jobId}`,
     stripeRef: sourceCharge ?? null,
   });
-  return { transferId: transfer.id, amountCents: amount, transferred: true };
+  return { status: 'paid', transferId: transfer.id, amountCents: amount, transferred: true };
+}
+
+/**
+ * account.updated with payouts_enabled: complete every `pending_onboarding` payout for this worker.
+ * Each completion goes through payWorker() so the same checks and idempotency keys apply.
+ * Stub: implemented in P1 step 2 (payouts table + first-payout onboarding).
+ */
+export async function completePendingPayoutsForWorker(deps: PayoutDeps, workerId: string): Promise<PayWorkerResult[]> {
+  void deps;
+  void workerId;
+  throw new Error('completePendingPayoutsForWorker: not implemented yet');
 }

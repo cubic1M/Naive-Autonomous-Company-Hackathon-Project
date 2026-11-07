@@ -46,6 +46,9 @@ export interface StripeClient {
       ): Promise<Stripe.Identity.VerificationSession>;
     };
   };
+  disputes: {
+    update(id: string, params: Stripe.DisputeUpdateParams, options?: Stripe.RequestOptions): Promise<Stripe.Dispute>;
+  };
   webhooks: {
     constructEvent(payload: string | Buffer, header: string | Buffer | string[], secret: string): Stripe.Event;
   };
