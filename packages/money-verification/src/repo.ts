@@ -60,6 +60,8 @@ export interface Repo {
   listLedger(query: LedgerQuery): Promise<LedgerEntry[]>;
 
   // ---- stripe_events ----
+  /** True if this event id was already processed. Check -> handle -> mark, so a failed handler can be retried. */
+  hasStripeEvent(eventId: string): Promise<boolean>;
   /** Record event id; false if it was already recorded (duplicate delivery). */
   markStripeEvent(eventId: string, type: string): Promise<boolean>;
 

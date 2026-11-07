@@ -130,6 +130,9 @@ export class InMemoryRepo implements Repo {
     );
   }
 
+  async hasStripeEvent(eventId: string) {
+    return this.stripeEvents.has(eventId);
+  }
   async markStripeEvent(eventId: string, type: string) {
     if (this.stripeEvents.has(eventId)) return false;
     this.stripeEvents.set(eventId, { type, processed_at: this.now() });

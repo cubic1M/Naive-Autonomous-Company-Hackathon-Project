@@ -278,6 +278,10 @@ export class PostgresRepo implements Repo {
     );
   }
 
+  async hasStripeEvent(eventId: string) {
+    const { rows } = await this.sql.query('select 1 from stripe_events where event_id = $1', [eventId]);
+    return rows.length > 0;
+  }
   async markStripeEvent(eventId: string, type: string) {
     const { rows } = await this.sql.query(
       'insert into stripe_events (event_id, type) values ($1, $2) on conflict (event_id) do nothing returning event_id',
