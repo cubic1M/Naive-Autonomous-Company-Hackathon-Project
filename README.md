@@ -1,0 +1,119 @@
+# Operis
+
+**Humans on demand for autonomous companies.**
+An AI-run company asks for a human through our MCP server. Operis finds the right people online, reaches them through contact info they already publish, and pays whoever finishes the job. Workers never have to sign up in advance.
+
+> Built at the Naïve × YC Autonomous Companies Hackathon. Operis is itself an autonomous company: five Naïve agents run it, and the founders only set limits and approve big decisions.
+
+---
+
+## How it works
+
+```
+Autonomous company ──MCP──▶ Operis API ──▶ Naïve agents (CEO, Ops, Verifier, Finance)
+                                                 │
+                                   1. find people near the job (web scraping)
+                                   2. message them via their public contact
+                                                 ▼
+                              Human clicks link ──▶ Operis job page
+                                                 │  Accept / Decline
+                                                 │  Upload proof (photo / video / file)
+                                                 ▼
+                              Verifier checks proof ──▶ Customer charged ──▶ Worker paid
+```
+
+1. **Request.** A customer agent calls `request_human` on our MCP server with the task, location, deadline, budget, any certification needed, and what proof it wants.
+2. **Safety check.** We reject illegal, identity-faking, surveillance or licensed work. Borderline requests go to a founder.
+3. **Hold payment.** The customer's card is held, not charged (Stripe, manual capture).
+4. **Find people.** The scraper looks for people near the job on public, work-related sources: gig boards, campus job boards, business listings, and past workers.
+5. **Reach out.** We message many people at once using contact info they published themselves (email, SMS, etc.), with a link to the job page. The first person to accept gets the job. Every message includes an opt-out.
+6. **Job page.** The human sees the job description, pay, location and required certification, and clicks **Yes** or **No**. If needed, they upload extra info such as a certification.
+7. **Proof.** When they're done, they upload the proof the job asked for: photos, video or documents, with GPS and a timestamp.
+8. **Verify.** The Verifier agent checks the proof against the request. It approves if it's confident; otherwise a human reviewer decides.
+9. **Pay.** The customer's card is charged. The worker connects a bank account once, on their first payout, and receives their share. We keep the fee.
+
+## Money
+
+- **Workers pay nothing.** No signup, no fees.
+- **Customers pay only for finished jobs.** The card is held up front and charged only when proof passes. If the job fails, the hold is released.
+- **Our cut:** 25% of the job price ($20 minimum job). Example: a $60 job pays the worker $45, and Operis keeps $15.
+
+## MCP tools (for customer agents)
+
+| Tool | What it does |
+|---|---|
+| `request_human` | Post a job: task, location, deadline, budget, certification, proof requirements |
+| `get_job` | Status, plus the proof package once approved |
+| `cancel_job` | Cancel before someone accepts |
+
+Example request:
+
+```json
+{
+  "title": "Hold a sign near the YC office",
+  "instructions": "Hold our sign at the corner for 2 hours, 12-2pm.",
+  "location": { "address": "YC, San Francisco, CA", "lat": 37.7749, "lng": -122.4194 },
+  "deadline": "2026-11-08T14:00:00-08:00",
+  "budget_usd": 60,
+  "certification_required": null,
+  "proof": { "photos": { "min": 2, "must_show": ["person holding sign", "street corner"] }, "geofence_m": 150 }
+}
+```
+
+## The agent team (Naïve)
+
+| Agent | Job |
+|---|---|
+| **CEO** | Owns the board, assigns every job, P&L, disputes, daily report to founders |
+| **Ops** | Runs the scraper, sends outreach, picks the worker who accepts |
+| **Verifier** | Checks proof (vision model + GPS); approves or escalates |
+| **Finance** | Holds, charges, payouts, refunds, ledger |
+| **Sales** | Gets other teams' agents connected to our MCP server |
+
+**Limits set by the founders:** a daily spend cap per agent; refunds and payouts over $150 need founder approval; jobs only within the demo area (San Francisco).
+
+## Team split
+
+| Role | Owner | Builds |
+|---|---|---|
+| **Frontend** | _TBD_ | The worker website: job page (description, pay, certification, Yes/No), upload forms, proof upload with GPS, payout setup screen, plus the live dashboard (map, live job, agent feed, money) |
+| **Scraping & outreach** | _TBD_ | Finding people near a location, extracting public contact info, sending the "blast" (email / SMS), first-yes-wins logic, the regulars list |
+| **Verification & payouts** | _TBD_ | Proof checks (GPS distance, timestamp, image/video review with a vision model), approve/escalate flow, Stripe hold → charge → payout to bank |
+| **Naïve agents & MCP** | _TBD_ | The MCP server and API, database, the five Naïve agents (prompts, budgets, tool permissions, team board), and wiring everything together |
+
+**Shared contract:** everyone builds against the same `jobs` / `workers` / `proofs` tables and the job states below. Change them only after agreeing as a team.
+
+```
+requested → held → outreach → accepted → proof_submitted → approved → paid
+                                                         ↘ escalated / rejected
+(also: cancelled, expired, refunded)
+```
+
+## Stack
+
+| Layer | Tool |
+|---|---|
+| Agents | Naïve Managed Agents (`@usenaive-sdk/managed-agents`, `naive` CLI) |
+| API + MCP server | TypeScript on Vercel (`@modelcontextprotocol/sdk`) |
+| Database | Postgres (Neon, or a Naïve fullstack app) |
+| Payments + payouts | Stripe Checkout (manual capture) + Stripe Connect Express |
+| Messaging | Twilio SMS + email via Naïve inboxes |
+| Proof storage | Vercel Blob (or Naïve app storage) |
+| Vision | A vision model via Naïve's model router |
+
+## Rules we follow
+
+- **Only public, work-related contact info.** We don't buy or dig up personal data. Everyone we message can opt out, and once they do, we never contact them again.
+- **No identity work.** Humans never sign contracts, pass CAPTCHAs, receive OTPs or pretend to be the agent.
+- **No licensed advice sold as ours.** If a job needs a certification, the worker shows it, and they do the work in their own name.
+- **Every job is verified.** GPS, a timestamp and proof are required before money moves.
+
+## Getting started
+
+```bash
+npm i -g @usenaive-sdk/cli
+naive login
+naive whoami   # should show our org
+```
+
+Setup steps, environment variables and the build plan: _coming in `docs/`_.
