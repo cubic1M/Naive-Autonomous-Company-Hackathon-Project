@@ -1,6 +1,6 @@
-# Outreach × Naïve: integration plan (needs Andrew's approval before anything is applied)
+# Outreach × Naïve: integration plan
 
-Nothing here has been applied to Naïve yet.
+**Approved by Andrew (2026-11-07):** skill + tools on Ops, `send_blast` = **ask** until `OUTREACH_LIVE=true`, re-blast schedule on.
 
 ## 1. Skill: teach the Ops agent how to source workers
 
@@ -20,10 +20,10 @@ Tools come from our internal MCP server (`name: "operis"`), so the agent sees th
 // agents/agents.json → ops.tools.configs (Edwin's file; default_config is deny)
 "operis.get_job":     { "enabled": true, "permission": "allow" },
 "operis.find_people": { "enabled": true, "permission": "allow" },  // spend capped server-side (OUTREACH_MAX_SPEND_USD)
-"operis.send_blast":  { "enabled": true, "permission": "allow" }   // proposal: "ask" until we flip OUTREACH_LIVE=true
+"operis.send_blast":  { "enabled": true, "permission": "ask" }     // approved: ask until OUTREACH_LIVE=true, then allow
 ```
 
-Why both can be `allow`: the limits are enforced in code, not in the prompt.
+Why these are safe: the limits are enforced in code, not in the prompt.
 - `find_people` stops paid calls at `OUTREACH_MAX_SPEND_USD` (default $0.25 per call) and logs `scrape_cost` to the ledger.
 - `send_blast` never messages opted-out people, never double-messages, never cold-SMSes, and sends nothing real unless `OUTREACH_LIVE=true` (allowlisted test contacts excepted). `PAUSE_OUTREACH=true` stops all sending.
 
