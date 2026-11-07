@@ -40,7 +40,8 @@ export async function createEscrow(deps: EscrowDeps, job: Job): Promise<{ url: s
     throw new InvalidStateError(`escrow for job ${job.id} is already ${existing.status}`);
   }
   if (!existing) {
-    const heldToday = await ledger.sumKind(deps.repo, 'escrow_hold', new Date(now.getTime() - DAY_MS), now);
+    // listLedger's upper bound is exclusive; +1 ms so a hold written at this same instant still counts.
+    const heldToday = await ledger.sumKind(deps.repo, 'escrow_hold', new Date(now.getTime() - DAY_MS), new Date(now.getTime() + 1));
     if (heldToday + amount > deps.env.DAILY_ESCROW_CAP_CENTS) {
       throw new DailyCapExceededError(amount, heldToday, deps.env.DAILY_ESCROW_CAP_CENTS);
     }
