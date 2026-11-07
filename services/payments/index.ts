@@ -6,6 +6,7 @@ import type { ServiceModule, ToolContext } from "../../contracts/runtime";
 import {
   createContractTools,
   createEscrow,
+  createOnboardingLink,
   depsFromApiContext,
   depsFromProcessEnv,
   handleStripeWebhook,
@@ -24,7 +25,8 @@ export default payments;
 
 /**
  * Called by request_human (registry.createHold) before any agent is involved: creates the manual-capture
- * Checkout session for the job and returns the URL the customer agent pays at.
+ * Checkout session for the job and returns the URL the customer agent pays at. Needs DATABASE_URL and
+ * STRIPE_SECRET_KEY; until the migration has run, set MOCK_PAYMENTS=true so the API keeps its mock.
  */
 export async function createHold(jobId: string): Promise<{ escrow_url: string }> {
   const deps = depsFromProcessEnv();
@@ -32,6 +34,18 @@ export async function createHold(jobId: string): Promise<{ escrow_url: string }>
   if (!job) throw new Error(`job ${jobId} not found`);
   const { url } = await createEscrow(deps, job);
   return { escrow_url: url };
+}
+
+/**
+ * Called by POST /v1/worker/payout-setup (Dora's /payout screen): a Stripe Connect Express onboarding link
+ * for the worker, creating the connected account on first use (idempotent per worker).
+ */
+export async function createPayoutLink(workerId: string): Promise<{ url: string }> {
+  const deps = depsFromProcessEnv();
+  const worker = await deps.repo.getWorker(workerId);
+  if (!worker) throw new Error(`worker ${workerId} not found`);
+  const { url } = await createOnboardingLink(deps, worker);
+  return { url };
 }
 
 /**
