@@ -4,6 +4,7 @@ This document follows one job from request to payout. At each step it shows who 
 
 - **Shared contract:** [`contracts/`](../contracts). This is the only place where everyone's code meets.
 - **Team split:** see the [README](../README.md#team-split).
+- **Build plans:** [Edwin: API, MCP, database, agents](plans/edwin.md)
 
 ---
 
