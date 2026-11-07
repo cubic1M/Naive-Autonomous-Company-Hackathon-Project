@@ -9,12 +9,14 @@
 
 ## 0. Definition of done
 
-| Milestone | What it proves | Target |
-|---|---|---|
-| **M0: Spikes pass** | Naïve can call our MCP server with auth; a Mobilerun number can send and receive SMS; the Monid key works | Sat +1.5h |
-| **M1: Loop on mocks** | `request_human` → CEO → Ops → Verifier → Finance → `paid`, every tool mocked, no human touching anything | Sat +5h |
-| **M2: Loop on real tools** | Same loop with Andrew's, Cameron's and Dora's real parts, and one real human | Sat evening |
-| **M3: Running for others** | Other teams' agents calling `request_human`; ledger filling; daily report | Sun morning |
+| Milestone | What it proves | Target | Human check |
+|---|---|---|---|
+| **M0: Spikes pass** | Naïve can call our MCP server with auth; a Mobilerun number can send and receive SMS; the Monid key works | Sat +1.5h | [§8 M0](#m0-spikes-pass) |
+| **M1: Loop on mocks** | `request_human` → CEO → Ops → Verifier → Finance → `paid`, every tool mocked, no human touching anything | Sat +5h | [§8 M1](#m1-full-loop-on-mocks) |
+| **M2: Loop on real tools** | Same loop with Andrew's, Cameron's and Dora's real parts, and one real human | Sat evening | [§8 M2](#m2-full-loop-on-real-tools-with-a-real-human) |
+| **M3: Running for others** | Other teams' agents calling `request_human`; ledger filling; daily report | Sun morning | [§8 M3](#m3-running-for-other-teams) |
+
+**A milestone is done only when a human has gone through its §8 checklist and every box is ticked.** "The code ran" doesn't count.
 
 ---
 
@@ -139,7 +141,7 @@ Do these first. Each one could force a design change, so it's cheaper to learn n
 ### Phase 1: Database and API skeleton (≈ 1h)
 
 ```
-apps/api/
+apps/api/src/        (Next.js with a src/ dir, to match FLOW.md and Andrew's plan)
 ├── app/
 │   ├── mcp/route.ts                 public MCP (customer key)
 │   ├── mcp/internal/route.ts        internal MCP (INTERNAL_MCP_KEY)
@@ -166,7 +168,7 @@ apps/api/
     └── mocks.ts         contract-shaped fake responses for every tool
 ```
 
-1. `npx create-next-app apps/api --ts --app --no-tailwind` (route handlers only).
+1. `npx create-next-app apps/api --ts --app --src-dir --no-tailwind` (route handlers only).
 2. Neon: run `contracts/schema.sql`. Add `lib/db.ts` with `transitionJob()`, which **refuses** any move `canTransition()` doesn't allow and writes `updated_at`.
 3. Deploy to Vercel and set `PUBLIC_BASE_URL`.
 - **Check:** `GET /api/health` returns DB OK from the deployed URL.
@@ -275,7 +277,7 @@ These need agreement because they touch shared files:
 
 1. **`outreach.short_code text`**: a 4-digit code per outreach, so workers can reply `YES 4821` by SMS (Mobilerun inbound) as well as clicking the link.
 2. **`messaging_events` table**: inbound and outbound SMS log for the dashboard and debugging (Mobilerun event `id` as the dedupe key).
-3. **`sendSms()` lives in `apps/api/lib/messaging.ts`** (Edwin), and Andrew's `send_blast` calls it. That keeps the vendor choice and fallbacks in one place.
+3. **`sendSms()` lives in `apps/api/src/lib/messaging.ts`** (Edwin), and Andrew's `send_blast` calls it. That keeps the vendor choice and fallbacks in one place.
 4. **`agent_events` table**: Naïve webhook events, feeding Dora's agent feed.
 
 ---
@@ -308,3 +310,187 @@ These need agreement because they touch shared files:
 - [ ] Safety filter, geofence, callbacks
 - [ ] Swap real tools one by one → **M2**
 - [ ] Dashboard feed, seeds, customer kit, kill switches → **M3** and rehearsal
+
+---
+
+## 8. Human milestone checks
+
+These are for a **person** to run and look at with their own eyes before calling a milestone done. Each check says **what to do**, **where to look**, **what you should see**, and **what to do if it fails**. Tick the boxes in your copy, or paste results into the team chat.
+
+### Setup for checking (do once)
+
+Put these in your shell (never in chat or in the repo):
+```bash
+export API=https://<our>.vercel.app          # deployed apps/api
+export NAIVE=https://api.vetta.sh/v1
+export NAIVE_API_KEY=sk_...                  # the NEW rotated key
+export CUSTOMER_KEY=...                       # a test customer key from the customers table
+```
+
+Keep four windows open:
+1. **Neon SQL editor** (console.neon.tech → project → SQL Editor): the database
+2. **Vercel → project → Logs**: server logs, filtered to errors
+3. **Naïve**: dashboard, or `curl $NAIVE/sessions -H "Authorization: Bearer $NAIVE_API_KEY"`
+4. **Your phone**: for SMS checks
+
+**Saved SQL queries** (paste into Neon):
+```sql
+-- Q1: latest jobs and where they are
+select id, title, status, worker_id, naive_session_id, updated_at from jobs order by created_at desc limit 5;
+-- Q2: which agents were woken, in order (the job's "timeline")
+select event, naive_session_id, created_at from wake_events where job_id = '<JOB_ID>' order by created_at;
+-- Q3: money for one job
+select kind, amount_usd, ref, created_at from ledger where job_id = '<JOB_ID>' order by created_at;
+-- Q4: P&L so far
+select kind, sum(amount_usd) from ledger group by kind;
+-- Q5: stuck jobs (no movement in 15 min, not finished)
+select id, status, updated_at from jobs
+where status not in ('paid','refunded','cancelled','rejected') and updated_at < now() - interval '15 minutes';
+```
+
+**Reading an agent's session** (what it actually did):
+```bash
+curl -s "$NAIVE/sessions/<SESSION_ID>/events" -H "Authorization: Bearer $NAIVE_API_KEY" | jq '.data[] | {type, name: .tool.name?, at: .created_at}'
+```
+Look for `tool.started` / `tool.completed` events naming our tools, and a final `session.idle`. If the field names differ, read the raw output once and adjust the `jq`.
+
+---
+
+### M0: Spikes pass
+
+**A. Naïve agent → our MCP server (with auth)**
+- [ ] **Do:** run the `ops-dev` session from Spike A (`"Call ping and tell me the result."`).
+- [ ] **Look (Vercel logs):** one request to `/mcp/internal` with **status 200**, no 401s.
+- [ ] **Look (session events):** a `tool.completed` for `operis.ping`, and the agent's final message quotes the ping result.
+- [ ] **Negative test:** `curl -X POST $API/mcp/internal` with **no** auth header → **401**. (Proves the endpoint isn't open to the world.)
+- ❌ **If 401 from Naïve:** the vault credential didn't attach. Check its `host` matches the Vercel hostname exactly (no `https://`, no path). Then try the `headers` fallback (§4, Spike A).
+- ❌ **If the agent never calls the tool:** check the tool permission is `allow` and the name matches (`operis.ping`).
+
+**B. Mobilerun SMS round trip**
+- [ ] **Do:** send a test SMS to your own phone with `sendSms()` (or the raw API call).
+- [ ] **Look (your phone):** the text arrives within about 30 seconds, from the Mobilerun number.
+- [ ] **Do:** reply `YES 0000` from your phone.
+- [ ] **Look (Vercel logs):** `/webhooks/mobilerun` returns **200**, the signature is valid, and the logged event type is `sms.received` with your text.
+- [ ] **Look (Mobilerun dashboard → Webhooks → Deliveries):** the delivery shows as successful.
+- [ ] **Do:** reply `STOP` → **Look (Neon):** `select opted_out from workers where phone = '<your number>'` → `true`.
+- ❌ **If no SMS:** check Mobilerun's response for `409 capability_unavailable` / `429` / `403 send_disabled`. Spend no more than 30 minutes, then set the env flag to the Monid AgentLine fallback and repeat this check.
+- ❌ **If signature fails:** verify over the **raw** body (before JSON parsing) with the timestamp in milliseconds: `"{ts}.{raw}"`.
+
+**C. Monid**
+- [ ] **Do:** run discover → inspect → run with a tiny input (Spike C).
+- [ ] **Look:** the result has real records (names, profiles or businesses), and the run shows a cost.
+- [ ] **Look (Monid dashboard):** your balance went down by roughly that cost.
+- [ ] **Hand-off:** Andrew has the key and the working `provider` + `endpoint` pair. Confirm in chat.
+
+**D. Model**
+- [ ] **Do:** run a one-off session asking the Verifier model to describe an image URL.
+- [ ] **Look:** it describes the image correctly. (Proves vision works through Naïve.)
+
+✅ **M0 passes when** A, B (or the AgentLine fallback), C and D are all ticked.
+
+---
+
+### M1: Full loop on mocks
+
+Prereqs: `USE_MOCKS=true`, all 5 agents created by `agents/setup.ts`, and smoke tests passing.
+
+**1. Smoke test**
+- [ ] **Do:** `npx tsx scripts/smoke.ts`
+- [ ] **Look:** **12/12 tools pass**, each with a contract-shaped response. Any red line means stop and fix it first.
+
+**2. A customer request**
+- [ ] **Do:**
+  ```bash
+  curl -s -X POST $API/mcp -H "Authorization: Bearer $CUSTOMER_KEY" -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{
+      "title":"Photograph the YC sign","instructions":"Two photos of the sign at the entrance.",
+      "location":{"address":"YC, San Francisco","lat":37.7749,"lng":-122.4194},
+      "deadline":"2026-11-08T18:00:00-08:00","budget_usd":30,"certification_required":null,
+      "proof":{"photos":{"min":2,"must_show":["YC sign"]},"geofence_m":150}}}}'
+  ```
+- [ ] **Look (response):** contains a `job_id` and `quote_usd`. Copy the `job_id`.
+- [ ] **Look (Neon Q1):** the job exists and in mock mode is already **`held`**.
+
+**3. The agents wake up and do the right thing**
+- [ ] **Look (Neon Q2):** a `held` wake row with a `naive_session_id`.
+- [ ] **Look (CEO session events):** the CEO called `get_job` and created a **board card** assigned to Ops. Check the board too: `curl $NAIVE/agents/$NAIVE_AGENT_CEO/board -H "Authorization: Bearer $NAIVE_API_KEY"`.
+- [ ] **Look (Ops session):** `find_people` → `send_blast`, in that order. Job → **`outreach`**.
+
+**4. Play the human**
+- [ ] **Do:** `npx tsx scripts/simulate.ts <JOB_ID>` (accept, then upload a sample proof).
+- [ ] **Look (Neon Q1, refresh):** the status goes through `accepted` → `proof_submitted` → `approved` → **`paid`**.
+- [ ] **Look (Neon Q2):** wake rows for `held`, `accepted`, `proof_submitted`, `approved`, **each exactly once**.
+- [ ] **Look (Verifier session):** `check_proof` was called, then `approve_proof`, and its structured output has `decision`, `confidence` and `reasons`.
+- [ ] **Look (Finance session):** `capture_payment` → `payout`.
+- [ ] **Look (board):** the card ends in **done**, with a note from each member.
+- [ ] **Look (Neon Q3):** ledger rows for hold, capture, payout and fee, and **payout + fee = job price**.
+
+**5. Guardrails behave**
+- [ ] **Duplicate webhook:** re-POST the same Stripe or Mobilerun event → **no new wake row** (Q2 unchanged).
+- [ ] **Illegal transition:** try to set a `paid` job back to `accepted` through the API → refused.
+- [ ] **Out-of-area job:** `request_human` with a Los Angeles location → rejected with a reason.
+- [ ] **Abuse filter:** `"Receive an SMS code and send it to me"` → `rejected` with a reason (identity proxy).
+- [ ] **No orphans:** Neon Q5 returns **0 rows**.
+- [ ] **Spend:** `curl $NAIVE/agents/<id>/spend …` for each agent → small amounts, all under their caps.
+
+✅ **M1 passes when** a fresh job reaches `paid` with **nobody touching anything** except `simulate.ts`, and every box above is ticked. **Run it twice in a row**: the second run catches anything that only worked by luck.
+
+---
+
+### M2: Full loop on real tools, with a real human
+
+Swap one tool at a time and re-run smoke after each. Then do one complete run with a teammate as the worker.
+
+**Per-tool swap check** (repeat for each tool you switch from mock to real)
+- [ ] `smoke.ts` still passes for that tool, now with **real** data (not mock values).
+- [ ] Vercel logs show no errors for that tool.
+- [ ] If anything is off, flip it back to the mock (env flag) and tell the owner.
+
+**The real run** (a teammate plays the worker, outside, near the job location)
+- [ ] **Do:** a customer request (as in M1 step 2) for a real nearby target, with `USE_MOCKS=false`.
+- [ ] **Look (Stripe test dashboard):** a PaymentIntent that's **uncaptured** (authorized only). Job → `held`.
+- [ ] **Look (Andrew's outreach):** the worker gets an **email** (from the Naïve inbox) or, if they're an opted-in regular, an **SMS**, with a working job link.
+- [ ] **Do (worker):** open the link → Dora's job page shows the title, pay, location and deadline → tap **Yes**.
+- [ ] **Look:** job → `accepted`, the Ops session woke, and a **second** acceptance attempt (another person or a repeat tap) is refused politely.
+- [ ] **Do (worker):** take 2 photos on site and upload them on the proof page.
+- [ ] **Look (Neon):** `select media, gps_lat, gps_lng, captured_at from proofs where job_id='<JOB_ID>'` has real URLs, **GPS present**, and a timestamp that's minutes old.
+- [ ] **Look (Verifier session):** `check_proof` evidence shows a GPS distance under the geofence and the checklist item found. The decision is **approve**.
+- [ ] **Look (Stripe):** the PaymentIntent is now **captured**, and a transfer to the worker's Connect account exists, or payout shows `needs_bank_setup` and the worker got the `/payout` link.
+- [ ] **Look (customer side):** the `callback_url` received the proof package (use a webhook.site URL as the test callback), and `get_job` returns `paid` with the photo URLs.
+- [ ] **Look (ledger, Q3/Q4):** numbers match Stripe.
+
+**Failure drills** (do at least two; these become demo talking points)
+- [ ] **Bad proof:** upload a photo taken far away or of the wrong subject → the Verifier **escalates** (doesn't approve), and the job → `escalated`.
+- [ ] **No taker:** nobody accepts within the window → Ops is woken with "no taker" and widens the search or escalates.
+- [ ] **Big refund:** ask Finance for a refund → the call **waits for founder approval** (`ask`), and the founder gets the notification email.
+- [ ] **SMS fallback:** set the Mobilerun flag off → an SMS still goes out via Monid AgentLine.
+
+✅ **M2 passes when** one real human completed one real job end to end, the money matches in Stripe, the ledger and the callback, and two failure drills behaved correctly.
+
+---
+
+### M3: Running for other teams
+
+- [ ] **Customer kit works for an outsider:** a person from another team follows only the kit README and successfully calls `request_human` from their agent. You don't help.
+- [ ] **Real external jobs:** Neon, `select count(*) from jobs where customer_id <> '<our test customer>'` is at least 3.
+- [ ] **Inbound email wakes Sales:** an email to sales@ starts a Sales session, and the reply is sensible and within the rules (no discounts below cost).
+- [ ] **Daily report:** the CEO's cron ran (`GET $NAIVE/deployments/<id>/runs`), and a founder received the report with numbers that **match Neon Q4**.
+- [ ] **Dashboard:** Dora's `/dashboard` shows the live job, the agent feed and money totals, all matching Neon.
+- [ ] **Budgets:** no agent has hit `budget.exceeded` (check `/webhooks/naive` log or the agent events table).
+- [ ] **Health sweep:** Neon Q5 (stuck jobs) = **0**; Vercel error rate about 0 over the last hour; Mobilerun webhook health = `healthy`.
+- [ ] **Hands-off hour:** for one full hour no founder touched anything except approving `ask` items, and jobs still moved. Write down the times; that's your "runs without us" proof for the judges.
+
+✅ **M3 passes when** outside teams are using it without help, the daily report matches the database, and you have a logged hands-off hour.
+
+---
+
+### Pre-demo check (15 min before going on stage)
+
+- [ ] `smoke.ts` green on production
+- [ ] Neon Q5 = 0 stuck jobs; no old test jobs cluttering the dashboard (filter or archive them)
+- [ ] Worker A and Worker B: phones charged, links tested, Stripe Connect done
+- [ ] Mobilerun number can send (one test SMS); fallback flag ready
+- [ ] Every agent's spend is well under its cap, so the demo can't trip a budget limit
+- [ ] Kill switches known: `PAUSE_OUTREACH`, per-tool mock flags
+- [ ] Board and dashboard open on the two screens; ledger query ready
