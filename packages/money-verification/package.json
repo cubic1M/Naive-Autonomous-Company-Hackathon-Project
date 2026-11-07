@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Standin escrow, payouts, ledger, Stripe webhooks, proof verification and worker verification.",
+  "description": "Operis escrow, payouts, ledger, Stripe webhooks, proof verification and worker verification.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

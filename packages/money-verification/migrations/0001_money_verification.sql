@@ -1,4 +1,4 @@
--- Standin money + verification tables. Idempotent; run by hand (psql "$DATABASE_URL" -f this_file).
+-- Operis money + verification tables. Idempotent; run by hand (psql "$DATABASE_URL" -f this_file).
 -- Does NOT touch teammates' tables (jobs, workers, proofs).
 
 create table if not exists escrows (

@@ -4,17 +4,17 @@
  */
 
 export type JobStatus =
-  | 'quoted'
-  | 'funded'
-  | 'offered'
+  | 'requested'
+  | 'held'
+  | 'outreach'
   | 'accepted'
   | 'proof_submitted'
   | 'approved'
-  | 'escalated'
   | 'paid'
+  | 'escalated'
   | 'rejected'
-  | 'expired'
   | 'cancelled'
+  | 'expired'
   | 'refunded';
 
 export type TaskType = 'notarization' | 'inspection' | (string & {});
@@ -94,7 +94,8 @@ export type LedgerKind =
   | 'fee'
   | 'refund'
   | 'stripe_cost'
-  | 'kyc_cost';
+  | 'kyc_cost'
+  | 'dispute_loss';
 
 export interface LedgerEntry {
   id: string;
