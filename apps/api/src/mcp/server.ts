@@ -11,8 +11,8 @@ const text = (v: unknown) => {
 };
 
 /** Build a stateless MCP server exposing `tools` and answer one HTTP request with it. */
-export async function serveMcp(req: Request, name: string, tools: Record<string, Handler>): Promise<Response> {
-  const server = new McpServer({ name, version: "0.1.0" });
+export async function serveMcp(req: Request, name: string, tools: Record<string, Handler>, instructions?: string): Promise<Response> {
+  const server = new McpServer({ name, version: "0.1.0" }, instructions ? { instructions } : undefined);
   for (const [tool, handler] of Object.entries(tools)) {
     const spec = SCHEMAS[tool as keyof typeof SCHEMAS];
     server.registerTool(tool, { description: spec.description, inputSchema: spec.shape as any }, async (args: any) => {

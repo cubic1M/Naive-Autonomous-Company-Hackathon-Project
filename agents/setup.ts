@@ -1,6 +1,6 @@
 // Create or update the Operis team on Naïve from agents/agents.json. Safe to re-run.
 //
-//   npm run agents:setup                       # uses PUBLIC_BASE_URL from apps/api/.env.local
+//   npm run agents:setup                       # uses API_BASE_URL from apps/api/.env.local
 //   npm run agents:setup -- --auth=query       # MCP auth fallback: ?key= on the URL instead of the vault
 //   npm run agents:setup -- --write-env        # write NAIVE_AGENT_* ids into apps/api/.env.local
 //
@@ -15,11 +15,11 @@ import { ROOT } from "../scripts/env";
 const NAIVE = "https://api.vetta.sh/v1";
 const KEY = process.env.NAIVE_API_KEY!;
 const INTERNAL = process.env.INTERNAL_MCP_KEY!;
-const BASE = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+const BASE = (process.env.API_BASE_URL ?? "").replace(/\/$/, "");
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, "").split("=")).map(([k, v]) => [k, v ?? "true"]));
 const AUTH = (args.auth ?? "vault") as "vault" | "header" | "query";
 if (!KEY || !INTERNAL || !BASE.startsWith("https://")) {
-  console.error("Need NAIVE_API_KEY, INTERNAL_MCP_KEY and an https PUBLIC_BASE_URL in apps/api/.env.local");
+  console.error("Need NAIVE_API_KEY, INTERNAL_MCP_KEY and an https API_BASE_URL in apps/api/.env.local");
   process.exit(1);
 }
 
@@ -93,6 +93,7 @@ for (const [role, m] of Object.entries<any>(cfg.members)) {
     system: prompt(role), mcp_servers: [mcpServer], tools: toolsConfig(m.tools), budget: budget(m.budget_usd),
   };
   if (m.output_schema) Object.assign(body, { output_schema: m.output_schema, structured_output_required: true });
+  if (m.skills) body.skills = m.skills;
   const a = await upsert(m, body);
   ids[role] = a.id;
   versions[role] = a.current_version ?? 1;
@@ -130,6 +131,21 @@ if (c.daily_report && !args["skip-cron"]) {
       budget_micro_usd: c.daily_report.budget_usd * 1e6,
     });
     console.log(`✓ daily report cron ${c.daily_report.cron} ${c.daily_report.timezone}`);
+  }
+}
+
+// 6. member schedules (e.g. Ops re-blast), created once per agent+cron
+{
+  const deps = await listAll("/deployments");
+  for (const [role, m] of Object.entries<any>(cfg.members)) {
+    for (const sch of m.schedules ?? []) {
+      if (deps.some((d) => d.agent_id === ids[role] && d.cron === sch.cron)) continue;
+      await api("POST", "/deployments", {
+        agent_id: ids[role], cron: sch.cron, timezone: sch.timezone, input_template: sch.input,
+        budget_micro_usd: sch.budget_usd * 1e6, enabled: sch.enabled ?? true,
+      });
+      console.log(`✓ ${m.name} schedule ${sch.cron}${sch.enabled === false ? " (disabled)" : ""}`);
+    }
   }
 }
 

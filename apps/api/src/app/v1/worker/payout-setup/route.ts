@@ -1,6 +1,6 @@
 // POST { token } → a Stripe Connect onboarding link for the worker (Cameron's createPayoutLink).
 import { outreachByToken } from "@/lib/worker";
-import payments from "@services/payments";
+import payments from "@services/payments/index";
 export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const { token } = await req.json();

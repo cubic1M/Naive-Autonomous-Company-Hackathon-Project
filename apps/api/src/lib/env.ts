@@ -13,4 +13,7 @@ export function flag(key: string): boolean {
 export function list(key: string): string[] {
   return (process.env[key] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 }
-export const baseUrl = () => (process.env.PUBLIC_BASE_URL ?? "http://localhost:3001").replace(/\/$/, "");
+/** Dora's web app (worker job links: {PUBLIC_BASE_URL}/j/{token}). Same meaning as in services/outreach. */
+export const baseUrl = () => (process.env.PUBLIC_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+/** This API itself (MCP URL, webhooks). */
+export const apiBaseUrl = () => (process.env.API_BASE_URL ?? "http://localhost:3001").replace(/\/$/, "");

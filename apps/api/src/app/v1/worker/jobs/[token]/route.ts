@@ -7,7 +7,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const { token } = await params;
   const o = await outreachByToken(token);
   if (!o) return Response.json({ error: "not_found" }, { status: 404 });
-  if (o.outreach_status === "sent") await sql`update outreach set status = 'opened' where id = ${o.outreach_id}`;
+  if (o.outreach_status === "sent" || o.outreach_status === "dry_run") await sql`update outreach set status = 'opened' where id = ${o.outreach_id}`;
   const youAreAssigned = o.assigned_worker_id === o.worker_id;
   return Response.json({
     job: {
@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       certification_required: o.certification_required, proof_requirement: o.proof_requirement,
     },
     state: youAreAssigned ? o.job_status : o.job_status === "outreach" ? "open" : "unavailable",
-    can_accept: o.job_status === "outreach" && ["sent", "opened"].includes(o.outreach_status),
+    can_accept: o.job_status === "outreach" && ["sent", "dry_run", "opened"].includes(o.outreach_status),
     can_upload_proof: youAreAssigned && o.job_status === "accepted",
     reply_code: o.short_code,
   });

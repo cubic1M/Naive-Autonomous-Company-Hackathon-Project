@@ -3,11 +3,12 @@
 //   MOCK_TOOLS=a,b        → force these tools to mock (fast rollback on stage)
 //   otherwise             → real if the owner exported it from services/<area>/index.ts, else mock
 import type { ServiceModule, ToolName, ToolContext } from "@contracts/runtime";
-import outreach from "@services/outreach";
-import verify from "@services/verify";
-import payments from "@services/payments";
+import outreach from "@services/outreach/index";
+import verify from "@services/verify/index";
+import payments from "@services/payments/index";
 import { mocks } from "./mocks";
 import { getJob } from "./edwin";
+import { outreachConfigured, realFindPeople, realSendBlast } from "./outreach";
 import { flag, list } from "@/lib/env";
 
 const REAL: ServiceModule = { ...outreach, ...verify, ...payments };
@@ -20,7 +21,7 @@ export const INTERNAL_TOOLS: ToolName[] = [
 export function resolveTool(name: ToolName): { impl: (input: any, ctx: ToolContext) => Promise<any>; source: "real" | "mock" } {
   if (name === "get_job") return { impl: getJob, source: "real" };
   const forcedMock = flag("USE_MOCKS") || list("MOCK_TOOLS").includes(name);
-  const real = REAL[name];
+  const real = REAL[name] ?? (outreachConfigured() ? ({ find_people: realFindPeople, send_blast: realSendBlast } as any)[name] : undefined);
   if (real && !forcedMock) return { impl: real as any, source: "real" };
   const mock = mocks[name];
   if (!mock) throw new Error(`no implementation for ${name}`);

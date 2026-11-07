@@ -1,5 +1,5 @@
 // Calls every MCP tool once against the API and checks the response shape.
-// Usage: npm run smoke            (API defaults to PUBLIC_BASE_URL or http://localhost:3001)
+// Usage: npm run smoke            (API defaults to API_BASE_URL or http://localhost:3001)
 // Tip: run with the Naïve agents NOT configured on the server, or they'll act on the smoke job too.
 import postgres from "postgres";
 import { createHash, randomBytes } from "node:crypto";

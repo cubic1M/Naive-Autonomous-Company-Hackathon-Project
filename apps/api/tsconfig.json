@@ -38,7 +38,6 @@
     "next-env.d.ts",
     "src/**/*.ts",
     "../../contracts/**/*.ts",
-    "../../services/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

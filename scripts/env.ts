@@ -11,4 +11,4 @@ for (const f of ["apps/api/.env.local", "apps/api/.env"]) {
   }
 }
 export const ROOT = root;
-export const API = (process.env.API ?? process.env.PUBLIC_BASE_URL ?? "http://localhost:3001").replace(/\/$/, "");
+export const API = (process.env.API ?? process.env.API_BASE_URL ?? "http://localhost:3001").replace(/\/$/, "");
