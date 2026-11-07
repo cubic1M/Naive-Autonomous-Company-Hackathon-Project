@@ -31,13 +31,27 @@ find.ts                              blast.ts
 2. **Regulars first:** query `workers` for people who worked with us before and opted in to more jobs, nearest first. They reply fastest.
 3. **Search the web through [Monid](https://monid.ai)** (one API key covering many scrapers). Run 2–3 sources in parallel:
 
-   | Need | Monid source (confirm with `monid discover`) | Why |
-   |---|---|---|
-   | Local gig workers | Craigslist gigs / services scraper | People who **posted** that they want work in SF |
-   | Local businesses | Apify `/damilo/google-maps-scraper` (e.g. "event staffing", "sign spinners", "couriers" near the job) | Public phone, website and coordinates |
-   | Certified people | LinkedIn / people search | **Only** when the job needs a certification (e.g. notary) |
-   | Contact email | Email finder / website contact scraper | Turns a business website into an email |
-   | Extra availability | Reddit posts (e.g. "looking for work SF") | People saying they're available |
+   **Chosen endpoints** (checked with `monid discover` / `inspect` on 2026-11-07):
+
+   | Need | Provider · endpoint | Price | Input | Why |
+   |---|---|---|---|---|
+   | Local businesses (staffing, sign spinners, couriers, notaries) | `litescrape` · `/google/maps` | $0.00015/call | **query params:** `q`, `type: "search"`, `ll: "@lat,lng,13z"` | Public phone, address, website, rating. **Tested:** "event staffing" near SF returned 10 real agencies |
+   | Contact email for a business | `hunterio` · `/domain-search` | $0.0245 per 10 emails | **body:** `domain`, `limit` | Turns a Maps result's website into emails; prefer `type: generic` (info@, jobs@) |
+   | Read a business site | `search1api` · `/crawl` | $0.001/page | **body:** `url` | Fallback to find a contact/booking page on a website |
+   | Certified people (notary, paralegal) | `ploid` · `/linkedin/search` | $0.01/result | **body:** `filters.{keywords, location, title}` | **Only** when `certification_required` is set; keep the limit small |
+   | People saying they're available | `anyapi` · `/reddit.search` | ~$0.00035/call | **body:** query, `timeframe` | Posts like "looking for gig work SF" |
+
+   No dedicated Craigslist scraper exists in Monid, and Craigslist's terms forbid scraping, so we skip it.
+
+   Example run (the one we tested):
+
+   ```bash
+   monid run -p litescrape -e /google/maps \
+     --query '{"q":"event staffing","type":"search","ll":"@37.7749,-122.4194,13z"}' -w 60 -o maps.json
+   # -> local_results[]: title, phone, address, website, rating, place_id, gps_coordinates
+   ```
+
+   **Cost per job** (one Maps search + Hunter on the top 3 sites) is about **$0.08**.
 
 4. **Clean:** dedupe by email/phone, drop anyone with no public work contact, and drop `opted_out = true`.
 5. **Score (0–1):** distance to the job, task fit, has a contact, and a bonus for regulars.
