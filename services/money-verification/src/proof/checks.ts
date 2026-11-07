@@ -5,6 +5,8 @@ import { readExif as defaultReadExif, type ExifData, type ReadMedia } from './ex
 export const DEFAULT_GEOFENCE_M = 150;
 export const GPS_DISAGREEMENT_M = 150;
 export const EARLY_TOLERANCE_MS = 10 * 60_000;
+/** Window used when the job has no accepted_at (contracts/schema.sql lacks the column): the day before the deadline. */
+export const NO_ACCEPTED_AT_WINDOW_MS = 24 * 60 * 60_000;
 
 export interface MediaExif {
   media: ProofMedia;
@@ -68,9 +70,9 @@ export function geofenceChecks(job: Job, proof: Proof, exifs: MediaExif[]): Proo
  * lands outside is only "needs_review": we may have misread local time as UTC.
  */
 export function timeCheck(job: Job, exifs: MediaExif[]): ProofCheck {
-  if (!job.accepted_at) return check('time', 'needs_review', 'job has no accepted_at; cannot bound capture time');
-  const start = job.accepted_at.getTime() - EARLY_TOLERANCE_MS;
   const end = job.deadline.getTime();
+  const start = job.accepted_at ? job.accepted_at.getTime() - EARLY_TOLERANCE_MS : end - NO_ACCEPTED_AT_WINDOW_MS;
+  const windowNote = job.accepted_at ? '' : ' (no accepted_at on the job; window is the 24h before the deadline)';
   const timed = exifs.filter((e) => e.exif?.capturedAt);
   if (timed.length === 0) return check('time', 'needs_review', 'missing EXIF capture time');
 
@@ -94,8 +96,8 @@ export function timeCheck(job: Job, exifs: MediaExif[]): ProofCheck {
     status = 'needs_review';
     notes.push(`${missing} image(s) missing EXIF capture time`);
   }
-  if (notes.length === 0) return check('time', 'pass', `${timed.length} capture time(s) within window`);
-  return check('time', status, notes.join('; '));
+  if (notes.length === 0) return check('time', 'pass', `${timed.length} capture time(s) within window${windowNote}`);
+  return check('time', status, notes.join('; ') + windowNote);
 }
 
 const FIELD_TYPES = new Set(['string', 'number', 'boolean']);

@@ -111,8 +111,12 @@ describe('timeCheck', () => {
     expect(c.status).toBe('needs_review');
     expect(c.detail).toMatch(/missing EXIF capture time/);
   });
-  it('needs review without accepted_at', () => {
-    expect(timeCheck(makeJob({ accepted_at: null }), at(T0)).status).toBe('needs_review');
+  it('falls back to the 24h before the deadline without accepted_at (shared schema has no column yet)', () => {
+    const c = timeCheck(makeJob({ accepted_at: null }), at(T0));
+    expect(c.status).toBe('pass');
+    expect(c.detail).toContain('no accepted_at');
+    // 30h before the deadline is outside the fallback window
+    expect(timeCheck(makeJob({ accepted_at: null }), at(new Date(T0.getTime() + 4 * HOUR_MS - 30 * HOUR_MS))).status).toBe('fail');
   });
 });
 
