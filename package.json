@@ -1,0 +1,16 @@
+{
+  "name": "operis",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev -w @operis/api",
+    "build": "npm run build -w @operis/api",
+    "typecheck": "npm run typecheck -w @operis/api",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "simulate": "tsx scripts/simulate.ts",
+    "agents:setup": "tsx agents/setup.ts",
+    "customer:create": "tsx scripts/create-customer.ts"
+  }
+}

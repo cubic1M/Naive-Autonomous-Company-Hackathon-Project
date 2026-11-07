@@ -1,0 +1,31 @@
+{
+  "name": "@operis/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "smoke": "tsx ../../scripts/smoke.ts",
+    "simulate": "tsx ../../scripts/simulate.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@vercel/blob": "latest",
+    "mcp-handler": "^2.3.1",
+    "next": "^16.4.5",
+    "postgres": "^4.1.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "stripe": "latest",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "tsx": "latest",
+    "typescript": "^5"
+  }
+}
