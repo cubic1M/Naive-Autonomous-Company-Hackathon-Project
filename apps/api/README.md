@@ -1,4 +1,4 @@
-# apps/api — Edmond
+# apps/api — Edwin
 
 MCP server + REST API + webhooks. The hub everything plugs into. Flow: [docs/FLOW.md](../../docs/FLOW.md).
 

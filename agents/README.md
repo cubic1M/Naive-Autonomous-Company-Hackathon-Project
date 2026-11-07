@@ -1,4 +1,4 @@
-# agents — Edmond
+# agents — Edwin
 
 The five Naïve agents. Flow: [docs/FLOW.md §5](../docs/FLOW.md#5-what-wakes-which-agent).
 

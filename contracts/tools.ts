@@ -4,7 +4,7 @@
 
 import type { JobState } from "./states";
 
-type Owner = "edmond" | "andrew" | "cameron";
+type Owner = "edwin" | "andrew" | "cameron";
 type Agent = "customer" | "ceo" | "ops" | "verifier" | "finance" | "sales";
 
 interface ToolSpec<In, Out> {
@@ -104,11 +104,11 @@ export interface Tools {
   >;
 }
 
-/** Where each tool lives and who may call it. Edmond mirrors calledBy in agents/agents.json. */
+/** Where each tool lives and who may call it. Edwin mirrors calledBy in agents/agents.json. */
 export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; calledBy: Agent[] }> = {
-  request_human:   { owner: "edmond",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
-  get_job:         { owner: "edmond",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer", "ceo", "ops", "verifier", "finance"] },
-  cancel_job:      { owner: "edmond",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
+  request_human:   { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
+  get_job:         { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer", "ceo", "ops", "verifier", "finance"] },
+  cancel_job:      { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
   find_people:     { owner: "andrew",  folder: "services/outreach",          calledBy: ["ops"] },
   send_blast:      { owner: "andrew",  folder: "services/outreach",          calledBy: ["ops"] },
   check_proof:     { owner: "cameron", folder: "services/verify",            calledBy: ["verifier"] },
