@@ -1,3 +1,4 @@
+import { FEE_BPS } from '../pricing.js';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
   Dispute,
@@ -10,7 +11,9 @@ import type {
   Payout,
   PayoutStatus,
   Proof,
+  ProofMedia,
   ProofReview,
+  ProofSchema,
   VerificationKind,
   Worker,
   WorkerVerification,
@@ -46,23 +49,91 @@ const dateOnly = (v: unknown): Date | null => {
 /** Send a calendar day as 'YYYY-MM-DD': pg would serialise a Date in local time and shift the day west of UTC. */
 const isoDay = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
+// ---- contracts/schema.sql compatibility ------------------------------------------------------------
+// The shared jobs/proofs tables keep money as *_usd numerics, the proof requirement as `proof_requirement`
+// and media as [{url, kind, exif}]. This package is integer cents and reads ProofSchema / ProofMedia, so the
+// mappers accept both spellings and prefer the cents columns when a later migration adds them.
+
+const usdToCents = (v: unknown): number | null => (v == null ? null : Math.round(num(v) * 100));
+
+/** 25% fee, half-up, with no minimum-price check: mapping a row must never throw on an odd budget. */
+function feeSplit(priceCents: number): { fee: number; worker: number } {
+  const fee = Math.floor((priceCents * FEE_BPS + 5_000) / 10_000);
+  return { fee, worker: priceCents - fee };
+}
+
+/** Our checks key off task_type; the contract marks notary work with certification_required. */
+function taskTypeOf(r: Row): string {
+  if (r.task_type != null) return String(r.task_type);
+  const cert = r.certification_required == null ? '' : String(r.certification_required).toLowerCase();
+  if (cert.includes('notar')) return 'notarization';
+  return r.title == null ? 'job' : String(r.title);
+}
+
+function proofSchemaOf(r: Row): ProofSchema {
+  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; geofence_m?: unknown; fields?: unknown }>(
+    r.proof_schema ?? r.proof_requirement,
+    {},
+  );
+  const schema: ProofSchema = {
+    photos: {
+      min: p.photos?.min == null ? 0 : num(p.photos.min),
+      must_show: Array.isArray(p.photos?.must_show) ? p.photos.must_show.map(String) : [],
+    },
+  };
+  if (p.geofence_m != null) schema.geofence_m = num(p.geofence_m);
+  if (Array.isArray(p.fields)) schema.fields = p.fields as ProofSchema['fields'];
+  return schema;
+}
+
 function mapJob(r: Row): Job {
+  const budget_cents = r.budget_cents != null ? num(r.budget_cents) : (usdToCents(r.budget_usd) ?? 0);
+  let fee_cents = r.fee_cents != null ? num(r.fee_cents) : usdToCents(r.fee_usd);
+  let worker_pay_cents = r.worker_pay_cents != null ? num(r.worker_pay_cents) : usdToCents(r.worker_pay_usd);
+  if (fee_cents == null || worker_pay_cents == null) {
+    const split = feeSplit(budget_cents);
+    fee_cents = fee_cents ?? split.fee;
+    worker_pay_cents = worker_pay_cents ?? split.worker;
+  }
   return {
     id: String(r.id),
-    task_type: String(r.task_type),
-    budget_cents: num(r.budget_cents),
-    worker_pay_cents: num(r.worker_pay_cents),
-    fee_cents: num(r.fee_cents),
+    task_type: taskTypeOf(r),
+    budget_cents,
+    worker_pay_cents,
+    fee_cents,
     lat: num(r.lat),
     lng: num(r.lng),
-    accepted_at: date(r.accepted_at),
+    accepted_at: date(r.accepted_at), // not in contracts/schema.sql yet: null -> the time check asks for review
     deadline: date(r.deadline) as Date,
-    proof_schema: json(r.proof_schema, { photos: { min: 0, must_show: [] } }),
+    proof_schema: proofSchemaOf(r),
     required_tier: num(r.required_tier ?? 0),
     status: r.status as Job['status'],
     worker_id: r.worker_id == null ? null : String(r.worker_id),
     risk_class: r.risk_class == null ? null : String(r.risk_class),
   };
+}
+
+/** media rows may carry {url, kind, exif} (contract) or {url, sha256, mime} (this package). */
+function mimeOf(m: Record<string, unknown>): string {
+  if (typeof m.mime === 'string' && m.mime) return m.mime;
+  const kind = typeof m.kind === 'string' ? m.kind.toLowerCase() : '';
+  const url = typeof m.url === 'string' ? (m.url.toLowerCase().split('?')[0] ?? '') : '';
+  if (kind === 'video' || /\.(mp4|mov|webm)$/.test(url)) return 'video/mp4';
+  if (kind === 'photo' || kind === 'image' || /\.(jpe?g|png|heic|webp)$/.test(url)) {
+    return url.endsWith('.png') ? 'image/png' : 'image/jpeg';
+  }
+  return 'application/octet-stream';
+}
+
+function mapMedia(v: unknown): ProofMedia[] {
+  return json<unknown[]>(v, [])
+    .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null)
+    .map((m) => ({
+      url: String(m.url ?? ''),
+      // no hash in the contract's media rows yet; an empty sha256 is skipped by the reuse check
+      sha256: typeof m.sha256 === 'string' ? m.sha256 : '',
+      mime: mimeOf(m),
+    }));
 }
 function mapWorker(r: Row): Worker {
   return {
@@ -79,7 +150,7 @@ function mapProof(r: Row): Proof {
     id: String(r.id),
     job_id: String(r.job_id),
     worker_id: String(r.worker_id),
-    media: json(r.media, []),
+    media: mapMedia(r.media),
     fields: json(r.fields, {}),
     gps_lat: r.gps_lat == null ? null : num(r.gps_lat),
     gps_lng: r.gps_lng == null ? null : num(r.gps_lng),
@@ -103,10 +174,11 @@ function mapLedger(r: Row): LedgerEntry {
     id: String(r.id),
     job_id: r.job_id == null ? null : String(r.job_id),
     kind: r.kind as LedgerEntry['kind'],
-    amount_cents: num(r.amount_cents),
+    // rows written by other packages (contracts/schema.sql) carry amount_usd only
+    amount_cents: r.amount_cents != null ? num(r.amount_cents) : (usdToCents(r.amount_usd) ?? 0),
     currency: String(r.currency ?? 'usd'),
-    stripe_ref: r.stripe_ref == null ? null : String(r.stripe_ref),
-    idempotency_key: String(r.idempotency_key),
+    stripe_ref: r.stripe_ref == null ? (r.ref == null ? null : String(r.ref)) : String(r.stripe_ref),
+    idempotency_key: r.idempotency_key == null ? '' : String(r.idempotency_key),
     created_at: date(r.created_at) as Date,
   };
 }
@@ -204,9 +276,10 @@ export class PostgresRepo implements Repo {
     return this.one('select * from proofs where id = $1', [id], mapProof);
   }
   getProofsForJob(jobId: string) {
-    return this.many('select * from proofs where job_id = $1', [jobId], mapProof);
+    return this.many('select * from proofs where job_id = $1 order by created_at', [jobId], mapProof);
   }
-  findProofsByMediaSha256(sha256: string) {
+  async findProofsByMediaSha256(sha256: string) {
+    if (!sha256) return []; // contract media rows without a hash must not match each other
     return this.many(
       `select p.* from proofs p
        where exists (select 1 from jsonb_array_elements(p.media) m where m->>'sha256' = $1)`,
@@ -260,8 +333,8 @@ export class PostgresRepo implements Repo {
 
   async insertLedger(entry: NewLedgerEntry) {
     const inserted = await this.one(
-      `insert into ledger (id, job_id, kind, amount_cents, currency, stripe_ref, idempotency_key)
-       values (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+      `insert into ledger (id, job_id, kind, amount_cents, amount_usd, currency, stripe_ref, idempotency_key)
+       values (gen_random_uuid(), $1, $2, $3::integer, $3::integer / 100.0, $4, $5, $6)
        on conflict (idempotency_key) do nothing returning *`,
       [entry.job_id, entry.kind, entry.amount_cents, entry.currency ?? 'usd', entry.stripe_ref, entry.idempotency_key],
       mapLedger,

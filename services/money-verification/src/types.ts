@@ -95,7 +95,10 @@ export type LedgerKind =
   | 'refund'
   | 'stripe_cost'
   | 'kyc_cost'
-  | 'dispute_loss';
+  | 'dispute_loss'
+  // written by other packages into the shared ledger table (contracts/schema.sql): counted as costs in pnl()
+  | 'sms_cost'
+  | 'scrape_cost';
 
 export interface LedgerEntry {
   id: string;
@@ -133,6 +136,8 @@ export interface ProofCheck {
   pass: boolean;
   status: ProofCheckStatus;
   detail: string;
+  /** Structured facts behind the detail (e.g. geofence distance_m, vision must_show_found) for contract-shaped tool outputs. */
+  data?: Record<string, unknown>;
 }
 
 export interface ProofReview {

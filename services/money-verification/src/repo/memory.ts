@@ -66,6 +66,7 @@ export class InMemoryRepo implements Repo {
     return [...this.proofs.values()].filter((p) => p.job_id === jobId);
   }
   async findProofsByMediaSha256(sha256: string) {
+    if (!sha256) return [];
     return [...this.proofs.values()].filter((p) => p.media.some((m) => m.sha256 === sha256));
   }
   async setWorkerConnectAccount(workerId: string, accountId: string) {

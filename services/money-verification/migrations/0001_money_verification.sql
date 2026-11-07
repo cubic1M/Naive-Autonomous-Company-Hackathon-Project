@@ -14,23 +14,34 @@ create table if not exists escrows (
 create index if not exists escrows_payment_intent_idx on escrows (stripe_payment_intent_id);
 create index if not exists escrows_status_idx on escrows (status);
 
+-- ledger: contracts/schema.sql also defines a `ledger` (kind, amount_usd, ref) that Edwin's and Andrew's code
+-- write cost rows into. Whichever file runs first, both writers must work, so this block is a superset:
+-- our rows carry amount_cents (+ amount_usd = cents / 100 for their queries) and an idempotency key.
 create table if not exists ledger (
-  id uuid primary key,
+  id uuid primary key default gen_random_uuid(),
   job_id uuid,
-  kind text not null check (kind in ('escrow_hold','escrow_capture','escrow_release','payout','fee','refund','stripe_cost','kyc_cost','dispute_loss')),
-  amount_cents integer not null,
+  kind text not null,
+  amount_cents integer,
+  amount_usd numeric,
   currency text not null default 'usd',
   stripe_ref text,
-  idempotency_key text unique not null,
+  ref text,
+  idempotency_key text,
   created_at timestamptz not null default now()
 );
+-- If contracts/schema.sql created the table first, add our columns to it (all idempotent).
+alter table ledger add column if not exists amount_cents integer;
+alter table ledger add column if not exists amount_usd numeric;
+alter table ledger add column if not exists currency text not null default 'usd';
+alter table ledger add column if not exists stripe_ref text;
+alter table ledger add column if not exists ref text;
+alter table ledger add column if not exists idempotency_key text;
+-- Kinds are typed in code (src/types.ts LedgerKind); other packages write sms_cost / scrape_cost, so no check constraint.
+alter table ledger drop constraint if exists ledger_kind_check;
+create unique index if not exists ledger_idempotency_key_idx on ledger (idempotency_key);
 create index if not exists ledger_created_at_idx on ledger (created_at);
 create index if not exists ledger_job_id_idx on ledger (job_id);
 create index if not exists ledger_stripe_ref_idx on ledger (stripe_ref);
--- Re-assert the kind list so a database created from an earlier version of this file picks up new kinds.
-alter table ledger drop constraint if exists ledger_kind_check;
-alter table ledger add constraint ledger_kind_check
-  check (kind in ('escrow_hold','escrow_capture','escrow_release','payout','fee','refund','stripe_cost','kyc_cost','dispute_loss'));
 
 create table if not exists stripe_events (
   event_id text primary key,
@@ -90,7 +101,7 @@ create index if not exists payouts_worker_status_idx on payouts (worker_id, stat
 -- Stripe disputes (chargebacks) against captured charges; filled by charge.dispute.* webhooks.
 create table if not exists disputes (
   id text primary key,                       -- Stripe dispute id (dp_...)
-  job_id uuid,                               -- references jobs(id) logically; no FK so Edmond's table can evolve
+  job_id uuid,                               -- references jobs(id) logically; no FK so Edwin's table can evolve
   stripe_charge_id text not null,
   stripe_payment_intent_id text,
   amount_cents integer not null,

@@ -32,7 +32,7 @@ export interface Pnl {
   feesCents: number;
   payoutsCents: number;
   refundsCents: number;
-  /** stripe_cost + kyc_cost + dispute_loss */
+  /** stripe_cost + kyc_cost + dispute_loss + sms_cost + scrape_cost (the last two are written by other packages) */
   costsCents: number;
   /** fees - refunds - costs. Payouts are pass-through (funded by the customer's charge), not margin. */
   grossMarginCents: number;
@@ -46,7 +46,7 @@ export async function pnl(repo: Repo, range: { from?: Date; to?: Date }): Promis
   const feesCents = sum(['fee']);
   const payoutsCents = sum(['payout']);
   const refundsCents = sum(['refund']);
-  const costsCents = sum(['stripe_cost', 'kyc_cost', 'dispute_loss']);
+  const costsCents = sum(['stripe_cost', 'kyc_cost', 'dispute_loss', 'sms_cost', 'scrape_cost']);
   return {
     feesCents,
     payoutsCents,

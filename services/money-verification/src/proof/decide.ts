@@ -19,8 +19,8 @@ export interface DecideDeps extends ChecksDeps {
   confidenceThreshold?: number;
 }
 
-function note(name: string, status: ProofCheck['status'], detail: string): ProofCheck {
-  return { name, status, pass: status === 'pass', detail };
+function note(name: string, status: ProofCheck['status'], detail: string, data?: Record<string, unknown>): ProofCheck {
+  return { name, status, pass: status === 'pass', detail, ...(data ? { data } : {}) };
 }
 
 const isHardFail = (c: ProofCheck) => (c.name === 'geofence' || c.name === 'reuse') && c.status === 'fail';
@@ -69,13 +69,14 @@ async function runVision(
       instructions: `${job.task_type} job ${job.id}`,
     });
     const missing = job.proof_schema.photos.must_show.filter((item) => score.mustShowFound[item] !== true);
+    const data = { confidence: score.confidence, must_show_found: score.mustShowFound, notes: score.notes };
     if (score.confidence >= threshold && missing.length === 0) {
-      checks.push(note('vision', 'pass', `confidence ${score.confidence}; ${score.notes}`.trim()));
+      checks.push(note('vision', 'pass', `confidence ${score.confidence}; ${score.notes}`.trim(), data));
     } else {
       const parts = [`confidence ${score.confidence} (threshold ${threshold})`];
       if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
       if (score.notes) parts.push(score.notes);
-      checks.push(note('vision', 'needs_review', parts.join('; ')));
+      checks.push(note('vision', 'needs_review', parts.join('; '), data));
     }
     return score.confidence;
   } catch (err) {

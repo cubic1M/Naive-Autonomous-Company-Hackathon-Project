@@ -11,8 +11,8 @@ export interface MediaExif {
   exif: ExifData | null;
 }
 
-function check(name: string, status: ProofCheckStatus, detail: string): ProofCheck {
-  return { name, status, pass: status === 'pass', detail };
+function check(name: string, status: ProofCheckStatus, detail: string, data?: Record<string, unknown>): ProofCheck {
+  return { name, status, pass: status === 'pass', detail, ...(data ? { data } : {}) };
 }
 
 /** Great-circle distance in meters; accurate to well under a meter at geofence scale. */
@@ -54,7 +54,11 @@ export function geofenceChecks(job: Job, proof: Proof, exifs: MediaExif[]): Proo
   const dist = haversineMeters(point, { lat: job.lat, lng: job.lng });
   const source = exifGps ? 'EXIF' : 'device';
   out.push(
-    check('geofence', dist <= limit ? 'pass' : 'fail', `${Math.round(dist)} m from job (limit ${limit} m, ${source} GPS)`),
+    check('geofence', dist <= limit ? 'pass' : 'fail', `${Math.round(dist)} m from job (limit ${limit} m, ${source} GPS)`, {
+      distance_m: Math.round(dist),
+      limit_m: limit,
+      source,
+    }),
   );
   return out;
 }
@@ -115,6 +119,7 @@ export function completenessCheck(job: Job, proof: Proof): ProofCheck {
 /** The same file submitted for a different job is the cheapest fraud there is; re-upload on the same job is fine. */
 export async function reuseCheck(repo: Pick<Repo, 'findProofsByMediaSha256'>, proof: Proof): Promise<ProofCheck> {
   for (const m of proof.media) {
+    if (!m.sha256) continue; // contract media rows carry no hash yet; nothing to compare
     const hits = await repo.findProofsByMediaSha256(m.sha256);
     const other = hits.find((p) => p.job_id !== proof.job_id);
     if (other) return check('reuse', 'fail', `media ${m.sha256.slice(0, 8)} already used on job ${other.job_id}`);
