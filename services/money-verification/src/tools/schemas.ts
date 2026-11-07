@@ -1,5 +1,5 @@
 /**
- * Zod schemas for the internal MCP tools this package backs (Edmond registers them in the MCP server).
+ * Zod schemas for the internal MCP tools this package backs (Edwin registers them in the MCP server).
  * Operis is "humans on demand for autonomous companies": these tools move the money (escrow holds,
  * capture, payouts, refunds, ledger), review proof, verify certifications and handle chargebacks.
  * All money is integer cents; ids are UUIDs except Stripe ids (plain strings); timestamps are ISO-8601 with offset.
@@ -164,7 +164,7 @@ export type ToolInput<N extends ToolName> = z.input<(typeof toolSchemas)[N]['inp
 export type ToolOutput<N extends ToolName> = z.output<(typeof toolSchemas)[N]['output']>;
 export const TOOL_NAMES = Object.keys(toolSchemas) as ToolName[];
 
-/** Other names used in the build spec and in Edmond's contracts/tools.ts for the same tools. */
+/** Other names used in the build spec and in Edwin's contracts/tools.ts for the same tools. */
 export const TOOL_ALIASES: Record<string, ToolName> = {
   hold_for_job: 'create_escrow',
   charge_job: 'capture_escrow',

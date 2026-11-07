@@ -1,5 +1,5 @@
 /**
- * The internal MCP tools, as plain async functions over injected deps. Edmond registers them in the MCP
+ * The internal MCP tools, as plain async functions over injected deps. Edwin registers them in the MCP
  * server (see README "Internal MCP tools"); Naive agents call them. Every function validates its input
  * with the zod schema in ./tools/schemas.ts and returns the matching output shape (snake_case, integer cents).
  * Business rules live in the modules this file calls; this layer only maps shapes and names.
