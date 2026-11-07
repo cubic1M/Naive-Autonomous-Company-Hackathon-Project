@@ -42,6 +42,16 @@ export async function requestHuman(
   const safety = checkSafety(input.title, input.instructions);
   if (!safety.ok) return reject(`${safety.reason} (${safety.category})`);
 
+  // usage limits: protect the team's agent budgets while payments run in test mode
+  const [{ open, today }] = await ctx.sql`
+    select count(*) filter (where status not in ('paid','refunded','cancelled','rejected','expired'))::int as open,
+           count(*) filter (where created_at > now() - interval '24 hours')::int as today
+    from jobs where customer_id = ${customerId}`;
+  if (open >= Number(process.env.MAX_OPEN_JOBS_PER_CUSTOMER ?? 3)) return reject("You have too many open jobs. Wait for one to finish or cancel one.");
+  if (today >= Number(process.env.MAX_JOBS_PER_CUSTOMER_PER_DAY ?? 10)) return reject("Daily job limit reached for your key. Try again tomorrow.");
+  const [{ all }] = await ctx.sql`select count(*)::int as all from jobs where created_at > now() - interval '24 hours'`;
+  if (all >= Number(process.env.MAX_JOBS_PER_DAY ?? 60)) return reject("Operis is at capacity today. Try again later.");
+
   const fee = Math.round(input.budget_usd * FEE_RATE * 100) / 100;
   const [job] = await ctx.sql`
     insert into jobs (customer_id, title, instructions, address, lat, lng, deadline, budget_usd, fee_usd, worker_pay_usd,

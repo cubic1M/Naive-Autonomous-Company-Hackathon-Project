@@ -7,19 +7,38 @@
     "ops": {
       "name": "operis-ops",
       "description": "Finds and dispatches a human worker for each job.",
-      "budget_usd": { "cap": 40, "max_task": 5 },
+      "budget_usd": {
+        "cap": 40,
+        "max_task": 5
+      },
       "tools": {
         "operis.get_job": "allow",
         "operis.find_people": "allow",
-        "operis.send_blast": "allow",
+        "operis.send_blast": "ask",
         "board_read": "allow",
         "board_write": "allow"
-      }
+      },
+      "skills": [
+        "worker-sourcing@1"
+      ],
+      "schedules": [
+        {
+          "cron": "*/10 * * * *",
+          "timezone": "America/Los_Angeles",
+          "budget_usd": 0.5,
+          "input": "Check jobs stuck in outreach for 15+ minutes with no accept and follow the worker-sourcing skill's 'If nobody accepts' steps.",
+          "enabled": false
+        }
+      ],
+      "$comment": "Approved by Andrew (services/outreach/docs/NAIVE.md): skill worker-sourcing@1; find_people allow; send_blast ask until OUTREACH_LIVE=true. Re-blast schedule is created disabled; enable once live."
     },
     "verifier": {
       "name": "operis-verifier",
       "description": "Checks worker proof against the job and approves or escalates.",
-      "budget_usd": { "cap": 40, "max_task": 3 },
+      "budget_usd": {
+        "cap": 40,
+        "max_task": 3
+      },
       "tools": {
         "operis.get_job": "allow",
         "operis.check_proof": "allow",
@@ -32,17 +51,37 @@
       "output_schema": {
         "type": "object",
         "properties": {
-          "decision": { "type": "string", "enum": ["approve", "escalate"] },
-          "confidence": { "type": "number" },
-          "reasons": { "type": "array", "items": { "type": "string" } }
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "escalate"
+            ]
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["decision", "confidence", "reasons"]
+        "required": [
+          "decision",
+          "confidence",
+          "reasons"
+        ]
       }
     },
     "finance": {
       "name": "operis-finance",
       "description": "Captures customer payments, pays workers, handles refunds, keeps the ledger.",
-      "budget_usd": { "cap": 20, "max_task": 5 },
+      "budget_usd": {
+        "cap": 20,
+        "max_task": 5
+      },
       "tools": {
         "operis.get_job": "allow",
         "operis.capture_payment": "allow",
@@ -56,7 +95,10 @@
     "sales": {
       "name": "operis-sales",
       "description": "Gets other teams' agents connected to the Operis MCP server.",
-      "budget_usd": { "cap": 20, "max_task": 5 },
+      "budget_usd": {
+        "cap": 20,
+        "max_task": 5
+      },
       "tools": {
         "email.read": "allow",
         "email.send": "allow",
@@ -70,7 +112,10 @@
   "ceo": {
     "name": "operis-ceo",
     "description": "Coordinates the Operis team: plans every job on the board, assigns members, owns P&L and the daily report.",
-    "budget_usd": { "cap": 300, "max_task": 25 },
+    "budget_usd": {
+      "cap": 300,
+      "max_task": 25
+    },
     "tools": {
       "operis.get_job": "allow",
       "operis.ledger": "allow",
@@ -82,6 +127,10 @@
       "list_agents": "allow",
       "ask_operator": "allow"
     },
-    "daily_report": { "cron": "0 8 * * *", "timezone": "America/Los_Angeles", "budget_usd": 1 }
+    "daily_report": {
+      "cron": "0 8 * * *",
+      "timezone": "America/Los_Angeles",
+      "budget_usd": 1
+    }
   }
 }

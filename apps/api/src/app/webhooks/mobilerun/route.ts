@@ -2,7 +2,8 @@
 // Worker replies: "YES 4821" accepts, "NO 4821" declines, "STOP" opts out forever.
 import { verifyMobilerunSignature } from "@/lib/mobilerun";
 import { sql } from "@/lib/db";
-import { acceptJob, declineJob } from "@/lib/worker";
+import { acceptJob, declineJob, openOutreachForPhone } from "@/lib/worker";
+import { outreachConfigured, classifyInbound } from "@/tools/outreach";
 import { sendSms } from "@/lib/messaging";
 import { later } from "@/lib/naive";
 export const dynamic = "force-dynamic";
@@ -28,26 +29,30 @@ export async function POST(req: Request) {
 
 async function handleInbound(evt: any) {
   const d = evt.data ?? {};
-  // payload shape isn't documented yet: read the likely field names, log the raw event above
+  // payload shape isn't documented yet: read the likely field names (raw event is logged above)
   const from = normPhone(String(d.from ?? d.fromNumber ?? d.sender ?? d.message?.from ?? ""));
   const body = String(d.body ?? d.text ?? d.message?.body ?? d.content ?? "").trim();
   await sql`insert into messaging_events (direction, provider, provider_id, phone, body, status) values ('in', 'mobilerun', ${evt.id}, ${from}, ${body}, 'received')`;
+
+  // Andrew's classifier handles STOP / regulars / questions; we handle accept + decline (job state is ours).
+  if (outreachConfigured()) {
+    const r: any = await classifyInbound(from, body);
+    if (r.action === "accept_requested") return accept(from, r.code);
+    if (r.action === "declined") { const o = await openOutreachForPhone(from); if (o) await declineJob(o.id); return; }
+    if (r.reply_text) await sendSms(from, r.reply_text);
+    return;
+  }
   const m = body.toUpperCase().match(/^(YES|Y|NO|N|STOP|UNSUBSCRIBE)\b\s*(\d{4})?/);
   if (!m) return;
   const [, word, code] = m;
-  if (word === "STOP" || word === "UNSUBSCRIBE") {
-    await sql`update workers set opted_out = true where phone = ${from}`;
-    return;
-  }
-  if (!code) { await sendSms(from, "Please reply with the 4-digit code from the job message, e.g. YES 1234."); return; }
-  const [o] = await sql`
-    select o.id from outreach o join workers w on w.id = o.worker_id
-    where o.short_code = ${code} and w.phone = ${from} and o.status in ('sent','opened') order by o.created_at desc limit 1`;
-  if (!o) { await sendSms(from, `We couldn't find an open job with code ${code}.`); return; }
-  if (word.startsWith("Y")) {
-    const r = await acceptJob(o.id);
-    await sendSms(from, r.ok ? "You got it! Open your job link for details and to upload proof when done." : "Sorry, someone else already took this job.");
-  } else {
-    await declineJob(o.id);
-  }
+  if (word === "STOP" || word === "UNSUBSCRIBE") { await sql`update workers set opted_out = true where phone = ${from}`; return; }
+  if (word.startsWith("Y")) return accept(from, code);
+  const o = await openOutreachForPhone(from, code); if (o) await declineJob(o.id);
+}
+
+async function accept(from: string, code?: string) {
+  const o = await openOutreachForPhone(from, code);
+  if (!o) { await sendSms(from, code ? `We couldn't find an open job with code ${code}.` : "You have more than one open offer. Reply YES plus the 4-digit code from the message, e.g. YES 1234."); return; }
+  const r = await acceptJob(o.id);
+  await sendSms(from, r.ok ? "You got it! Open your job link for details and to upload proof when done." : "Sorry, someone else already took this job.");
 }

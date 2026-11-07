@@ -5,7 +5,11 @@ import type { NextConfig } from "next";
 const repoRoot = path.join(import.meta.dirname, "../..");
 
 const config: NextConfig = {
-  turbopack: { root: repoRoot },
   outputFileTracingRoot: repoRoot,
+  // services/outreach uses NodeNext-style imports ("./blast.js" → blast.ts); webpack maps them.
+  webpack: (cfg) => {
+    cfg.resolve.extensionAlias = { ".js": [".ts", ".tsx", ".js"] };
+    return cfg;
+  },
 };
 export default config;
