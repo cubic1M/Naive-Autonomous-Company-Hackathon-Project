@@ -1,0 +1,87 @@
+{
+  "$comment": "Operis agent team. Applied by `npm run agents:setup`. Tool names: built-ins (board_read, send_to_agent, view_image, email.send, ...) and our MCP tools as operis.<tool>. Default is deny: each agent only gets what is listed.",
+  "model": "anthropic/claude-haiku-5.5",
+  "harness": "pi",
+  "mcp_server_name": "operis",
+  "members": {
+    "ops": {
+      "name": "operis-ops",
+      "description": "Finds and dispatches a human worker for each job.",
+      "budget_usd": { "cap": 40, "max_task": 5 },
+      "tools": {
+        "operis.get_job": "allow",
+        "operis.find_people": "allow",
+        "operis.send_blast": "allow",
+        "board_read": "allow",
+        "board_write": "allow"
+      }
+    },
+    "verifier": {
+      "name": "operis-verifier",
+      "description": "Checks worker proof against the job and approves or escalates.",
+      "budget_usd": { "cap": 40, "max_task": 3 },
+      "tools": {
+        "operis.get_job": "allow",
+        "operis.check_proof": "allow",
+        "operis.approve_proof": "allow",
+        "operis.escalate": "allow",
+        "view_image": "allow",
+        "board_read": "allow",
+        "board_write": "allow"
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "decision": { "type": "string", "enum": ["approve", "escalate"] },
+          "confidence": { "type": "number" },
+          "reasons": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["decision", "confidence", "reasons"]
+      }
+    },
+    "finance": {
+      "name": "operis-finance",
+      "description": "Captures customer payments, pays workers, handles refunds, keeps the ledger.",
+      "budget_usd": { "cap": 20, "max_task": 5 },
+      "tools": {
+        "operis.get_job": "allow",
+        "operis.capture_payment": "allow",
+        "operis.payout": "allow",
+        "operis.refund": "ask",
+        "operis.ledger": "allow",
+        "board_read": "allow",
+        "board_write": "allow"
+      }
+    },
+    "sales": {
+      "name": "operis-sales",
+      "description": "Gets other teams' agents connected to the Operis MCP server.",
+      "budget_usd": { "cap": 20, "max_task": 5 },
+      "tools": {
+        "email.read": "allow",
+        "email.send": "allow",
+        "web_search": "allow",
+        "web_fetch": "allow",
+        "board_read": "allow",
+        "board_write": "allow"
+      }
+    }
+  },
+  "ceo": {
+    "name": "operis-ceo",
+    "description": "Coordinates the Operis team: plans every job on the board, assigns members, owns P&L and the daily report.",
+    "budget_usd": { "cap": 300, "max_task": 25 },
+    "tools": {
+      "operis.get_job": "allow",
+      "operis.ledger": "allow",
+      "operis.refund": "ask",
+      "board_read": "allow",
+      "board_write": "allow",
+      "send_to_agent": "allow",
+      "wait_for_agents": "allow",
+      "list_agents": "allow",
+      "ask_operator": "allow"
+    },
+    "daily_report": { "cron": "0 8 * * *", "timezone": "America/Los_Angeles", "budget_usd": 1 }
+  }
+}
