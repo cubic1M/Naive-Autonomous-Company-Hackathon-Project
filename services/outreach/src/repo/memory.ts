@@ -99,6 +99,13 @@ export class InMemoryRepo implements Repo {
     return ids.map((id) => this.people.get(id)).filter((p): p is Person => Boolean(p));
   }
 
+  async findByContact(contact: { email?: string; phone?: string }): Promise<Person[]> {
+    const email = normEmail(contact.email ?? null);
+    const phone = toE164(contact.phone ?? null);
+    if (!email && !phone) return [];
+    return [...this.people.values()].filter((p) => (email && p.email === email) || (phone && p.phone === phone));
+  }
+
   async optOut(contact: { email?: string; phone?: string }): Promise<number> {
     const email = normEmail(contact.email ?? null);
     const phone = toE164(contact.phone ?? null);

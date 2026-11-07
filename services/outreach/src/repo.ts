@@ -19,6 +19,9 @@ export interface Repo {
 
   getPeople(ids: string[]): Promise<Person[]>;
 
+  /** People matching an email or phone (normalized). Used to handle inbound replies. */
+  findByContact(contact: { email?: string; phone?: string }): Promise<Person[]>;
+
   /** Opt-out by email or phone (STOP / unsubscribe). Returns how many people matched. */
   optOut(contact: { email?: string; phone?: string }): Promise<number>;
 
