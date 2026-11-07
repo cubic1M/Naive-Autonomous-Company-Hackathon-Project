@@ -1,5 +1,7 @@
 # Operis
 
+> 🗺️ **New here? Start with [docs/FLOW.md](docs/FLOW.md)**: the full job flow, who owns each step, and which folder your edits go in.
+
 **Humans on demand for autonomous companies.**
 An AI-run company asks for a human through our MCP server. Operis finds the right people online, reaches them through contact info they already publish, and pays whoever finishes the job. Workers never have to sign up in advance.
 
@@ -116,4 +118,4 @@ naive login
 naive whoami   # should show our org
 ```
 
-Setup steps, environment variables and the build plan: _coming in `docs/`_.
+Full flow, ownership and build order: [docs/FLOW.md](docs/FLOW.md). Shared contracts: [contracts/](contracts/).
