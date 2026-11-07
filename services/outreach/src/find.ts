@@ -1,6 +1,7 @@
 import { pickChannel } from './channel.js';
 import { dedupeKey, mergeLeads } from './dedupe.js';
 import type { Env } from './env.js';
+import { distanceKm } from './geo.js';
 import type { Monid } from './monid.js';
 import { planQueries } from './queries.js';
 import type { Repo } from './repo.js';
@@ -114,6 +115,8 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
 
   // 3. dedupe + enrich
   leads = mergeLeads(leads);
+  // Maps returns some far-away "relevant" places; drop them before paying to enrich them.
+  leads = leads.filter((l) => l.lat === null || l.lng === null || distanceKm(job.lat!, job.lng!, l.lat, l.lng) <= radiusKm);
   // Key before enrichment: stable across runs and matches earlier saves (and opt-outs) even once an email is found.
   const keys = new Map<Lead, string>(leads.map((l) => [l, dedupeKey(l)]));
   const ctx = { radiusKm, queries };
@@ -171,6 +174,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
   const ranked = [...people.values()]
     .map((p) => ({ p, channel: pickChannel(p), score: scorePerson(p, job, ctx), d: distanceToJob(p, job) }))
     .filter((x): x is typeof x & { channel: NonNullable<typeof x.channel> } => x.channel !== null)
+    .filter((x) => x.d === null || x.d <= radiusKm) // never invite people outside the job's area
     .sort((a, b) => Number(b.p.regular) - Number(a.p.regular) || b.score - a.score || (a.d ?? 1e9) - (b.d ?? 1e9))
     .slice(0, limit);
 

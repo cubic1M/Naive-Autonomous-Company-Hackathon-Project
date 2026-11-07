@@ -12,7 +12,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "find": "tsx scripts/find-live.ts"
+    "find": "tsx scripts/find-live.ts",
+    "demo": "tsx scripts/demo.ts"
   },
   "engines": { "node": ">=20" },
   "dependencies": {

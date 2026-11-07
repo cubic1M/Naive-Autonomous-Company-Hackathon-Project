@@ -26,7 +26,9 @@ find.ts                              blast.ts
 
 ```bash
 cd services/outreach && npm install && npm test
-MONID_API_KEY=... npx tsx scripts/find-live.ts   # real search for a sample YC job, capped at $0.10
+npm run demo                                          # FREE: full flow on saved data, prints the invite email
+TEST_EMAIL=you@x.com TEST_NAME=You npm run demo        # adds you as a nearby regular
+LIVE_SEARCH=1 MONID_API_KEY=... npm run demo           # real Monid search (max $0.10); still emails nobody
 ```
 
 - Live result for the sample job "Hold a sign near the YC office": real SF event-staffing businesses 0.2–2.4 km away, with emails found on their sites; ~$0.09 per call.

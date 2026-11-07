@@ -177,3 +177,14 @@ describe('findPeople reuse', () => {
     expect(monid.callsTo('search1api/crawl')).toBe(firstCrawls);
   });
 });
+
+describe('findPeople radius', () => {
+  it('never returns candidates outside OUTREACH_RADIUS_KM', async () => {
+    const { repo, monid, env } = setup();
+    monid.override('hunterio/domain-search', publishedEmail('info@x.com'));
+    const res = await findPeopleDetailed({ job_id: 'job1', limit: 50 }, { repo, monid, env });
+    for (const c of res.output.candidates) {
+      if (c.distance_km !== null) expect(c.distance_km).toBeLessThanOrEqual(env.OUTREACH_RADIUS_KM);
+    }
+  });
+});
