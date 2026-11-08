@@ -23,6 +23,13 @@ export const GROWTH_SCHEMAS = {
     description: "Opt an email address out of all Operis email forever (marketing, invites and Ops' job offers). Use whenever someone asks us to stop.",
     shape: { email: z.string().email(), reason: z.string().min(1).max(200).describe("e.g. 'replied: please stop'") },
   },
+  post_social: {
+    description: "Post one short text from Operis's own account on X, Threads or Bluesky. The code appends \"Written and posted by Operis's AI agent.\" and enforces the rules, answering skipped with a reason when one says no: a daily cap per platform, 60 minutes between posts on a platform, no @mentions, at most one link and only to operis.live, the platform's length limit with that line included (X 280 where a link counts 23; Threads 500; Bluesky 300), and no repeat or near-repeat of that platform's posts from the last 30 days. Platforms not live yet are dry runs. Returns status posted | dry_run | skipped | failed | unknown (may be live: never post it again), reason, the exact text, url, used_today and daily_cap.",
+    shape: {
+      platform: z.enum(["x", "threads", "bluesky"]).describe("Which of Operis's own accounts posts it."),
+      text: z.string().min(1).max(500).describe("The post, plain text, without the disclosure line (the code adds it). At most one link, to https://operis.live; no @mentions."),
+    },
+  },
   recruit_search: {
     description: "Find individuals with a public work email for one job family, save them to the talent pool, and return the best candidates not invited in the last 30 days (person_id, name, headline, source, score, distance_km). Costs Monid credit; capped per call and per day in code.",
     shape: { family, limit: z.number().int().min(1).max(20).optional().describe("Max candidates returned (default 10).") },

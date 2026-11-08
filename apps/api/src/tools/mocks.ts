@@ -141,6 +141,9 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   async suppress_contact() {
     return { suppressed: true as const, matched_contacts: 0, matched_workers: 0 };
   },
+  async post_social({ platform, text }) {
+    return { platform, status: "dry_run" as const, reason: "mock: nothing was posted", text, used_today: 0, daily_cap: 3 };
+  },
   async recruit_search({ family }) {
     return { family, found: 0, new: 0, spend_usd: 0, spend_today_usd: 0, daily_cap_usd: 2, candidates: [] };
   },

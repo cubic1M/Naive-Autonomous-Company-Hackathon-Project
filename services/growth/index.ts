@@ -13,6 +13,7 @@ import {
   joinPage,
   PostgresGrowthRepo,
   unsubscribePage,
+  ZernioPublisher,
   type GrowthDeps,
   type GrowthEnv,
   type PageResult,
@@ -23,6 +24,15 @@ function salesSender(env: GrowthEnv, monid: Monid | undefined): EmailSender | un
     return new NaiveEmailSender({ apiKey: env.NAIVE_API_KEY, baseUrl: env.NAIVE_BASE_URL, identityId: env.GROWTH_SALES_NAIVE_IDENTITY_ID, inboxId: env.GROWTH_SALES_NAIVE_INBOX_ID });
   }
   return monid && env.GROWTH_SALES_AGENTMAIL_INBOX ? new MonidEmailSender(monid, env.GROWTH_SALES_AGENTMAIL_INBOX) : undefined;
+}
+
+/** post_social's publisher: Zernio with Operis's own account on each platform. Without a key, real posts fail as not_configured. */
+function socialPublisher(env: GrowthEnv): ZernioPublisher | undefined {
+  if (!env.ZERNIO_API_KEY) return undefined;
+  return new ZernioPublisher({
+    apiKey: env.ZERNIO_API_KEY,
+    accounts: { x: env.ZERNIO_X_ACCOUNT_ID ?? undefined, threads: env.ZERNIO_THREADS_ACCOUNT_ID ?? undefined, bluesky: env.ZERNIO_BLUESKY_ACCOUNT_ID ?? undefined },
+  });
 }
 
 /** `sql` is apps/api's postgres.js client (apps/api/src/lib/db.ts). */
@@ -38,6 +48,7 @@ export function growthDeps(sql: any): GrowthDeps {
       recruit: monid && env.GROWTH_RECRUIT_AGENTMAIL_INBOX ? new MonidEmailSender(monid, env.GROWTH_RECRUIT_AGENTMAIL_INBOX) : undefined,
     },
     monid,
+    social: socialPublisher(env),
     identity: (workerId: string) => createIdentityLink(workerId),
     now: () => new Date(),
   };
@@ -49,6 +60,7 @@ const growth: ServiceModule = {
   list_prospects: (input, ctx) => tools(ctx).list_prospects(input),
   send_marketing: (input, ctx) => tools(ctx).send_marketing(input),
   suppress_contact: (input, ctx) => tools(ctx).suppress_contact(input),
+  post_social: (input, ctx) => tools(ctx).post_social(input),
   recruit_search: (input, ctx) => tools(ctx).recruit_search(input),
   recruit_invite: (input, ctx) => tools(ctx).recruit_invite(input),
   growth_report: (_input, ctx) => tools(ctx).growth_report(),
