@@ -1,4 +1,5 @@
-// Periodic sweep (Vercel cron, every 5 min): expire overdue jobs and nudge Ops when nobody accepts.
+// Periodic sweep (Vercel cron, every 5 min): expire overdue jobs, finish liability decisions, release card holds of
+// cancelled jobs, and nudge Ops when nobody accepts.
 import { sql, TransitionError } from "./db";
 import { transition } from "./jobs";
 import { wake } from "./naive";
@@ -6,6 +7,7 @@ import { makeContext } from "@/tools/context";
 import { resolveTool } from "@/tools/registry";
 import { afterDecision } from "@/tools/liability";
 import * as compliance from "@services/compliance/index";
+import * as payments from "@services/payments/index";
 
 const NUDGES = [
   { afterMin: 15, event: "no_taker_1" },
@@ -13,7 +15,7 @@ const NUDGES = [
 ];
 
 export async function sweep() {
-  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, redriven: 0, errors: [] as string[] };
+  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, redriven: 0, holdsReleased: 0, holdsExpired: 0, errors: [] as string[] };
   // job_liability arrives with migration 0003 (42P01 until then): the liability steps find nothing. Other errors are reported.
   const noLiabilityRows = (step: string) => (e: any) => {
     if (e?.code !== "42P01") report.errors.push(`${step}: ${String(e).slice(0, 120)}`);
@@ -27,7 +29,7 @@ export async function sweep() {
   for (const j of overdue) {
     try {
       if (j.status === "requested" || j.status === "held") {
-        // requested: nothing was held. held: the hold is released by payments when the job is cancelled.
+        // requested: nothing was paid. held: transition() releases the card hold right after the cancel (step 4 retries it).
         await transition(j.id, "cancelled");
         report.cancelled++;
         continue;
@@ -60,17 +62,15 @@ export async function sweep() {
   }
 
   // 3. Decisions whose follow-up did not happen (a CEO wake or a hold release that failed): drive them again from
-  //    state. Held jobs refused, or cleared without a liability_decided wake; refused jobs already cancelled whose
-  //    card hold is still open (the release failed after the cancel). Legacy decisions (migration 0004) were
-  //    dispatched by the old flow; two minutes leave the agent's own call time to finish.
+  //    state: held jobs refused, or cleared without a liability_decided wake. (A refused job already cancelled whose
+  //    hold is still open is step 4's.) Legacy decisions (migration 0004) were dispatched by the old flow; two
+  //    minutes leave the agent's own call time to finish.
   const pending = await sql`
     select j.id, l.model, l.reason from jobs j
     join job_liability l on l.job_id = j.id
     where l.model is not null and l.decided_by <> 'legacy' and l.decided_at < now() - interval '2 minutes'
-      and ((j.status = 'held' and (l.model = 'refuse'
-             or not exists (select 1 from wake_events w where w.job_id = j.id and w.event = 'liability_decided')))
-        or (j.status = 'cancelled' and l.model = 'refuse'
-             and exists (select 1 from escrows e where e.job_id = j.id and e.status in ('pending', 'authorized'))))`
+      and j.status = 'held' and (l.model = 'refuse'
+        or not exists (select 1 from wake_events w where w.job_id = j.id and w.event = 'liability_decided'))`
     .catch(noLiabilityRows("liability re-drive"));
   for (const j of pending) {
     try {
@@ -81,7 +81,29 @@ export async function sweep() {
     }
   }
 
-  // 4. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
+  // 4. Card holds (Cameron's services/payments): a cancelled job whose hold is still open, because the release after
+  //    the cancel failed, is released again; then every authorized hold whose card authorization has expired.
+  const openHolds = await sql`
+    select j.id from jobs j join escrows e on e.job_id = j.id
+    where j.status = 'cancelled' and e.status in ('pending', 'authorized') and j.updated_at < now() - interval '2 minutes'`
+    .catch((e: any) => {
+      report.errors.push(`open holds: ${String(e).slice(0, 120)}`);
+      return [] as any[];
+    });
+  for (const j of openHolds) {
+    try {
+      if ((await payments.releaseCancelledHold(j.id, "job cancelled (sweep retry)")).released) report.holdsReleased++;
+    } catch (e) {
+      report.errors.push(`hold ${j.id}: ${String(e).slice(0, 120)}`);
+    }
+  }
+  try {
+    report.holdsExpired = await payments.expireStaleHolds();
+  } catch (e) {
+    report.errors.push(`expire holds: ${String(e).slice(0, 120)}`);
+  }
+
+  // 5. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
   for (const n of NUDGES) {
     const stuck = await sql`
       select j.id from jobs j
