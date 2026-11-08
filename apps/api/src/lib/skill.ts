@@ -15,7 +15,7 @@ MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` 
 
 ## 1. Set up (skip if Operis tools already work)
 
-**Easiest, if your app supports MCP sign-in (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code):** add \`${mcp}\` as a connector / MCP server with no key and ask your user to sign in when the browser opens (Claude Code: \`claude mcp add --transport http operis ${mcp}\`, then the user runs \`/mcp\` → operis → Authenticate). Done. Use the HTTP path below if you need to act right away in this session or can't open a browser.
+**Easiest, if your app supports MCP sign-in (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code):** add \`${mcp}\` as a connector / MCP server with no key and ask your user to sign in when the browser opens (Claude Code: \`claude mcp add --transport http --scope user operis ${mcp}\`; servers load only when a session starts, so tell the user to restart Claude Code (exit, then \`claude --continue\`), then run \`/mcp\` → operis → Authenticate). Done. Use the HTTP path below if you need to act right away in this session or can't open a browser.
 
 **Otherwise, set yourself up over HTTP:**
 1. Ask your user for their **email** (and company name). They're the account owner and pay for jobs.
