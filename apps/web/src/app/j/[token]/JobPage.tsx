@@ -112,7 +112,7 @@ export default function JobPage({ token }: { token: string }) {
     await postJson(`/v1/worker/jobs/${encodeURIComponent(token)}/feedback`, { more_like_this: v });
   }
 
-  if (load.kind === "loading") return <div style={{ minHeight: "calc(100vh - 24px)", background: "#ECE8DF" }} aria-busy="true" />;
+  if (load.kind === "loading") return <div style={{ minHeight: "100vh", background: "#ECE8DF" }} aria-busy="true" />;
   if (load.kind === "expired") return <Expired />;
   if (load.kind === "offline") return <Offline retry={() => { setLoad({ kind: "loading" }); refresh(); }} />;
 
@@ -250,8 +250,8 @@ export default function JobPage({ token }: { token: string }) {
   const city = job.location.address.split(",").slice(-2).join(",").trim();
 
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <SiteHeader />
 
         <div style={{ background: "#E9EFE4", borderBottom: "1px solid #DCE6D8" }}>

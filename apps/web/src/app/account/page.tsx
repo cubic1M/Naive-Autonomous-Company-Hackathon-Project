@@ -25,7 +25,7 @@ export default function AccountPage() {
     if (!loading && !user) router.replace("/login?next=/account");
   }, [loading, user, router]);
 
-  if (!user) return <div style={{ minHeight: "calc(100vh - 24px)", background: "#ECE8DF" }} aria-busy="true" />;
+  if (!user) return <div style={{ minHeight: "100vh", background: "#ECE8DF" }} aria-busy="true" />;
 
   const [idText, idColor] = ID_TEXT[user.identity.status] ?? ID_TEXT.unverified!;
   const card = { background: "#FBF9F5", border: "1px solid #DCD6CA", borderRadius: "14px", padding: "22px", display: "flex", flexDirection: "column", gap: "12px" } as const;
@@ -33,8 +33,8 @@ export default function AccountPage() {
   const edit = (step: number) => ({ href: `/onboarding?step=${step}&next=/account`, style: { fontSize: "14px", fontWeight: 600, color: "#3B5A44", textDecoration: "none" } });
 
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <SimpleHeader action={<Link href="/jobs" style={headerLink}>Browse requests</Link>} />
         <main style={{ flex: "1", width: "100%", maxWidth: "880px", margin: "0 auto", boxSizing: "border-box", padding: "28px 24px 56px", display: "flex", flexDirection: "column", gap: "16px" }}>
           <section style={{ ...card, background: "radial-gradient(120% 110% at 88% 0%, #43594A 0%, #26342B 42%, #151D17 100%)", border: "0", color: "#F3EEE4", flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>

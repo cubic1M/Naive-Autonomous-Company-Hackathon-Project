@@ -7,7 +7,7 @@ import QuickStart from "@/components/QuickStart";
 // Log in / Sign up / Find work point at the "For people" steps: workers don't have accounts (the job link is the credential).
 export default function Home() {
   return (
-    <div className="launch" style={{ borderRadius: "22px", overflow: "hidden", background: "#17211A" }}>
+    <div className="launch" style={{ overflow: "hidden", background: "#17211A" }}>
       <LaunchHands />
       <section aria-labelledby="launch-title" style={{ position: "relative", isolation: "isolate", background: "#ECE8DF", color: "#1F2A22", overflow: "hidden" }}>
         <HandsClip variant="grey" bg="#ECE8DF" />

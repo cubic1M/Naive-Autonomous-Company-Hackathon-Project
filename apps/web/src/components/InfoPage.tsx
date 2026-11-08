@@ -35,8 +35,8 @@ export function SiteFooter() {
 
 export function InfoPage({ eyebrow, title, muted, intro, children, note }: { eyebrow: string; title: string; muted?: string; intro: string; children: ReactNode; note?: ReactNode }) {
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <SiteHeader />
         <main style={{ flex: "1", width: "100%", maxWidth: "980px", margin: "0 auto", boxSizing: "border-box", padding: "20px 24px 64px", display: "flex", flexDirection: "column", gap: "18px" }}>
           <section style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "12px 0 8px" }}>
