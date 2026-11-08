@@ -52,6 +52,13 @@ describe('licences required by the liability tags', () => {
       expect(await checkEligibility({ repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID })).toMatchObject({ eligible: true, reasons: [] });
     }
   });
+  it('also requires the licence of the rule Compliance recorded', async () => {
+    const repo = await setup(['L2']);
+    await repo.decideJobLiability(JOB_ID, { model: 'connector', rule_id: 'L1', reason: 'recorded before the tag check', policy_version: '2026-11-08', decided_by: 'test', decided_at: T0 });
+    const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
+    expect(r.reasons.some((x) => x.startsWith('attorney_not_verified'))).toBe(true);
+  });
   it('changes nothing for a job without tags', async () => {
     const repo = new InMemoryRepo();
     repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));

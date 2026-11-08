@@ -72,6 +72,11 @@ export async function setLiability(
       'repost_required: this job was priced as a standard job; refuse it with rule L1 or L2 and tell the customer to post it again as a notary or legal job so it is priced as one',
     );
   }
+  if (input.model === 'connector' && licensed && !row.tags.rules.includes(rule.id)) {
+    throw new InvalidStateError(
+      `rule_not_tagged: ${rule.id} is not among this job's intake tags ${JSON.stringify(row.tags.rules)}; record the tagged rule, so the licence checked at accept is the one the work needs`,
+    );
+  }
   const repostRefusal = input.model === 'refuse' && licensed && row.pricing === 'standard';
   if (rule.model !== input.model && !repostRefusal) {
     throw new InvalidStateError(`rule_mismatch: rule ${rule.id} (${rule.title}) means ${rule.model}, not ${input.model}`);

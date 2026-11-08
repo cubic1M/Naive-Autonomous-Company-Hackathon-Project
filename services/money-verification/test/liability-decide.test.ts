@@ -50,6 +50,11 @@ describe('setLiability', () => {
     await expect(set(d, 'connector', 'L2')).rejects.toThrow(/^repost_required/);
     expect((await set(d, 'refuse', 'L2', 'legal work priced as standard; re-post as a legal job')).next).toBe('cancel');
   });
+  it('refuses a licensed rule intake did not tag (no L1/L2 swap)', async () => {
+    const d = deps(); await seed(d.repo, ['L2'], 'connector', 'connector');
+    await expect(set(d, 'connector', 'L1')).rejects.toThrow(/^rule_not_tagged/);
+    expect((await set(d, 'connector', 'L2')).liability.rule_id).toBe('L2');
+  });
   it('creates the intake row for a job created before this shipped', async () => {
     const d = deps();
     expect((await set(d, 'operis', 'D')).liability.pricing).toBe('standard');
