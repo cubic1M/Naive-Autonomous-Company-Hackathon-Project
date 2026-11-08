@@ -53,10 +53,12 @@ Edwin's API must also:
 
 ## 4. Re-blast schedule (optional)
 
+Ops agent (Operis org): `agt_zzy6h6r9pnrad5aqnvkdhsyjhp`. On Vercel this is `NAIVE_AGENT_OPS`.
+
 A Naïve deployment on Ops every 10 minutes: "Any job in `outreach` for 15+ minutes with no accept? Follow the worker-sourcing skill's 'If nobody accepts' steps."
 
 ```bash
-naive deploy create --agent <ops_id> --cron "*/10 * * * *" --budget-usd 0.5 --prompt "Check jobs stuck in outreach and follow the worker-sourcing skill."
+naive deploy create --agent agt_zzy6h6r9pnrad5aqnvkdhsyjhp --cron "*/10 * * * *" --budget-usd 0.5 --prompt "Check jobs stuck in outreach and follow the worker-sourcing skill."
 ```
 
 ## 5. Env vars (Vercel)
