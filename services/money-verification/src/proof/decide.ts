@@ -210,6 +210,15 @@ export async function approveProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; notes?: string; override?: boolean },
 ): Promise<ProofReview> {
+  return approve(deps, input, { founder: false });
+}
+
+/** approveProof, and for a founder also past an unverified identity (recorded as waived). */
+async function approve(
+  deps: DecideDeps,
+  input: { proofId: string; reviewer: string; notes?: string; override?: boolean },
+  by: { founder: boolean },
+): Promise<ProofReview> {
   const { proof, job } = await loadProofAndJob(deps.repo, input.proofId);
   const review = await reviewOnRecord(deps, input.proofId);
   const profile = profileFor(deps, job);
@@ -222,8 +231,11 @@ export async function approveProof(
   if (late && !input.override) throw new InvalidStateError(`outside_time_window: ${late.detail}; pass override to approve anyway`);
   const current: ProofCheck[] = [];
   if (profile.identityRequired) {
-    const identity = await identityCheck(deps.repo, proof.worker_id, profile);
-    if (identity.status !== 'pass') throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
+    let identity = await identityCheck(deps.repo, proof.worker_id, profile);
+    if (identity.status !== 'pass') {
+      if (!by.founder) throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
+      identity = note('identity', 'pass', `${identity.detail}; waived: a founder approved the escalation`, { ...identity.data, waived_by: 'founder' });
+    }
     current.push(identity);
   }
   const threshold = thresholdFor(deps, profile);
@@ -280,4 +292,27 @@ export async function rejectProof(
   input: { proofId: string; reviewer: string; reason: string },
 ): Promise<ProofReview> {
   return recordEscalationOrRejection(deps, input, 'rejected');
+}
+
+/**
+ * A founder's decision on a job's latest proof, for the founder console (apps/api POST /v1/admin/escalations/[jobId]).
+ * proof_reviews stays the one record payWorker and settleApprovedJob read, so a console approval must be written here,
+ * not only into proofs and jobs.status. 'approved' is recorded with reviewer 'founder' and override (the confidence
+ * threshold and stored completeness/time failures are the founder's call), and it passes the identity gate even under
+ * IDENTITY_GATE=enforce: the founder is the human escalation, and the identity check records the waiver. A geofence or
+ * reuse failure is still refused (fraud signals). 'rejected' is refused once the proof is approved (rejectProof).
+ */
+export async function recordFounderDecision(
+  deps: DecideDeps,
+  input: { jobId: string; decision: 'approved' | 'rejected'; note?: string },
+): Promise<ProofReview> {
+  const proofs = await deps.repo.getProofsForJob(input.jobId);
+  const proof = proofs[proofs.length - 1];
+  if (!proof) throw new NotFoundError('proof for job', input.jobId);
+  const written = input.note?.trim() ?? '';
+  const detail = written ? `founder: ${written}` : 'founder decision';
+  if (input.decision === 'approved') {
+    return approve(deps, { proofId: proof.id, reviewer: 'founder', notes: detail, override: true }, { founder: true });
+  }
+  return rejectProof(deps, { proofId: proof.id, reviewer: 'founder', reason: detail });
 }

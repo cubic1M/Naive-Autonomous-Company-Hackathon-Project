@@ -7,6 +7,7 @@ import {
   createContractTools,
   depsFromApiContext,
   depsFromProcessEnv,
+  recordFounderDecision as recordFounderDecisionOnProof,
   startIdentityVerification,
   type ApiContext,
   type VerificationStatus,
@@ -45,4 +46,20 @@ export default verify;
 export async function createIdentityLink(workerId: string): Promise<{ url: string | null; status: VerificationStatus }> {
   const { url, status } = await startIdentityVerification(depsFromProcessEnv(), workerId);
   return { url, status };
+}
+
+/**
+ * Named export for the founder console (POST /v1/admin/escalations/[jobId]): records the founder's decision on the job's
+ * latest proof in proof_reviews (reviewer 'founder'), the record payout and settle read, so a founder-approved job can
+ * be paid. Fires no hooks: call it first, then the route's own `update proofs` and transition(). Approving lifts the
+ * confidence threshold and the identity gate (recorded as waived); it throws InvalidStateError (code 'invalid_state')
+ * on a geofence or reused-media failure, and so does rejecting a proof that is already approved. Needs DATABASE_URL.
+ */
+export async function recordFounderDecision(
+  jobId: string,
+  decision: "approved" | "rejected",
+  note = "",
+): Promise<{ proof_id: string; decision: string }> {
+  const review = await recordFounderDecisionOnProof(depsFromProcessEnv(), { jobId, decision, note });
+  return { proof_id: review.proof_id, decision: review.decision };
 }
