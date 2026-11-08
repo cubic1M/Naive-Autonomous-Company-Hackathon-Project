@@ -27,7 +27,14 @@ interface Seed {
   lat?: number;
   lng?: number;
   location_text?: string;
+  /** Mobile number (E.164, e.g. +14155550142). Only with the person's OK: enables SMS invites. */
+  phone?: string;
+  /** The person agreed to receive job texts. Required for any SMS. */
+  sms_consent?: boolean;
 }
+
+/** YC office (Pier 70), the demo job's location. */
+export const YC_PIER70 = { lat: 37.7609, lng: -122.3875, location_text: 'Pier 70, San Francisco, CA' };
 
 const DEFAULT: Seed[] = [
   {
@@ -45,7 +52,7 @@ function toLead(s: Seed): Lead {
     name: s.name,
     kind: 'person',
     email: s.email,
-    phone: null,
+    phone: s.phone ?? null,
     website: null,
     profile_url: null,
     address: null,
@@ -68,8 +75,8 @@ function toLead(s: Seed): Lead {
 async function seedInto(repo: Repo): Promise<void> {
   for (const s of seeds) {
     const p = await repo.upsertLead(toLead(s), `email:${s.email.toLowerCase()}`);
-    await repo.setRegular(p.id, true); // opted in to jobs; no SMS consent
-    console.log(`  seeded regular: ${s.name} <${s.email}>`);
+    await repo.setRegular(p.id, true, s.phone && s.sms_consent ? true : undefined); // opted in to jobs; SMS only with consent
+    console.log(`  seeded regular: ${s.name} <${s.email}>${s.phone ? ` ${s.phone}${s.sms_consent ? ' (SMS ok)' : ''}` : ''}`);
   }
 }
 
