@@ -33,7 +33,7 @@ export default function HowItWorks() {
   }, []);
 
   return (
-    <section id="for-people" aria-labelledby="how-title" style={{ background: "#17211A", color: "#F3EEE4", scrollMarginTop: "12px" }}>
+    <section id="for-people" aria-labelledby="how-title" style={{ background: "transparent", color: "#F3EEE4", scrollMarginTop: "12px" }}>
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "100px 24px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: "36px" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", letterSpacing: "0.14em", color: "#A3ADA4" }}>HOW IT WORKS</span>
         <h2 id="how-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: 500, fontSize: "clamp(30px, 3.6vw, 46px)", letterSpacing: "-0.04em", textAlign: "center", color: "#F3EEE4" }}>

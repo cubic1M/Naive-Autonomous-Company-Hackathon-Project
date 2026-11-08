@@ -310,14 +310,17 @@ p { margin: 0; }
 .launch :focus-visible { outline: 2px solid #c9d8c3; outline-offset: 2px; }
 
 /* ---------- hands backdrop (components/LaunchHands.tsx) ---------- */
-/* Each layer is fixed on its own (no wrapping stacking context) so its blend mode reaches the page. */
-.hands-bg__layer { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
-/* Above the beige/green line: the halftone grey, multiplied into the beige (white paper vanishes). */
-.hands-bg__layer--grey { clip-path: inset(0 0 calc(100% - var(--line, 100%)) 0); mix-blend-mode: multiply; opacity: 0.15; }
-/* Below it: neon green dots, screened onto the dark green (black paper vanishes). */
-.hands-bg__layer--neon { clip-path: inset(var(--line, 100%) 0 calc(100% - var(--foot, 100%)) 0); mix-blend-mode: screen; opacity: 0.17; }
-/* Behind the footer the hands show at a fifth of their strength, so the footer reads as a near-solid block. */
-.hands-bg__layer--dim { clip-path: inset(var(--foot, 100%) 0 0 0); mix-blend-mode: screen; opacity: 0.034; } /* 20% of the neon: the footer reads ~80% opaque */
+/* Each section has its own copy: a container clipped to the section (clip-path also clips the fixed
+   layer inside it), sitting between the section background and its content. The browser scrolls the
+   clip with the page, so the grey/neon split is always exactly on the border. */
+.hands-clip { position: absolute; inset: 0; z-index: -1; clip-path: inset(0); pointer-events: none; }
+.hands-bg__layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+/* Beige hero: the halftone grey, multiplied into the beige (white paper vanishes). */
+.hands-bg__layer--grey { mix-blend-mode: multiply; opacity: 0.15; }
+/* Dark sections: neon green dots, screened onto the dark green (black paper vanishes). */
+.hands-bg__layer--neon { mix-blend-mode: screen; opacity: 0.17; }
+/* Footer: a fifth of the neon, so the footer reads ~80% opaque. */
+.hands-bg__layer--dim { mix-blend-mode: screen; opacity: 0.034; }
 .hands-bg__layer--neon .hands-bg__img, .hands-bg__layer--dim .hands-bg__img { filter: url(#hands-neon); }
 
 /* The image is 1706×795. The fingertips meet at (956, 414) = 56.04% / 52.08%; the stage puts that
@@ -344,8 +347,9 @@ p { margin: 0; }
   transform: translateX(calc(7% * (1 - var(--p, 0))));
 }
 
-/* The line ripple: a strip that redraws the beige/green edge as a travelling wave (JS sets its shape). */
-.hands-bg__ripple { position: fixed; z-index: 4; display: none; pointer-events: none; overflow: visible; }
+/* The line ripple: a strip at the top of the dark sections that redraws the beige/green edge as a
+   travelling wave (JS sets its shape); it scrolls with the page. */
+.hands-bg__ripple { position: absolute; left: 0; width: 100%; z-index: 2; display: none; pointer-events: none; overflow: visible; }
 
 /* The spark where the fingertips touch (always the center of the screen): a hot white core, rays,
    and a wide, bright glow that fades out with no visible edge. */

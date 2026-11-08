@@ -1,5 +1,5 @@
 import { AuthButtons, LogoPill } from "@/components/SiteHeader";
-import LaunchHands from "@/components/LaunchHands";
+import LaunchHands, { HandsClip, RippleLine } from "@/components/LaunchHands";
 import HowItWorks from "./HowItWorks";
 import QuickStart from "@/components/QuickStart";
 
@@ -9,7 +9,8 @@ export default function Home() {
   return (
     <div className="launch" style={{ borderRadius: "22px", overflow: "hidden", background: "#17211A" }}>
       <LaunchHands />
-      <section aria-labelledby="launch-title" style={{ position: "relative", background: "#ECE8DF", color: "#1F2A22", overflow: "hidden" }}>
+      <section aria-labelledby="launch-title" style={{ position: "relative", isolation: "isolate", background: "#ECE8DF", color: "#1F2A22", overflow: "hidden" }}>
+        <HandsClip variant="grey" bg="#ECE8DF" />
         <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: "0", width: "100%", height: "100%" }} fill="none" stroke="#D2CCBF" strokeWidth="1.2">
           <path d="M0 90 H120 Q140 90 140 110 V250 Q140 270 160 270 H300" />
           <path d="M180 0 V60 Q180 80 200 80 H330" />
@@ -94,7 +95,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-labelledby="why-title" style={{ background: "#17211A", color: "#F3EEE4" }}>
+      <div className="hands-dark" style={{ position: "relative", isolation: "isolate", background: "#17211A" }}>
+      <HandsClip variant="neon" bg="#17211A" />
+      <RippleLine />
+      <section aria-labelledby="why-title" style={{ background: "transparent", color: "#F3EEE4" }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "110px 24px 90px", display: "flex", flexDirection: "column", alignItems: "center", gap: "70px", textAlign: "center" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "22px" }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", letterSpacing: "0.14em", color: "#A3ADA4" }}>WHY OPERIS</span>
@@ -108,8 +112,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-labelledby="inside-title" style={{ background: "#17211A", padding: "0 12px 12px" }}>
-        <div style={{ borderRadius: "18px", background: "radial-gradient(120% 90% at 85% 10%, #4E6452 0%, #233026 45%, #141C16 100%)", color: "#F3EEE4", padding: "80px 24px 40px" }}>
+      <section aria-labelledby="inside-title" style={{ background: "transparent", padding: "0 12px 12px" }}>
+        <div style={{ borderRadius: "18px", background: "radial-gradient(120% 90% at 85% 10%, rgba(78, 100, 82, 0.9) 0%, rgba(35, 48, 38, 0.86) 45%, rgba(20, 28, 22, 0.88) 100%)", color: "#F3EEE4", padding: "80px 24px 40px" }}>
           <div style={{ maxWidth: "1240px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "44px" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", textAlign: "center" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "6px 12px", borderRadius: "999px", background: "rgba(243, 238, 228, 0.1)", fontFamily: "var(--font-mono)", fontSize: "13px", letterSpacing: "0.12em", color: "#D6DED3" }}><span aria-hidden="true" style={{ width: "6px", height: "6px", borderRadius: "999px", background: "#FF8800" }}></span>INSIDE THE PLATFORM</span>
@@ -149,7 +153,7 @@ export default function Home() {
       </section>
 
       <HowItWorks />
-      <section aria-labelledby="cta-title" style={{ background: "#17211A", color: "#F3EEE4" }}>
+      <section aria-labelledby="cta-title" style={{ background: "transparent", color: "#F3EEE4" }}>
         <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "100px 24px 110px", display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", textAlign: "center" }}>
           <svg width="22" height="22" viewBox="0 0 34 34" aria-hidden="true"><circle cx="13.5" cy="17" r="6" fill="none" stroke="#F3EEE4" strokeWidth="2.4" /><circle cx="20.5" cy="17" r="6" fill="none" stroke="#A9C0A2" strokeWidth="2.4" /></svg>
           <h2 id="cta-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: "500", fontSize: "clamp(32px, 4.2vw, 54px)", letterSpacing: "-0.04em", lineHeight: "1.08" }}>Your next errand, <span style={{ color: "#8E958C" }}>already handled.</span></h2>
@@ -161,7 +165,10 @@ export default function Home() {
         </div>
       </section>
 
-      <footer data-hands-footer="" style={{ background: "#1C2820", color: "#C3CBC2", borderTop: "1px solid #33443A", boxShadow: "0 -1px 0 rgba(0, 0, 0, 0.35)", overflow: "hidden" }}>
+      </div>
+
+      <footer style={{ position: "relative", isolation: "isolate", background: "#1C2820", color: "#C3CBC2", borderTop: "1px solid #33443A", boxShadow: "0 -1px 0 rgba(0, 0, 0, 0.35)", overflow: "hidden" }}>
+        <HandsClip variant="dim" bg="#1C2820" />
         <div style={{ maxWidth: "1320px", margin: "0 auto", padding: "48px 24px 0", display: "flex", flexWrap: "wrap", gap: "36px" }}>
           <div style={{ flex: "2 1 260px", display: "flex", flexDirection: "column", gap: "10px" }}>
             <span style={{ display: "flex", alignItems: "center", gap: "8px", color: "#F3EEE4", fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "19px" }}><svg width="22" height="22" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="8" fill="#ECE8DF" /><circle cx="13.5" cy="17" r="6" fill="none" stroke="#1F2A22" strokeWidth="2.4" /><circle cx="20.5" cy="17" r="6" fill="none" stroke="#46664F" strokeWidth="2.4" /></svg>operis.</span>
