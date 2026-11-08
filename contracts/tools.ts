@@ -116,7 +116,19 @@ export interface Tools {
     { job_id: string },
     { job_id: string; status: "paid"; worker_pay_usd: number; fee_usd: number } | { error: "needs_bank_setup" | "over_limit" }
   >;
-  refund: ToolSpec<{ job_id: string; reason: string }, { job_id: string; status: "refunded"; amount_usd: number }>;
+  refund: ToolSpec<
+    { job_id: string; reason: string; amount_cents?: number; request_id?: string },
+    { job_id: string; status: "refunded"; amount_usd: number; refunded_total_usd?: number; partial?: true; released_hold?: true }
+  >;
+  /** Over the $150 cap: the CEO agent runs these with approved_by (Cameron, PR #11). */
+  refund_large: ToolSpec<
+    { job_id: string; reason: string; amount_cents?: number; request_id: string; approved_by: string; approval_note?: string },
+    { job_id: string; status: "refunded"; amount_usd: number; refunded_total_usd?: number; partial?: true; released_hold?: true }
+  >;
+  release_payout_large: ToolSpec<
+    { job_id: string; approved_by: string; approval_note?: string },
+    { job_id: string; status: "paid"; worker_pay_usd: number; fee_usd: number }
+  >;
   ledger: ToolSpec<
     { since?: string },
     { revenue_usd: number; payouts_usd: number; fees_usd: number; costs_usd: number; jobs_paid: number }
@@ -136,5 +148,7 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   capture_payment: { owner: "cameron", folder: "services/payments",          calledBy: ["finance"] },
   payout:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance"] },
   refund:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance", "ceo"] },
+  refund_large:    { owner: "cameron", folder: "services/payments",          calledBy: ["ceo"] },
+  release_payout_large: { owner: "cameron", folder: "services/payments",     calledBy: ["ceo"] },
   ledger:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance", "ceo"] },
 };

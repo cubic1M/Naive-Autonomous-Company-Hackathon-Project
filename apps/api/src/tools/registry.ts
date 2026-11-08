@@ -16,7 +16,7 @@ const REAL: ServiceModule = { ...outreach, ...verify, ...payments };
 
 export const INTERNAL_TOOLS: ToolName[] = [
   "get_job", "find_people", "send_blast", "check_proof", "approve_proof", "escalate",
-  "capture_payment", "payout", "refund", "ledger",
+  "capture_payment", "payout", "refund", "ledger", "refund_large", "release_payout_large",
 ];
 
 export function resolveTool(name: ToolName): { impl: (input: any, ctx: ToolContext) => Promise<any>; source: "real" | "mock" } {

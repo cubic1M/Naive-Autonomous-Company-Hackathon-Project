@@ -74,7 +74,7 @@ Example request:
 | **Finance** | Holds, charges, payouts, refunds, ledger |
 | **Sales** | Gets other teams' agents connected to our MCP server |
 
-**Limits set by the founders:** a daily spend cap per agent; refunds and payouts over $150 need founder approval; jobs only within the demo area (San Francisco).
+**Limits set by the founders:** a daily spend cap per agent; refunds and payouts over $150 need the CEO agent's approval; anything over $1,000, or any legal or safety issue, goes to a founder; jobs only within the demo area (San Francisco).
 
 ## Team split
 

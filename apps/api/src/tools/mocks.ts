@@ -120,6 +120,17 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     return { revenue_usd: t.capture ?? 0, payouts_usd: t.payout ?? 0, fees_usd: t.fee ?? 0, costs_usd: costs, jobs_paid: n };
   },
 
+  async refund_large({ job_id, reason }, ctx) {
+    return mocks.refund({ job_id, reason: `large: ${reason}` }, ctx);
+  },
+  async release_payout_large({ job_id }, ctx) {
+    const [j] = await ctx.sql`select worker_id, worker_pay_usd, fee_usd from jobs where id = ${job_id}`;
+    await ctx.ledger(job_id, "payout", Number(j.worker_pay_usd), "mock-large");
+    await ctx.ledger(job_id, "fee", Number(j.fee_usd), "mock-large");
+    await ctx.transition(job_id, "paid");
+    return { job_id, status: "paid" as const, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) };
+  },
+
   // public tools are implemented in edwin.ts, not mocked
   request_human: null as any,
   get_job: null as any,
