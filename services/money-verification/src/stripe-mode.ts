@@ -7,6 +7,9 @@ import { MoneyVerificationError } from './errors.js';
  */
 export type StripeMode = 'live' | 'test';
 
+/** process.env, or any object carrying the key (tests). The union keeps Next's augmented ProcessEnv assignable. */
+export type StripeKeySource = NodeJS.ProcessEnv | { STRIPE_SECRET_KEY?: string };
+
 const PREFIX = /^(?:sk|rk)_(live|test)_/;
 
 /** sk_live_/rk_live_ -> live, sk_test_/rk_test_ -> test; anything else is a configuration error (value not echoed). */
@@ -17,8 +20,8 @@ export function stripeModeOfKey(key: string): StripeMode {
 }
 
 /** The mode of STRIPE_SECRET_KEY; test when it is unset (read-only tools run without a key, and no live id exists then). */
-export function stripeModeFromEnv(source: { STRIPE_SECRET_KEY?: string } = process.env): StripeMode {
-  const key = source.STRIPE_SECRET_KEY;
+export function stripeModeFromEnv(source: StripeKeySource = process.env): StripeMode {
+  const key = (source as { STRIPE_SECRET_KEY?: string }).STRIPE_SECRET_KEY;
   return key ? stripeModeOfKey(key) : 'test';
 }
 

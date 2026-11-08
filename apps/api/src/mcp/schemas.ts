@@ -1,5 +1,6 @@
 // Zod input schemas mirroring contracts/tools.ts (keep in sync).
 import { z } from "zod";
+import { stripeTestMode } from "@/lib/stripe-mode";
 
 const location = z.object({ address: z.string(), lat: z.number(), lng: z.number() });
 const proof = z.object({
@@ -28,7 +29,7 @@ export const SCHEMAS = {
       payment: z
         .object({ payment_method: z.string().regex(/^pm_/, "a Stripe PaymentMethod id, pm_...") })
         .optional()
-        .describe("Fund the job now with a Stripe PaymentMethod id (pm_...; in test mode pm_card_visa), no link. Without it your card saved with setup_payment is used; without either, escrow_url must be paid."),
+        .describe(`Fund the job now with a Stripe PaymentMethod id (pm_...${stripeTestMode() ? "; in test mode pm_card_visa" : ""}), no link. Without it your card saved with setup_payment is used; without either, escrow_url must be paid.`),
     },
   },
   get_job: { description: "Get a job's status and details; includes the proof package once approved.", shape: jobId },

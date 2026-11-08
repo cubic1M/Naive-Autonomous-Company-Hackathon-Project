@@ -1,6 +1,12 @@
 // Single source for the customer guide: served at /llms.txt and rendered at /, and written to docs/CONNECT.md.
-export function guideMarkdown(api: string): string {
+// Test-card hints appear only when STRIPE_SECRET_KEY is a test key (lib/stripe-mode.ts).
+import { stripeTestMode } from "./stripe-mode";
+
+export function guideMarkdown(api: string, opts: { testMode?: boolean } = {}): string {
   const mcp = `${api}/mcp`;
+  const testMode = opts.testMode ?? stripeTestMode();
+  const testPm = testMode ? "; in test mode `pm_card_visa`" : "";
+  const testCard = testMode ? " (in test mode: card 4242 4242 4242 4242, any future expiry, any CVC)" : "";
   return `# Operis: hire a verified human from your agent
 
 Operis is an autonomous company that sends a verified, accountable human to do a real-world task for your AI agent, and only charges when proof passes. One MCP tool: \`request_human\`.
@@ -47,7 +53,7 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    | Can't configure MCP | keep calling over HTTP as in step 3, reading the key from \`OPERIS_API_KEY\` |
 
    New MCP servers usually load on the **next** session. Until then, keep using HTTP.
-5. **Payment:** every job is paid. To pay without a link, save a card once (call \`setup_payment\`, or \`POST ${api}/v1/customers/payment-setup\` with your key, and have your owner open the returned \`url\` one time), or pass \`payment.payment_method\` (a Stripe PaymentMethod id; in test mode \`pm_card_visa\`). Then \`request_human\` answers \`status: "held"\` with \`escrow_url: null\`: funded on the spot, the card held and charged only when proof passes. Otherwise the result is \`status: "requested"\` with an \`escrow_url\` your owner pays once in a browser, and the job starts when it's paid.
+5. **Payment:** every job is paid. To pay without a link, save a card once (call \`setup_payment\`, or \`POST ${api}/v1/customers/payment-setup\` with your key, and have your owner open the returned \`url\` one time), or pass \`payment.payment_method\` (a Stripe PaymentMethod id${testPm}). Then \`request_human\` answers \`status: "held"\` with \`escrow_url: null\`: funded on the spot, the card held and charged only when proof passes. Otherwise the result is \`status: "requested"\` with an \`escrow_url\` your owner pays once in a browser, and the job starts when it's paid.
 
 ## What humans can do for you
 
@@ -123,7 +129,7 @@ curl -X POST ${mcp} \\
 | \`certification_required\` | string \\| null | e.g. "notary" |
 | \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
-| \`payment\` | \`{ payment_method }\` (optional) | A Stripe PaymentMethod id (\`pm_…\`) that funds the job in this call, no link; in test mode \`pm_card_visa\`. Omit it to use the card saved with \`setup_payment\` |
+| \`payment\` | \`{ payment_method }\` (optional) | A Stripe PaymentMethod id (\`pm_…\`) that funds the job in this call, no link${testPm}. Omit it to use the card saved with \`setup_payment\` |
 
 Example:
 \`\`\`json
@@ -154,7 +160,7 @@ Returns \`{ job_id, status, quote_usd, escrow_url, reason?, fallback_reason?, ne
 \`{ job_id }\`: allowed until status is \`accepted\`. Any card hold is released at once.
 
 ### \`setup_payment\`
-No input → \`{ url, next_step }\`. Your human owner opens \`url\` once and saves a card on Stripe's page; nothing is charged then (in test mode: card 4242 4242 4242 4242, any future expiry, any CVC). Once Stripe confirms the card to us, \`request_human\` funds each job from it in the call. The link works for 24 hours; call again for a new one or to replace the card. Same as \`POST ${api}/v1/customers/payment-setup\` with your key.
+No input → \`{ url, next_step }\`. Your human owner opens \`url\` once and saves a card on Stripe's page; nothing is charged then${testCard}. Once Stripe confirms the card to us, \`request_human\` funds each job from it in the call. The link works for 24 hours; call again for a new one or to replace the card. Same as \`POST ${api}/v1/customers/payment-setup\` with your key.
 
 ## 4. Job lifecycle
 
