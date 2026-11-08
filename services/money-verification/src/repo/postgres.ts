@@ -1,3 +1,4 @@
+import { NotFoundError } from '../errors.js';
 import { FEE_BPS } from '../pricing.js';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
@@ -5,7 +6,9 @@ import type {
   Escrow,
   EscrowStatus,
   Job,
+  JobLiability,
   LedgerEntry,
+  LiabilityDecision,
   NewLedgerEntry,
   NotaryRecord,
   Payout,
@@ -271,6 +274,21 @@ function mapDispute(r: Row): Dispute {
     opened_at: date(r.opened_at) as Date,
     closed_at: date(r.closed_at),
     updated_at: date(r.updated_at) as Date,
+  };
+}
+function mapLiability(r: Row): JobLiability {
+  const tags = json<{ rules?: string[]; forced?: 'connector' | 'refuse' | null }>(r.tags, {});
+  return {
+    job_id: String(r.job_id),
+    tags: { rules: tags.rules ?? [], forced: tags.forced ?? null },
+    pricing: r.pricing === 'connector' ? 'connector' : 'standard',
+    model: (r.model ?? null) as JobLiability['model'],
+    rule_id: r.rule_id == null ? null : String(r.rule_id),
+    reason: r.reason == null ? null : String(r.reason),
+    policy_version: r.policy_version == null ? null : String(r.policy_version),
+    decided_by: r.decided_by == null ? null : String(r.decided_by),
+    decided_at: date(r.decided_at),
+    created_at: date(r.created_at) as Date,
   };
 }
 
@@ -542,5 +560,40 @@ export class PostgresRepo implements Repo {
     );
     if (!row) throw new Error('upsert disputes returned no row');
     return row;
+  }
+
+  async getJobLiability(jobId: string) {
+    try {
+      return await this.one('select * from job_liability where job_id = $1', [jobId], mapLiability);
+    } catch (e) {
+      if ((e as { code?: string }).code === '42P01') {
+        console.warn('[money-verification] job_liability is missing: run migration 0003');
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  async insertJobLiability(row: Pick<JobLiability, 'job_id' | 'tags' | 'pricing'>) {
+    const inserted = await this.one(
+      `insert into job_liability (job_id, tags, pricing) values ($1, $2::jsonb, $3)
+       on conflict (job_id) do nothing returning *`,
+      [row.job_id, JSON.stringify(row.tags), row.pricing],
+      mapLiability,
+    );
+    return inserted ?? (await this.getJobLiability(row.job_id))!;
+  }
+
+  async decideJobLiability(jobId: string, d: LiabilityDecision) {
+    const updated = await this.one(
+      `update job_liability set model = $2, rule_id = $3, reason = $4, policy_version = $5, decided_by = $6, decided_at = $7
+       where job_id = $1 and model is null returning *`,
+      [jobId, d.model, d.rule_id, d.reason, d.policy_version, d.decided_by, d.decided_at],
+      mapLiability,
+    );
+    if (updated) return { row: updated, changed: true };
+    const row = await this.getJobLiability(jobId);
+    if (!row) throw new NotFoundError('job_liability', jobId);
+    return { row, changed: false };
   }
 }
