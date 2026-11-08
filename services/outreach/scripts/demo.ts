@@ -7,7 +7,9 @@
  *   TEST_EMAIL=you@x.com SEND=1 NAIVE_API_KEY=... NAIVE_OPS_IDENTITY_ID=... NAIVE_OPS_INBOX_ID=... npx tsx scripts/demo.ts
  *                                                    # really emails ONLY you (allowlist); businesses are never emailed
  *
- * Job options: JOB_TITLE, JOB_ADDRESS, JOB_LAT, JOB_LNG, JOB_BUDGET, JOB_CERT.
+ * Job options: JOB_TITLE, JOB_ADDRESS, JOB_LAT, JOB_LNG, JOB_BUDGET, JOB_CERT, JOB_REMOTE=1 (online work, no distance limit).
+ * Hints (comma lists): HINT_ROLES, HINT_SKILLS, HINT_CREDENTIAL, e.g.
+ *   JOB_REMOTE=1 JOB_TITLE="Review our SaaS terms" HINT_ROLES="contract attorney,paralegal" HINT_CREDENTIAL="California bar license" npx tsx scripts/demo.ts
  */
 import { sendBlastDetailed } from '../src/blast.js';
 import { DEFAULTS, type Env } from '../src/env.js';
@@ -48,6 +50,16 @@ const env: Env = {
   OUTREACH_LIVE: false, // never email scraped businesses from a demo
   OUTREACH_TEST_ALLOWLIST: testEmail ? [testEmail] : [],
   PAUSE_OUTREACH: false,
+  OUTREACH_MANUAL_DAILY_CAP: 20,
+  OUTREACH_MANUAL_QUEUE: e.MANUAL_QUEUE === '1',
+};
+
+const list = (v: string | undefined) => (v ? v.split(',').map((x) => x.trim()).filter(Boolean) : undefined);
+const hints = {
+  ...(list(e.HINT_ROLES) ? { roles: list(e.HINT_ROLES) } : {}),
+  ...(list(e.HINT_SKILLS) ? { skills: list(e.HINT_SKILLS) } : {}),
+  ...(e.HINT_CREDENTIAL ? { credential: e.HINT_CREDENTIAL } : {}),
+  ...(e.JOB_REMOTE ? { remote: e.JOB_REMOTE === '1' } : {}),
 };
 
 const lat = Number(e.JOB_LAT ?? 37.7749);
@@ -64,6 +76,7 @@ repo.addJob({
   budget_usd: Number(e.JOB_BUDGET ?? 60),
   worker_pay_usd: null,
   certification_required: e.JOB_CERT ?? null,
+  remote: e.JOB_REMOTE === '1',
   status: 'held',
 });
 
@@ -93,9 +106,11 @@ const email: EmailSender = !send
     : new MonidEmailSender(new HttpMonid(monidKey!, env.MONID_BASE_URL), agentmailInbox!);
 
 console.log(`\n== 1. find_people (${liveSearch ? 'LIVE Monid search' : 'saved sample data, free'}) ==`);
-const found = await findPeopleDetailed({ job_id: 'demo-job', limit: 10 }, { repo, monid, env });
+const found = await findPeopleDetailed({ job_id: 'demo-job', limit: 10, hints }, { repo, monid, env });
+const pl = found.plan;
+console.log(`  plan: ${pl.remote ? 'REMOTE (no distance limit)' : `on-site near ${pl.locationText ?? '?'}`}; roles=${pl.roles.join('|')}; skills=${pl.skills.join('|') || '-'}; credential=${pl.credential ?? '-'}`);
 for (const c of found.output.candidates) {
-  console.log(`  ${c.score.toFixed(2)}  ${String(c.distance_km ?? '?').padStart(4)} km  ${c.channel.padEnd(5)}  ${c.source.padEnd(11)}  ${c.name ?? '(no name)'}`);
+  console.log(`  ${c.score.toFixed(2)}  ${String(c.distance_km ?? '-').padStart(4)} km  ${c.channel.padEnd(16)}  ${c.source.padEnd(15)}  ${c.name ?? '(no name)'}`);
 }
 if (found.output.candidates.length === 0) console.log('  (no contactable candidates found)');
 console.log(`  spend: $${found.spend_usd.toFixed(4)}${liveSearch ? '' : ' (simulated, nothing charged)'}`);
@@ -107,6 +122,10 @@ if (ids.length) {
   const toYou = send ? `really emailed you: ${blast.sent}` : `to you (would really send with SEND=1): ${blast.sent}`;
   console.log(`  ${toYou}   businesses (dry run, not sent): ${blast.dry_run}   failed: ${blast.failed}   skipped (opted out): ${blast.skipped_opted_out}`);
 }
+
+const queue = await repo.listManualTasks({ job_id: 'demo-job', status: 'queued' });
+console.log(`\n== 2b. manual DM queue (${queue.length} queued for a teammate to send; nothing is auto-sent) ==`);
+for (const t of queue) console.log(`  [${t.platform}] ${t.profile_url}\n    ${t.message.replace(/\n/g, '\n    ')}\n`);
 
 console.log('\n== 3. the invite email (what each person gets) ==');
 const people = await repo.getPeople(ids);

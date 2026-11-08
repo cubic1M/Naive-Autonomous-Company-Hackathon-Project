@@ -1,4 +1,14 @@
-import type { Channel, JobForOutreach, Lead, OutreachRow, OutreachStatus, Person } from './types.js';
+import type {
+  Channel,
+  JobForOutreach,
+  Lead,
+  ManualPlatform,
+  ManualTask,
+  ManualTaskStatus,
+  OutreachRow,
+  OutreachStatus,
+  Person,
+} from './types.js';
 
 /**
  * Persistence boundary. InMemoryRepo (tests, local dev) and PostgresRepo (prod) implement it.
@@ -34,6 +44,14 @@ export interface Repo {
   insertOutreach(row: { job_id: string; worker_id: string; channel: Channel; token: string; status: OutreachStatus }): Promise<OutreachRow>;
   listOutreachForJob(jobId: string): Promise<OutreachRow[]>;
   touchContacted(personId: string, at: Date): Promise<void>;
+
+  // ---- manual DM queue (migrations/0002_people.sql: manual_outreach) ----
+  /** Queue a drafted DM. Idempotent on (job_id, worker_id, platform): returns the existing task. */
+  insertManualTask(t: { job_id: string; worker_id: string; platform: ManualPlatform; profile_url: string; message: string }): Promise<ManualTask>;
+  listManualTasks(filter: { job_id?: string; status?: ManualTaskStatus }): Promise<ManualTask[]>;
+  markManualTask(id: string, status: 'sent' | 'skipped', at: Date): Promise<void>;
+  /** Tasks queued for a platform since a time (daily cap protecting the real sending account). */
+  countManualTasksSince(platform: ManualPlatform, since: Date): Promise<number>;
 
   /** Append a cost row to the ledger: kind 'scrape_cost' | 'sms_cost'. */
   recordCost(jobId: string, kind: 'scrape_cost' | 'sms_cost', amountUsd: number, ref: string): Promise<void>;

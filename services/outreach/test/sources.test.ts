@@ -5,7 +5,7 @@ import { hunter, pickHunterEmail } from '../src/sources/hunter.js';
 import { linkedin, parseLinkedin } from '../src/sources/linkedin.js';
 import { mapsNearby, parseMapsNearby } from '../src/sources/mapsNearby.js';
 import { SourceError } from '../src/sources/types.js';
-import { FakeMonid, fixture, makeJob } from './helpers/fakeMonid.js';
+import { FakeMonid, fixture, makeCtx, makeJob } from './helpers/fakeMonid.js';
 
 const base = { website: 'https://kineticevents.com', name: 'K', kind: 'business' as const, email: null, phone: null, profile_url: null, address: null, lat: null, lng: null, source: 's', source_ref: null, categories: [], rating: null, snippet: null };
 
@@ -25,7 +25,7 @@ describe('google maps', () => {
   });
   it('calls once per query with ll param', async () => {
     const m = new FakeMonid();
-    const r = await googleMaps.run({ job: makeJob(), monid: m, radiusKm: 8, queries: ['a', 'b'] });
+    const r = await googleMaps.run(makeCtx({ job: makeJob(), monid: m, queries: ['a', 'b'] }));
     expect(m.calls).toHaveLength(2);
     expect(m.calls[0]!.input.queryParams).toEqual({ q: 'a', type: 'search', ll: '@37.7749,-122.4194,13z' });
     expect(r.leads).toHaveLength(20);
@@ -33,7 +33,7 @@ describe('google maps', () => {
   });
   it('throws SourceError when all calls fail', async () => {
     const m = new FakeMonid().override('litescrape/google/maps', { error: 'boom' });
-    await expect(googleMaps.run({ job: makeJob(), monid: m, radiusKm: 8, queries: ['a'] })).rejects.toBeInstanceOf(SourceError);
+    await expect(googleMaps.run(makeCtx({ job: makeJob(), monid: m, queries: ['a'] }))).rejects.toBeInstanceOf(SourceError);
   });
 });
 
@@ -52,7 +52,7 @@ describe('maps nearby', () => {
   });
   it('sends the documented body', async () => {
     const m = new FakeMonid();
-    await mapsNearby.run({ job: makeJob(), monid: m, radiusKm: 8, queries: ['photographer'] });
+    await mapsNearby.run(makeCtx({ job: makeJob(), monid: m, queries: ['photographer'] }));
     expect(m.calls[0]!.input.body).toEqual({ query: 'photographer', coordinates: { latitude: 37.7749, longitude: -122.4194 } });
   });
 });
@@ -107,7 +107,7 @@ describe('linkedin', () => {
   });
   it('always sends limit <= 5 and the certification keyword', async () => {
     const m = new FakeMonid();
-    await linkedin.run({ job: makeJob({ certification_required: 'notary' }), monid: m, radiusKm: 8, queries: [] });
+    await linkedin.run(makeCtx({ job: makeJob({ certification_required: 'notary' }), monid: m, queries: [] }));
     expect(m.calls[0]!.input.body).toEqual({ filters: { keywords: 'notary', location: 'San Francisco' }, limit: 5 });
   });
 });

@@ -18,7 +18,7 @@ export interface Env {
   NAIVE_OPS_IDENTITY_ID?: string;
   NAIVE_OPS_INBOX_ID?: string;
 
-  /** Max Monid spend for one find_people call, USD. Default 0.25. */
+  /** Max Monid spend for one find_people call, USD. Default 0.50. */
   OUTREACH_MAX_SPEND_USD: number;
   /** Search radius around the job, km. Default 8. */
   OUTREACH_RADIUS_KM: number;
@@ -31,12 +31,20 @@ export interface Env {
   OUTREACH_TEST_ALLOWLIST: string[];
   /** Kill switch: when true, send_blast sends nothing at all. */
   PAUSE_OUTREACH: boolean;
+  /** Max manual DMs queued per platform per day (protects the real accounts that send them). Default 20. */
+  OUTREACH_MANUAL_DAILY_CAP: number;
+  /**
+   * Draft LinkedIn/X/Reddit/Instagram DMs for a teammate to send (people with no public email).
+   * Default false = fully autonomous: only channels Operis sends itself (email, consented SMS).
+   */
+  OUTREACH_MANUAL_QUEUE: boolean;
 }
 
 export const DEFAULTS = {
   MONID_BASE_URL: 'https://api.monid.ai',
   NAIVE_BASE_URL: 'https://api.vetta.sh',
-  OUTREACH_MAX_SPEND_USD: 0.25,
+  OUTREACH_MAX_SPEND_USD: 0.5,
+  OUTREACH_MANUAL_DAILY_CAP: 20,
   OUTREACH_RADIUS_KM: 8,
 } as const;
 
@@ -75,5 +83,7 @@ export function envFromProcess(source: NodeJS.ProcessEnv = process.env): Env {
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
     PAUSE_OUTREACH: bool(source.PAUSE_OUTREACH),
+    OUTREACH_MANUAL_DAILY_CAP: num(source.OUTREACH_MANUAL_DAILY_CAP, DEFAULTS.OUTREACH_MANUAL_DAILY_CAP),
+    OUTREACH_MANUAL_QUEUE: bool(source.OUTREACH_MANUAL_QUEUE),
   };
 }

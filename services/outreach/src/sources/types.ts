@@ -1,12 +1,16 @@
 import type { Monid, MonidRunResult } from '../monid.js';
 import { succeeded } from '../monid.js';
-import type { JobForOutreach, Lead } from '../types.js';
+import type { JobForOutreach, Lead, Profile, SearchHints } from '../types.js';
 
 export interface SourceContext {
   job: JobForOutreach;
   monid: Monid;
   radiusKm: number;
   queries: string[];
+  /** Merged agent hints + heuristics (always present; fields may be empty). */
+  hints: Required<Pick<SearchHints, 'roles' | 'skills'>> & { credential: string | null };
+  /** true = online work anywhere; false = on-site near job.lat/lng. */
+  remote: boolean;
 }
 
 export interface SourceAdapter {
@@ -19,11 +23,16 @@ export interface SourceAdapter {
   run(ctx: SourceContext): Promise<{ leads: Lead[]; cost_usd: number }>;
 }
 
-/** Enrichment: look up a contact for an existing business lead. Not a search. */
+/** Enrichment: look up a contact for an existing lead. Not a search. */
 export interface Enricher {
   id: string;
   costEstimateUsd: number;
-  enrich(lead: Lead, monid: Monid): Promise<{ email: string | null; phone: string | null; cost_usd: number }>;
+  /** Optional cheap pre-check: skip leads this enricher can't help (e.g. no LinkedIn URL). Default: always applies. */
+  applies?(lead: Lead): boolean;
+  enrich(
+    lead: Lead,
+    monid: Monid,
+  ): Promise<{ email: string | null; phone: string | null; cost_usd: number; profiles?: Profile[] }>;
 }
 
 /** A failed source call that may still have cost money. */

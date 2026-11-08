@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { distanceKm, normEmail, toE164 } from '../geo.js';
 import type { Repo } from '../repo.js';
-import type { Channel, JobForOutreach, Lead, OutreachRow, OutreachStatus, Person } from '../types.js';
+import { mergeProfiles } from '../profiles.js';
+import type { Channel, JobForOutreach, Lead, ManualPlatform, ManualTask, ManualTaskStatus, OutreachRow, OutreachStatus, Person } from '../types.js';
+
+function newest(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(b).getTime() > new Date(a).getTime() ? b : a;
+}
 
 /** In-memory Repo for tests and local dev. Same semantics as PostgresRepo. */
 export class InMemoryRepo implements Repo {
   readonly jobs = new Map<string, JobForOutreach>();
   readonly people = new Map<string, Person>();
   readonly outreach: OutreachRow[] = [];
+  readonly manual: ManualTask[] = [];
   readonly costs: { job_id: string; kind: string; amount_usd: number; ref: string }[] = [];
 
   addJob(job: JobForOutreach): void {
@@ -36,6 +44,12 @@ export class InMemoryRepo implements Repo {
       sms_consent: p.sms_consent ?? false,
       last_contacted_at: p.last_contacted_at ?? null,
       dedupe_key: p.dedupe_key,
+      profiles: p.profiles ?? [],
+      headline: p.headline ?? null,
+      location_text: p.location_text ?? null,
+      credentials: p.credentials ?? [],
+      open_to_work: p.open_to_work ?? false,
+      last_active_at: p.last_active_at ?? null,
     };
     this.people.set(person.id, person);
     return person;
@@ -73,6 +87,12 @@ export class InMemoryRepo implements Repo {
         categories: [...new Set([...existing.categories, ...lead.categories])],
         rating: existing.rating ?? lead.rating,
         snippet: existing.snippet ?? lead.snippet,
+        profiles: mergeProfiles(existing.profiles, lead.profiles),
+        headline: existing.headline ?? lead.headline ?? null,
+        location_text: existing.location_text ?? lead.location_text ?? null,
+        credentials: [...new Set([...existing.credentials, ...(lead.credentials ?? [])])],
+        open_to_work: existing.open_to_work || (lead.open_to_work ?? false),
+        last_active_at: newest(existing.last_active_at, lead.last_active_at ?? null),
       };
       this.people.set(merged.id, merged);
       return merged;
@@ -92,6 +112,12 @@ export class InMemoryRepo implements Repo {
       rating: lead.rating,
       snippet: lead.snippet,
       dedupe_key: dedupeKey,
+      profiles: lead.profiles ?? [],
+      headline: lead.headline ?? null,
+      location_text: lead.location_text ?? null,
+      credentials: lead.credentials ?? [],
+      open_to_work: lead.open_to_work ?? false,
+      last_active_at: lead.last_active_at ?? null,
     });
   }
 
@@ -154,6 +180,29 @@ export class InMemoryRepo implements Repo {
   async touchContacted(personId: string, at: Date): Promise<void> {
     const p = this.people.get(personId);
     if (p) p.last_contacted_at = at.toISOString();
+  }
+
+  async insertManualTask(t: { job_id: string; worker_id: string; platform: ManualPlatform; profile_url: string; message: string }): Promise<ManualTask> {
+    const dup = this.manual.find((m) => m.job_id === t.job_id && m.worker_id === t.worker_id && m.platform === t.platform);
+    if (dup) return dup;
+    const saved: ManualTask = { id: randomUUID(), status: 'queued', created_at: new Date().toISOString(), sent_at: null, ...t };
+    this.manual.push(saved);
+    return saved;
+  }
+
+  async listManualTasks(filter: { job_id?: string; status?: ManualTaskStatus }): Promise<ManualTask[]> {
+    return this.manual.filter((m) => (!filter.job_id || m.job_id === filter.job_id) && (!filter.status || m.status === filter.status));
+  }
+
+  async markManualTask(id: string, status: 'sent' | 'skipped', at: Date): Promise<void> {
+    const m = this.manual.find((x) => x.id === id);
+    if (!m) return;
+    m.status = status;
+    m.sent_at = status === 'sent' ? at.toISOString() : null;
+  }
+
+  async countManualTasksSince(platform: ManualPlatform, since: Date): Promise<number> {
+    return this.manual.filter((m) => m.platform === platform && new Date(m.created_at).getTime() >= since.getTime()).length;
   }
 
   async recordCost(jobId: string, kind: 'scrape_cost' | 'sms_cost', amountUsd: number, ref: string): Promise<void> {

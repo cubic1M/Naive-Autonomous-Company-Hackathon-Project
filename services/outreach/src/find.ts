@@ -1,43 +1,58 @@
 import { pickChannel } from './channel.js';
-import { dedupeKey, mergeLeads } from './dedupe.js';
+import { dedupeKey, identityKeys, mergeLeads } from './dedupe.js';
+import { personEnrichers } from './enrich/index.js';
 import type { Env } from './env.js';
 import { distanceKm } from './geo.js';
 import type { Monid } from './monid.js';
-import { planQueries } from './queries.js';
+import { mergeProfiles } from './profiles.js';
+import { planSearch, type SearchPlan } from './queries.js';
 import type { Repo } from './repo.js';
-import { distanceToJob, scorePerson, type Scorable } from './score.js';
+import { distanceToJob, fitScore, locationMatches, scorePerson, type ScoreContext, type Scorable } from './score.js';
 import { crawl } from './sources/crawl.js';
 import { googleMaps } from './sources/googleMaps.js';
 import { hunter } from './sources/hunter.js';
-import { linkedin } from './sources/linkedin.js';
 import { mapsNearby } from './sources/mapsNearby.js';
-import { SourceError, type SourceAdapter } from './sources/types.js';
+import { peopleSources } from './sources/people/index.js';
+import { SourceError, type Enricher, type SourceAdapter, type SourceContext } from './sources/types.js';
 import type { Candidate, FindPeopleInput, FindPeopleOutput, JobForOutreach, Lead, Person, SourceRun } from './types.js';
 
 export interface FindDeps {
   repo: Repo;
   monid: Monid;
   env: Env;
+  /** Test overrides: people-search sources and person enrichers. */
+  sources?: SourceAdapter[];
+  enrichers?: Enricher[];
 }
 
 export interface FindDetailed {
   output: FindPeopleOutput;
   runs: SourceRun[];
   spend_usd: number;
+  plan: SearchPlan;
 }
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
-const MAX_ENRICH = 12;
+const MAX_ENRICH = 15;
 const ENRICH_CONCURRENCY = 4;
-/** Naïve truncates tool results at 8,000 chars; stay under. */
+/** Naive truncates tool results at 8,000 chars; stay under. */
 const MAX_OUTPUT_CHARS = 7500;
+const MAX_REGULARS_SCAN = 300;
 
-const SHORT_SOURCE: Record<string, string> = {
-  'monid:litescrape/google/maps': 'google_maps',
-  'monid:anyapi/maps.search_nearby': 'maps_nearby',
-  'monid:ploid/linkedin/search': 'linkedin',
-};
+/** Short, stable names for the `source` field. */
+export function shortSource(id: string | null): string {
+  if (!id) return 'unknown';
+  const s = id.toLowerCase();
+  if (s.includes('search_nearby')) return 'maps_nearby';
+  if (s.includes('maps')) return 'google_maps';
+  if (s.includes('linkedin')) return 'linkedin';
+  if (/(twitter|(^|[:/._-])x([:/._-]|$))/.test(s)) return 'x';
+  if (s.includes('reddit')) return 'reddit';
+  if (/google.*(profile|serp|search)|profile.*google/.test(s)) return 'google_profiles';
+  if (s.includes('people')) return 'people_search';
+  return s.replace(/^monid:/, '').slice(0, 24);
+}
 
 function err(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -56,21 +71,54 @@ function leadAsScorable(l: Lead): Scorable {
     phone: l.phone,
     sms_consent: false,
     opted_out: false,
+    kind: l.kind,
+    headline: l.headline ?? null,
+    location_text: l.location_text ?? null,
+    credentials: l.credentials ?? [],
+    open_to_work: l.open_to_work ?? false,
+    last_active_at: l.last_active_at ?? null,
+    profiles: l.profiles ?? [],
   };
+}
+
+const REMOTE_CAPABLE = /\b(remote|worldwide|anywhere|online|virtual|global)\b/i;
+
+/** On-site: should a lead without coordinates stay? Persons only if they say they are in the job's area (or work remotely). */
+function keepWithoutCoords(l: Lead, plan: SearchPlan): boolean {
+  if (l.kind === 'business') return true;
+  if (locationMatches(l.location_text ?? l.address, plan.locationText)) return true;
+  return REMOTE_CAPABLE.test(`${l.location_text ?? ''} ${l.headline ?? ''} ${l.snippet ?? ''}`);
 }
 
 export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps): Promise<FindDetailed> {
   const { repo, monid, env } = deps;
+  const sources = deps.sources ?? peopleSources;
+  const enrichers = [...(deps.enrichers ?? personEnrichers)].sort((a, b) => a.costEstimateUsd - b.costEstimateUsd);
   const job: JobForOutreach | null = await repo.getJob(input.job_id);
   if (!job) throw new Error(`find_people: job ${input.job_id} not found`);
-  if (job.lat === null || job.lng === null) throw new Error(`find_people: job ${input.job_id} has no lat/lng`);
   const limit = Math.min(MAX_LIMIT, Math.max(1, Math.floor(input.limit ?? DEFAULT_LIMIT)));
   const radiusKm = env.OUTREACH_RADIUS_KM;
   const max = env.OUTREACH_MAX_SPEND_USD;
-  const queries = planQueries(job);
+
+  const plan = planSearch(job, input.hints);
+  const remote = plan.remote;
+  const onsiteCoords = !remote && job.lat !== null && job.lng !== null;
+  const hints = { roles: plan.roles, skills: plan.skills, credential: plan.credential };
+  const scoreCtx: ScoreContext = {
+    radiusKm,
+    queries: plan.mapsQueries,
+    roles: plan.roles,
+    skills: plan.skills,
+    credential: plan.credential,
+    remote,
+    locationText: plan.locationText,
+  };
+  // People queries: the roles; for on-site jobs, scoped to the job's city.
+  const peopleQueries = plan.roles.map((r) => (remote || !plan.locationText ? r : `${r} ${plan.locationText}`));
 
   const runMap = new Map<string, SourceRun>();
   let spend = 0;
+  let reserved = 0;
   const record = (source: string, leads: number, cost: number, error?: string) => {
     const r = runMap.get(source) ?? { source, leads: 0, cost_usd: 0 };
     r.leads += leads;
@@ -79,66 +127,100 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     runMap.set(source, r);
     spend += cost;
   };
-  const affordable = (est: number) => spend + est <= max + 1e-9;
 
-  /** Run a search adapter within budget. Returns leads, or null on failure / no budget. */
-  const search = async (adapter: SourceAdapter): Promise<Lead[] | null> => {
+  /** Reserve worst-case cost for a search (trimming per-query adapters to the budget). Null when unaffordable. */
+  const reserve = (adapter: SourceAdapter, queries: string[]): { qs: string[]; held: number } | null => {
+    const room = max - spend - reserved;
     let qs = queries;
+    let held = adapter.costEstimateUsd;
     if (adapter.perQuery) {
-      const n = Math.min(qs.length, Math.floor((max - spend) / adapter.costEstimateUsd + 1e-9));
+      const n = Math.min(qs.length, Math.floor(room / adapter.costEstimateUsd + 1e-9));
       qs = qs.slice(0, Math.max(0, n));
+      held = qs.length * adapter.costEstimateUsd;
       if (qs.length === 0) {
         record(adapter.id, 0, 0, 'skipped: budget');
         return null;
       }
-    } else if (!affordable(adapter.costEstimateUsd)) {
+    } else if (adapter.costEstimateUsd > room + 1e-9) {
       record(adapter.id, 0, 0, 'skipped: budget');
       return null;
     }
+    reserved += held;
+    return { qs, held };
+  };
+
+  const runReserved = async (adapter: SourceAdapter, r: { qs: string[]; held: number }): Promise<Lead[] | null> => {
+    const ctx: SourceContext = { job, monid, radiusKm, queries: r.qs, hints, remote };
     try {
-      const r = await adapter.run({ job, monid, radiusKm, queries: qs });
-      record(adapter.id, r.leads.length, r.cost_usd);
-      return r.leads;
+      const res = await adapter.run(ctx);
+      reserved -= r.held;
+      record(adapter.id, res.leads.length, res.cost_usd);
+      return res.leads;
     } catch (e) {
+      reserved -= r.held;
       record(adapter.id, 0, e instanceof SourceError ? e.cost_usd : 0, err(e));
       return null;
     }
   };
 
-  // 1. regulars first
-  const regulars = await repo.listRegularsNear(job.lat, job.lng, radiusKm, limit);
+  const search = async (adapter: SourceAdapter, queries: string[]): Promise<Lead[] | null> => {
+    const r = reserve(adapter, queries);
+    return r ? runReserved(adapter, r) : null;
+  };
 
-  // 2. search
-  let leads = (await search(googleMaps)) ?? [];
-  if (leads.length === 0) leads = (await search(mapsNearby)) ?? [];
-  if (job.certification_required) leads.push(...((await search(linkedin)) ?? []));
+  // 1. regulars first (on-site: near the job; remote: any regular whose profile fits the roles)
+  let regulars: Person[];
+  if (onsiteCoords) {
+    regulars = await repo.listRegularsNear(job.lat!, job.lng!, radiusKm, limit);
+  } else {
+    const all = await repo.listRegularsNear(0, 0, 20100, MAX_REGULARS_SCAN).catch(() => [] as Person[]);
+    regulars = all.filter((p) => fitScore(p, scoreCtx) >= 0.5).slice(0, limit);
+  }
 
-  // 3. dedupe + enrich
+  // 2. search: people sources for every job (in parallel, budget reserved up front); Maps businesses only as on-site backup
+  const planned = sources.map((s) => ({ s, r: reserve(s, peopleQueries) }));
+  const peopleRuns = planned.filter((x) => x.r).map((x) => runReserved(x.s, x.r!));
+  const mapsRun = (async () => {
+    if (remote) return [] as Lead[];
+    let l = (await search(googleMaps, plan.mapsQueries)) ?? [];
+    if (l.length === 0) l = (await search(mapsNearby, plan.mapsQueries)) ?? [];
+    return l;
+  })();
+  const [peopleLeads, mapsLeads] = await Promise.all([Promise.all(peopleRuns), mapsRun]);
+  let leads: Lead[] = [...peopleLeads.flatMap((l) => l ?? []), ...mapsLeads];
+
+  // 3. merge across sources + area filter
   leads = mergeLeads(leads);
-  // Maps returns some far-away "relevant" places; drop them before paying to enrich them.
-  leads = leads.filter((l) => l.lat === null || l.lng === null || distanceKm(job.lat!, job.lng!, l.lat, l.lng) <= radiusKm);
+  if (onsiteCoords) {
+    leads = leads.filter((l) =>
+      l.lat !== null && l.lng !== null ? distanceKm(job.lat!, job.lng!, l.lat, l.lng) <= radiusKm : keepWithoutCoords(l, plan),
+    );
+  }
   // Key before enrichment: stable across runs and matches earlier saves (and opt-outs) even once an email is found.
   const keys = new Map<Lead, string>(leads.map((l) => [l, dedupeKey(l)]));
-  const ctx = { radiusKm, queries };
   // Reuse contacts we already know: no paid enrichment for someone saved with an email (or opted out).
-  const known = new Map((await repo.getByDedupeKeys([...keys.values()])).map((p) => [p.dedupe_key, p]));
+  const allKeys = [...new Set(leads.flatMap((l) => [keys.get(l)!, ...identityKeys(l)]))];
+  const known = new Map((await repo.getByDedupeKeys(allKeys)).map((p) => [p.dedupe_key, p]));
+  const knownFor = (l: Lead): Person | undefined => [keys.get(l)!, ...identityKeys(l)].map((k) => known.get(k)).find(Boolean);
   for (const l of leads) {
-    const k = known.get(keys.get(l)!);
+    const k = knownFor(l);
     if (k?.email && !l.email) l.email = k.email;
   }
-  const skipEnrich = (l: Lead) => known.get(keys.get(l)!)?.opted_out === true;
+
+  // 4. enrich the top candidates, cheapest step first, stopping at the first email
+  const stepsFor = (l: Lead): Enricher[] => {
+    if (l.kind === 'person') return enrichers.filter((e) => !e.applies || e.applies(l));
+    return l.website ? [crawl, hunter] : [];
+  };
   const targets = leads
-    .filter((l) => l.kind === 'business' && !l.email && l.website && !skipEnrich(l))
-    .map((l) => ({ l, s: scorePerson(leadAsScorable(l), job, ctx) }))
+    .filter((l) => !l.email && knownFor(l)?.opted_out !== true && stepsFor(l).length > 0)
+    .map((l) => ({ l, s: scorePerson(leadAsScorable(l), job, scoreCtx) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, MAX_ENRICH)
     .map((t) => t.l);
 
-  // Cheapest first: crawling the site ($0.001) usually finds a contact email; Hunter ($0.0245) is the fallback.
-  // Run ENRICH_CONCURRENCY leads at a time, reserving each step's estimate so parallel calls can't overspend.
-  let reserved = 0;
   const enrichOne = async (lead: Lead) => {
-    for (const step of [crawl, hunter]) {
+    for (const step of stepsFor(lead)) {
       if (lead.email) break;
       if (spend + reserved + step.costEstimateUsd > max + 1e-9) {
         record(step.id, 0, 0, 'skipped: budget');
@@ -150,6 +232,12 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
         record(step.id, r.email ? 1 : 0, r.cost_usd);
         if (r.email) lead.email = r.email;
         if (r.phone && !lead.phone) lead.phone = r.phone;
+        if (r.profiles?.length) lead.profiles = mergeProfiles(lead.profiles, r.profiles);
+        // Person enrichers (src/enrich) may also return profile details; keep the first non-empty value.
+        const extra = r as { open_to_work?: boolean; headline?: string | null; location_text?: string | null };
+        if (extra.open_to_work) lead.open_to_work = true;
+        if (extra.headline && !lead.headline) lead.headline = extra.headline;
+        if (extra.location_text && !lead.location_text) lead.location_text = extra.location_text;
       } catch (e) {
         record(step.id, 0, e instanceof SourceError ? e.cost_usd : 0, err(e));
       } finally {
@@ -161,20 +249,35 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     await Promise.all(targets.slice(i, i + ENRICH_CONCURRENCY).map(enrichOne));
   }
 
-  // 4. persist
+  // 5. persist
   const people = new Map<string, Person>();
+  const leadOf = new Map<string, Lead>();
   for (const p of regulars) people.set(p.id, p);
   for (const lead of leads) {
     const p = await repo.upsertLead(lead, keys.get(lead)!);
-    if (!people.has(p.id)) people.set(p.id, p);
-    else if (p.regular) people.set(p.id, p);
+    leadOf.set(p.id, lead);
+    if (!people.has(p.id) || p.regular) people.set(p.id, p);
   }
 
-  // 5. rank
+  // 6. rank: regulars first, then score. Fields fall back to the in-memory lead if the repo didn't store them.
+  const view = (p: Person): Person => {
+    const l = leadOf.get(p.id);
+    if (!l) return p;
+    return {
+      ...p,
+      profiles: mergeProfiles(p.profiles, l.profiles),
+      headline: p.headline ?? l.headline ?? null,
+      location_text: p.location_text ?? l.location_text ?? null,
+      credentials: p.credentials?.length ? p.credentials : (l.credentials ?? []),
+      open_to_work: p.open_to_work || (l.open_to_work ?? false),
+      last_active_at: p.last_active_at ?? l.last_active_at ?? null,
+    };
+  };
   const ranked = [...people.values()]
-    .map((p) => ({ p, channel: pickChannel(p), score: scorePerson(p, job, ctx), d: distanceToJob(p, job) }))
+    .map(view)
+    .map((p) => ({ p, channel: pickChannel(p, { allowManual: env.OUTREACH_MANUAL_QUEUE }), score: scorePerson(p, job, scoreCtx), d: remote ? null : distanceToJob(p, job) }))
     .filter((x): x is typeof x & { channel: NonNullable<typeof x.channel> } => x.channel !== null)
-    .filter((x) => x.d === null || x.d <= radiusKm) // never invite people outside the job's area
+    .filter((x) => x.d === null || x.d <= radiusKm) // on-site: never invite people outside the job's area
     .sort((a, b) => Number(b.p.regular) - Number(a.p.regular) || b.score - a.score || (a.d ?? 1e9) - (b.d ?? 1e9))
     .slice(0, limit);
 
@@ -182,7 +285,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     candidate_id: x.p.id,
     name: x.p.name ? x.p.name.slice(0, 40) : null,
     channel: x.channel,
-    source: x.p.regular ? 'regular' : (SHORT_SOURCE[x.p.source ?? ''] ?? x.p.source ?? 'unknown'),
+    source: x.p.regular ? 'regular' : shortSource(x.p.source),
     distance_km: x.d === null ? null : Math.round(x.d * 10) / 10,
     score: Math.round(x.score * 100) / 100,
   }));
@@ -193,7 +296,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
   const runs = [...runMap.values()].map((r) => ({ ...r, cost_usd: Math.round(r.cost_usd * 1e6) / 1e6 }));
   const spend_usd = Math.round(spend * 1e6) / 1e6;
   if (spend_usd > 0) await repo.recordCost(job.id, 'scrape_cost', spend_usd, 'find_people');
-  return { output: { candidates }, runs, spend_usd };
+  return { output: { candidates }, runs, spend_usd, plan };
 }
 
 export async function findPeople(input: FindPeopleInput, deps: FindDeps): Promise<FindPeopleOutput> {

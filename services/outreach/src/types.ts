@@ -5,11 +5,29 @@
 
 // ---------- contract shapes (contracts/tools.ts: find_people, send_blast) ----------
 
-export type Channel = 'email' | 'sms';
+/**
+ * How we reach someone. `*_manual` = the agent drafts a DM and a teammate sends it from a real
+ * Operis account (LinkedIn Recruiter/InMail, X, Reddit, Instagram): platforms ban automated DMs.
+ */
+export type ManualPlatform = 'linkedin' | 'x' | 'reddit' | 'instagram';
+export type Channel = 'email' | 'sms' | 'linkedin_manual' | 'x_manual' | 'reddit_manual' | 'instagram_manual';
+
+/** Search hints from the Ops agent (an LLM), which understands the job far better than a keyword table. */
+export interface SearchHints {
+  /** Job titles to search for, e.g. ["contract attorney", "paralegal"], ["React developer"], ["brand ambassador"]. */
+  roles?: string[];
+  /** Skills/keywords, e.g. ["SaaS", "terms of service"], ["TypeScript", "Next.js"]. */
+  skills?: string[];
+  /** Required credential, e.g. "California bar license", "notary public". */
+  credential?: string | null;
+  /** Override: true = online work anywhere; false = on-site near the job. */
+  remote?: boolean;
+}
 
 export interface FindPeopleInput {
   job_id: string;
   limit?: number;
+  hints?: SearchHints;
 }
 
 export interface Candidate {
@@ -35,6 +53,8 @@ export interface SendBlastInput {
 export interface SendBlastOutput {
   sent: number;
   skipped_opted_out: number;
+  /** DMs drafted into the manual send queue (LinkedIn/X/Reddit/Instagram) for a teammate to send. */
+  queued_manual: number;
   outreach_ids: string[];
 }
 
@@ -52,6 +72,8 @@ export interface JobForOutreach {
   /** What the worker is paid. Null until priced; then fall back to budget * 0.75. */
   worker_pay_usd: number | null;
   certification_required: string | null;
+  /** Online work (legal, software, design...): no distance limit. On-site jobs use lat/lng + radius. */
+  remote: boolean;
   status: string;
 }
 
@@ -79,6 +101,28 @@ export interface Lead {
   rating: number | null;
   /** Short text for relevance scoring (headline, post title, business type). Max ~300 chars. */
   snippet: string | null;
+  // ---- individuals (optional; set by people sources) ----
+  /** Public profiles of the same person/business. */
+  profiles?: Profile[];
+  /** e.g. "Freelance contract attorney | SaaS & privacy". */
+  headline?: string | null;
+  /** Free-text location, e.g. "San Francisco Bay Area" (people sources rarely have coordinates). */
+  location_text?: string | null;
+  /** Credentials found publicly, e.g. ["California Bar", "Notary Public"]. */
+  credentials?: string[];
+  /** Public signal they want work: "open to work", "freelance", "[For Hire]", "available". */
+  open_to_work?: boolean;
+  /** Most recent public activity (post date etc.), ISO 8601. */
+  last_active_at?: string | null;
+}
+
+export type ProfilePlatform = 'linkedin' | 'github' | 'x' | 'reddit' | 'instagram' | 'website' | 'directory' | 'other';
+
+export interface Profile {
+  platform: ProfilePlatform;
+  url: string;
+  /** Username where the platform has one (github login, x handle, reddit user). */
+  handle?: string | null;
 }
 
 // ---------- persisted people (workers + worker_profiles) ----------
@@ -107,9 +151,31 @@ export interface Person {
   sms_consent: boolean;
   last_contacted_at: string | null;
   dedupe_key: string;
+  // ---- individuals (migrations/0002_people.sql) ----
+  profiles: Profile[];
+  headline: string | null;
+  location_text: string | null;
+  credentials: string[];
+  open_to_work: boolean;
+  last_active_at: string | null;
 }
 
-export type OutreachStatus = 'sent' | 'opened' | 'accepted' | 'declined' | 'failed' | 'dry_run';
+export type ManualTaskStatus = 'queued' | 'sent' | 'skipped';
+
+/** A DM the agent drafted for a teammate to send by hand (shown on the dashboard / board card). */
+export interface ManualTask {
+  id: string;
+  job_id: string;
+  worker_id: string;
+  platform: ManualPlatform;
+  profile_url: string;
+  message: string;
+  status: ManualTaskStatus;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export type OutreachStatus = 'queued' | 'sent' | 'opened' | 'accepted' | 'declined' | 'failed' | 'dry_run';
 
 export interface OutreachRow {
   id: string;

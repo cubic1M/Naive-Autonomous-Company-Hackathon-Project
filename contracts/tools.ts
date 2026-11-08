@@ -40,7 +40,10 @@ export interface Tools {
     {
       title: string;
       instructions: string;
-      location: Location;
+      /** On-site jobs: where. Remote jobs (remote: true) may pass null. */
+      location: Location | null;
+      /** Online work (legal, software, design...): no distance limit. Default false. [proposed by Andrew] */
+      remote?: boolean;
       deadline: string; // ISO 8601
       budget_usd: number; // >= 20
       certification_required: string | null;
@@ -59,13 +62,28 @@ export interface Tools {
 
   // INTERNAL: Ops → services/outreach (Andrew)
   find_people: ToolSpec<
-    { job_id: string; limit?: number },
-    { candidates: { candidate_id: string; name: string | null; channel: "email" | "sms"; source: string; distance_km: number | null; score: number }[] }
+    {
+      job_id: string;
+      limit?: number;
+      /** Ops agent's understanding of the job. [proposed by Andrew] */
+      hints?: { roles?: string[]; skills?: string[]; credential?: string | null; remote?: boolean };
+    },
+    {
+      candidates: {
+        candidate_id: string;
+        name: string | null;
+        /** *_manual = drafted DM a teammate sends from a real Operis account (platforms ban automated DMs). */
+        channel: "email" | "sms" | "linkedin_manual" | "x_manual" | "reddit_manual" | "instagram_manual";
+        source: string;
+        distance_km: number | null;
+        score: number;
+      }[];
+    }
   >;
 
   send_blast: ToolSpec<
     { job_id: string; candidate_ids: string[] },
-    { sent: number; skipped_opted_out: number; outreach_ids: string[] }
+    { sent: number; skipped_opted_out: number; queued_manual: number; outreach_ids: string[] }
   >;
 
   // INTERNAL: Verifier → services/verify (Cameron)

@@ -1,0 +1,156 @@
+{
+ "results": [
+  {
+   "name": "Kaitlin Adams",
+   "description": "Contract Review Attorney",
+   "profiles": [
+    "https://linkedin.com/in/kaitlinsadams"
+   ],
+   "location": {
+    "country_code": "US",
+    "region": "Washington",
+    "city": "Seattle"
+   },
+   "role": {
+    "title": "Attorney",
+    "seniority": "mid_senior_level",
+    "functions": [
+     "legal"
+    ],
+    "started_on": "2025-07-01",
+    "company": {
+     "name": "Kaitlin Adams Law PLLC",
+     "domain": null
+    }
+   },
+   "years_of_experience": 12,
+   "is_founder": false,
+   "skills": [],
+   "schools": [
+    "New York University School of Law",
+    "California Polytechnic State University-San Luis Obispo",
+    "University of Washington",
+    "Woodinville High School"
+   ]
+  },
+  {
+   "name": "Paul Awwad",
+   "description": "Lawyer at saas-law",
+   "profiles": [
+    "https://linkedin.com/in/paul-awwad-7657a583"
+   ],
+   "location": {
+    "country_code": "LB",
+    "region": null,
+    "city": null
+   },
+   "role": {
+    "title": "Lawyer",
+    "seniority": "mid_senior_level",
+    "functions": [
+     "legal"
+    ],
+    "started_on": null,
+    "company": {
+     "name": "saas-law",
+     "domain": null
+    }
+   },
+   "years_of_experience": null,
+   "is_founder": false,
+   "skills": [],
+   "schools": []
+  },
+  {
+   "name": "Marc Trilla",
+   "description": "Contract Negotiations & Review",
+   "profiles": [
+    "https://linkedin.com/in/marc-trilla-20857a1a"
+   ],
+   "location": {
+    "country_code": "ES",
+    "region": null,
+    "city": null
+   },
+   "role": {
+    "title": "lawyer",
+    "seniority": "associate",
+    "functions": [
+     "legal"
+    ],
+    "started_on": null,
+    "company": {
+     "name": "espai legal",
+     "domain": null
+    }
+   },
+   "years_of_experience": null,
+   "is_founder": false,
+   "skills": [],
+   "schools": [
+    "ESADE Business & Law School",
+    "Universidad del País Vasco/Euskal Herriko Unibertsitatea",
+    "Universitat Autònoma de Barcelona"
+   ]
+  },
+  {
+   "name": "andrea greenberg",
+   "description": "contract attorney at Royal Document Review",
+   "profiles": [
+    "https://www.linkedin.com/in/andrea-greenberg-a7ab8740"
+   ],
+   "location": {
+    "country_code": "US",
+    "region": "New York",
+    "city": "Brooklyn"
+   },
+   "role": {
+    "title": "contract attorney",
+    "seniority": null,
+    "functions": [],
+    "started_on": null,
+    "company": {
+     "name": "Royal Document Review",
+     "domain": null
+    }
+   },
+   "years_of_experience": null,
+   "is_founder": false,
+   "skills": [],
+   "schools": []
+  },
+  {
+   "name": "Ahmed fayed",
+   "description": "Lawyer | Contracts & Corporate Services | Contract Drafting & Review | Company Formatio",
+   "profiles": [
+    "https://linkedin.com/in/ahmed-fayed-34b791227"
+   ],
+   "location": {
+    "country_code": "EG",
+    "region": null,
+    "city": null
+   },
+   "role": {
+    "title": "Lawyer",
+    "seniority": "mid_senior_level",
+    "functions": [
+     "legal"
+    ],
+    "started_on": "2024-11-01",
+    "company": {
+     "name": "Ei Developments",
+     "domain": null
+    }
+   },
+   "years_of_experience": 4,
+   "is_founder": false,
+   "skills": [],
+   "schools": [
+    "Cairo university faculty of law",
+    "Cairo University"
+   ]
+  }
+ ],
+ "next_cursor": null,
+ "request_id": "d9531b14-39b8-424e-aff5-71178025b1a6"
+}
