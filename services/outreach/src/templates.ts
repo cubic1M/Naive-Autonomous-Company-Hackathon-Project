@@ -168,8 +168,9 @@ export function renderEmailHtml(ctx: MessageContext): string {
     ink: '#2f3a33',
     body: '#4a514c',
     muted: '#8a8f8a',
-    sage: '#6f8f7b',
-    deep: '#2f4a3b',
+    sage: '#19211a', // brand green (buttons)
+    label: '#4b5e4f',
+    deep: '#19211a', // brand green (hero)
   };
   const serif = "Georgia,'Times New Roman',Times,serif";
   const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
@@ -193,7 +194,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
 
   <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
 
-  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:linear-gradient(135deg,#9db8a6 0%,#6f8f7b 45%,#2f4a3b 100%);border-radius:16px;padding:56px 28px">
+  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:linear-gradient(135deg,#2e3d30 0%,#19211a 100%);border-radius:16px;padding:56px 28px">
     <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">A job that<br>fits you</div>
   </td></tr>
 
@@ -202,7 +203,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
   </td></tr>
 
   <tr><td style="background:${C.card};border-radius:16px;padding:28px 30px" align="center">
-    <div style="font-family:${sans};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${C.sage};margin-bottom:8px">${job.remote ? 'Remote job' : 'On-site job'}</div>
+    <div style="font-family:${sans};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${C.label};margin-bottom:8px">${job.remote ? 'Remote job' : 'On-site job'}</div>
     <div style="font-family:${serif};font-size:25px;line-height:1.25;color:${C.ink};margin-bottom:14px">${esc(job.title)}</div>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 20px;text-align:left">${details}</table>
     ${pill('View job & accept')}
