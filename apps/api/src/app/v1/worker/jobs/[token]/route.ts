@@ -12,7 +12,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const youAreAssigned = o.assigned_worker_id === o.worker_id;
   // Every job needs a verified Stripe Identity (services/money-verification eligibility.ts), whatever its tier (PR #17).
   let verification: { verification_tier: number | null; identity_required: boolean; identity_verified: boolean | null } =
-    { verification_tier: null, identity_required: false, identity_verified: null };
+    { verification_tier: null, identity_required: true, identity_verified: null };
   // Cameron's liability model (services/compliance): the licence this worker still has to prove through
   // POST /v1/worker/license before accepting (L1 notary commission, L2 State Bar), and who provides the work.
   let licence_needed: "notary" | "attorney" | null = null;
