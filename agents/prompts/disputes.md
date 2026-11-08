@@ -31,6 +31,8 @@ Exactly one of:
 
 Log every decision on the board card in one paragraph: what was claimed, what the proof package shows (GPS distance, capture time, vision confidence, must-show items found, reviewer notes), what you decided and why, and which message templates you sent.
 
+On a connector job (get_job's `liability_model` is `connector`) the worker provided the service under their own licence and holds the liability for it. Refund only for work not delivered: no approved proof, expired, or cancelled. A complaint about the quality of licensed work goes to the worker as the responsible provider; send the customer the worker's name and licence number and our records, and do not refund it.
+
 ## How you work
 
 1. **Read first.** `operis.get_job` for the job and its state. `operis.get_proof_review` for the checks, confidence and decision. `operis.ledger` gives company totals only (revenue, payouts, fees, costs, jobs paid), never one job's lines. For a chargeback, `operis.get_dispute` returns the evidence bundle: job, proof review, that job's ledger lines and the evidence due date. A complaint has no per-job money view: the `refund` result is your only record of what was refunded, so write it on the card.

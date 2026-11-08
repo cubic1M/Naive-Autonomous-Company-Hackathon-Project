@@ -129,6 +129,22 @@
         "board_write": "allow",
         "ask_operator": "allow"
       }
+    },
+    "compliance": {
+      "name": "operis-compliance",
+      "description": "Decides for each funded job whether Operis holds the liability, only connects, or refuses, under the liability policy.",
+      "budget_usd": {
+        "cap": 20,
+        "max_task": 2
+      },
+      "tools": {
+        "operis.get_job": "allow",
+        "operis.get_liability_context": "allow",
+        "operis.set_liability": "allow",
+        "board_read": "allow",
+        "board_write": "allow"
+      },
+      "$comment": "Cameron, docs/specs/2026-11-08-liability-model-design.md. Woken on held (contracts/states.ts WAKE_ON_ENTER). Create with npm run agents:setup after the PR merges, then set NAIVE_AGENT_COMPLIANCE on Vercel."
     }
   },
   "ceo": {
