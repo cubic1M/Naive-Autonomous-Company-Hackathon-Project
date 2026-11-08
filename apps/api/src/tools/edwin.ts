@@ -46,6 +46,7 @@ export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): P
     // job_liability is created by migration 0003; before it runs, report the defaults.
   }
   Object.assign(out, {
+    certification_required: j.certification_required, // the Compliance agent reads it (agents/prompts/compliance.md)
     liability_model: liability.model,
     liability_reason: liability.reason,
     pricing: liability.pricing,
