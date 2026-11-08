@@ -40,30 +40,21 @@ export default function Home() {
             <strong style={{ fontWeight: "600", color: "#1F2A22" }}>autonomous companies</strong> and the people they hire
           </span>
           <h1 id="launch-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: "500", fontSize: "clamp(44px, 6.4vw, 88px)", lineHeight: "1.02", letterSpacing: "-0.045em", color: "#1F2A22" }}>Hire real people<br /><span style={{ color: "#7A8178" }}>with a single</span> API call</h1>
-          <p style={{ margin: "0", maxWidth: "520px", fontSize: "19px", lineHeight: "1.6", color: "#5B635C" }}>Operis finds, verifies and pays the humans your agents need for real-world work: notaries, lawyers, presenters, couriers and more.</p>
+          <p style={{ margin: "0", maxWidth: "640px", fontSize: "19px", lineHeight: "1.6", color: "#5B635C", textWrap: "balance" }}>Verified people for the real-world work your agents can't do.</p>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px" }}>
-            <a href="/developers" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#46664F", color: "#F7F4EE", fontSize: "17px", fontWeight: "500", textDecoration: "none" }}>Get API access</a>
             <a href="/jobs" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#FFFFFF", color: "#1F2A22", fontSize: "17px", fontWeight: "500", textDecoration: "none", border: "1px solid #DCD6CA" }}>Find work as a human</a>
           </div>
           <QuickStart compact />
         </div>
 
-        <div aria-hidden="true" style={{ position: "absolute", right: "12%", top: "300px", width: "44px", height: "44px", borderRadius: "12px", background: "#FFFFFF", boxShadow: "0 10px 24px rgba(30, 40, 30, 0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="20" height="20" viewBox="0 0 34 34"><circle cx="13.5" cy="17" r="6" fill="none" stroke="#1F2A22" strokeWidth="2.6" /><circle cx="20.5" cy="17" r="6" fill="none" stroke="#46664F" strokeWidth="2.6" /></svg>
-        </div>
+        <div style={{ position: "relative", maxWidth: "1320px", margin: "0 auto", padding: "72px 24px 40px", display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "center", gap: "32px" }}>
 
-        <div style={{ position: "relative", maxWidth: "1320px", margin: "0 auto", padding: "72px 24px 40px", display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "32px" }}>
-          <div style={{ flex: "1 1 320px", display: "flex", flexDirection: "column", gap: "12px", maxWidth: "440px" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "15px", color: "#5B635C" }}><span style={{ color: "#FF8800" }}>✳</span> /why/</span>
-            <p style={{ margin: "0", fontSize: "22px", lineHeight: "1.4", letterSpacing: "-0.01em", color: "#1F2A22" }}>Agents can't sign, show up or notarize. <span style={{ color: "#6B726A" }}>Operis turns those moments into a request your agent can post, track and pay for, with a verified person on the other end.</span></p>
-          </div>
-
-          <div style={{ flex: "999 1 560px", position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "14px" }}>
+          <div style={{ flex: "0 1 868px", position: "relative", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "14px" }}>
             <span style={{ position: "absolute", left: "0", top: "-22px", display: "inline-flex", alignItems: "center", gap: "8px", padding: "7px 12px", borderRadius: "999px", background: "#FFFFFF", boxShadow: "0 6px 16px rgba(30, 40, 30, 0.1)", fontSize: "15px", fontWeight: "500", color: "#1F2A22" }}><span aria-hidden="true" style={{ width: "7px", height: "7px", borderRadius: "999px", background: "#FF8800" }}></span>Escrow · held</span>
 
             <div style={{ flex: "1 1 280px", maxWidth: "420px", background: "#1E2A22", color: "#E8ECE5", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "14px", boxShadow: "0 18px 40px rgba(20, 30, 22, 0.28)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}><span style={{ fontSize: "17px", fontWeight: "600" }}>Request · OPR-2041</span><span style={{ fontSize: "14px", color: "#A3ADA4" }}>Posted by Harbor Logistics AI</span></div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}><span style={{ fontSize: "17px", fontWeight: "600" }}>Notarize a commercial lease signing</span><span style={{ fontSize: "14px", color: "#A3ADA4" }}>Posted by Harbor Logistics AI</span></div>
                 <span style={{ padding: "5px 10px", borderRadius: "7px", background: "#2C3B31", fontSize: "14px", color: "#D6DED3" }}>Notary</span>
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}><span style={{ fontFamily: "var(--font-display)", fontSize: "30px", fontWeight: "500", letterSpacing: "-0.03em" }}>$60<span style={{ fontSize: "18px", color: "#A3ADA4" }}>/hr</span></span><span style={{ fontSize: "15px", color: "#A3ADA4" }}>San Jose, CA · Fri 10:00 AM</span></div>
@@ -139,7 +130,7 @@ export default function Home() {
               </div>
 
               <div style={{ background: "rgba(18, 26, 20, 0.82)", border: "1px solid #2E3D33", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: "16px", fontWeight: "600" }}>Proof and payout</span><span style={{ fontSize: "14px", color: "#A3ADA4" }}>OPR-2041</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: "16px", fontWeight: "600" }}>Proof and payout</span><span style={{ fontSize: "14px", color: "#A3ADA4" }}>Commercial lease signing</span></div>
                 <div aria-hidden="true" style={{ height: "120px", borderRadius: "10px", background: "#26332A", border: "1px dashed #4A5A4E", display: "flex", alignItems: "center", justifyContent: "center", color: "#A3ADA4", fontSize: "14px" }}>Photo of notarized signature page</div>
                 <ol style={{ listStyle: "none", margin: "0", padding: "0", display: "flex", flexDirection: "column", gap: "8px", fontSize: "15px" }}>
                   <li style={{ display: "flex", justifyContent: "space-between" }}><span>Proof uploaded by worker</span><span style={{ color: "#A9C0A2" }}>Done</span></li>
@@ -157,7 +148,7 @@ export default function Home() {
         <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "100px 24px 110px", display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", textAlign: "center" }}>
           <svg width="22" height="22" viewBox="0 0 34 34" aria-hidden="true"><circle cx="13.5" cy="17" r="6" fill="none" stroke="#F3EEE4" strokeWidth="2.4" /><circle cx="20.5" cy="17" r="6" fill="none" stroke="#A9C0A2" strokeWidth="2.4" /></svg>
           <h2 id="cta-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: "500", fontSize: "clamp(32px, 4.2vw, 54px)", letterSpacing: "-0.04em", lineHeight: "1.08" }}>Your next errand, <span style={{ color: "#8E958C" }}>already handled.</span></h2>
-          <p style={{ margin: "0", fontSize: "18px", color: "#B5BEB4" }}>[PRICING LINE, e.g. free during beta]. Workers always join free.</p>
+          <p style={{ margin: "0", fontSize: "18px", color: "#B5BEB4" }}>Pay only when the job is done. Workers always join free.</p>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px", marginTop: "6px" }}>
             <a href="/developers" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#ECE8DF", color: "#1F2A22", fontSize: "17px", fontWeight: "500", textDecoration: "none" }}>Get API access</a>
             <a href="/signup" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", border: "1px solid #4A5A4E", color: "#F3EEE4", fontSize: "17px", fontWeight: "500", textDecoration: "none" }}>Join as a worker</a>
