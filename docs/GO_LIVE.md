@@ -1,101 +1,57 @@
-# Going live on operis.live
+# Operis in production
 
-| Address | What | Project |
+How production is wired today, and how to change or rebuild it. Owner: Edwin.
+
+## Map
+
+| Address | Served by | Notes |
 |---|---|---|
-| `https://api.operis.live` | API, landing page with guide | Vercel project **operis-api** (root `apps/api`) |
-| `https://api.operis.live/mcp` | **Public MCP server** other teams' agents connect to | same |
-| `https://api.operis.live/llms.txt` | Guide for agents (plain markdown) | same |
-| `https://operis.live` | Dora's web app: worker job pages `/j/[token]`, dashboard | Vercel project **operis-web** (root `apps/web`); until it exists, point it at operis-api |
-| `sales@operis.live`, `ops@operis.live` | Agent inboxes (Naïve) | Naïve domain `dom_cargcf4dfrmk3mkrv09ksg6s19` |
+| `https://operis.live` (+ `www`) | Vercel project **operis-web** (root `apps/web`) | Dora's site. Rewrites `/api/*`, `/mcp`, `/llms.txt`, `/v1/*`, `/webhooks/*` to the API |
+| `https://api.operis.live` | Vercel project **operis-api** (root `apps/api`) | API, MCP servers, webhooks, crons, founder console `/admin` |
+| Database | **Neon** `operis-db` (Vercel Marketplace integration on operis-api) | `DATABASE_URL` set by the integration (pooled) |
+| Proof photos | **Vercel Blob** `operis-proofs` (public, sfo1) on operis-web | `BLOB_READ_WRITE_TOKEN`; phones upload originals straight to Blob |
+| Agents | **Naïve**, org **Operis** | 6 agents from `agents/agents.json` (`npm run agents:setup`) |
+| DNS | **Vercel DNS** (nameservers `ns1/ns2.vercel-dns.com`) | Website/API records are automatic; email records below |
+| Email | `@operis.live`: Microsoft 365 (Outlook). `@mail.operis.live`: AgentMail (Andrew's outreach sender `ops@mail.operis.live`) | Restore/recreate with `scripts/dns-restore-m365.sh`, `scripts/dns-agentmail.sh` |
+| Payments | **Stripe** (test mode) | Cameron's `services/money-verification`; webhook `https://api.operis.live/webhooks/stripe` |
+| People search | **Monid** (`MONID_API_KEY`) | Wallet must have credit: https://app.monid.ai/wallet |
 
----
-
-## 1. Database (Neon), 5 min
-
-1. console.neon.tech → New project `operis` (region: US West or US East).
-2. Copy the **pooled** connection string (host contains `-pooler`).
-3. Run migrations from your laptop:
-   ```bash
-   DATABASE_URL='postgres://…-pooler…/neondb?sslmode=require' npm run db:migrate
-   ```
-   You should see 4 ✓ lines (shared schema, Edwin's additions, self-serve customers, outreach).
-
-## 2. API on Vercel, 10 min
-
-1. vercel.com → Add New → Project → import `cubic1M/Naive-Autonomous-Company-Hackathon-Project`.
-2. **Root Directory: `apps/api`**. Leave "Include files outside the root directory" **on**. Framework: Next.js (auto).
-3. **Environment variables** (Production). Copy from `apps/api/.env.local`, with these production values:
-
-   | Var | Value |
-   |---|---|
-   | `DATABASE_URL` | Neon pooled string |
-   | `API_BASE_URL` | `https://api.operis.live` |
-   | `PUBLIC_BASE_URL` | `https://operis.live` |
-   | `NAIVE_API_KEY` | the **rotated** Naïve key |
-   | `INTERNAL_MCP_KEY`, `LINK_SIGNING_SECRET`, `NAIVE_WEBHOOK_SECRET`, `CALLBACK_SIGNING_SECRET` | from `.env.local` (or generate new ones) |
-   | `USE_MOCKS` | `true` for now (flip to `false` when real tools are ready) |
-   | `MOCK_PAYMENTS` | `true` until Cameron's Stripe hold is in |
-   | `MONID_API_KEY` | when you have it (turns on Andrew's real `find_people` / `send_blast`) |
-   | `OUTREACH_LIVE` | `false` (dry run) until the demo |
-   | `MOBILERUN_*`, `STRIPE_*`, `BLOB_READ_WRITE_TOKEN` | when each is ready |
-   | `NAIVE_AGENT_*` | after step 4 |
-
-4. Deploy. Then Project → Settings → **Domains** → add `api.operis.live`. Also add `operis.live` and `www.operis.live` (these move to operis-web when Dora deploys). Vercel shows the DNS records to create; use **its** values in step 3.
-
-## 3. DNS at GoDaddy, 10 min (+ propagation)
-
-GoDaddy → My Products → `operis.live` → **DNS** → Manage DNS.
-
-**First delete** GoDaddy's default `A @ → Parked` record and the default `CNAME www → @` if present.
-
-**Website and API (Vercel).** Use the exact values Vercel shows on the Domains page. They're usually:
-
-| Type | Name | Value | TTL |
-|---|---|---|---|
-| A | `@` | `76.76.21.21` | 600 |
-| CNAME | `www` | `cname.vercel-dns.com` | 600 |
-| CNAME | `api` | `cname.vercel-dns.com` | 600 |
-
-**Email for the agents (Naïve).** Exact values from Naïve for `operis.live`:
-
-| Type | Name | Value | Priority |
-|---|---|---|---|
-| MX | `@` | `receive.forge.rmta.net` | 10 |
-| MX | `send` | `feedback-smtp.us-east-1.amazonses.com` | 10 |
-| TXT | `send` | `v=spf1 include:amazonses.com ~all` | |
-| CNAME | `rsend` | `send.forge.rmta.net` | |
-| TXT | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDOJlAhFuxlpRFQju1fuzRquKxa7YuIXqE06UqKluLFmehKQfiq8PydXyerrELR4V07HGoV16C3oRf4wYtCwtagoNMXYWEKMI+jYVUBzLfkoyrnJmf8xxoaAl2vg92hcPT1+hMBIVT358DW3jLzKUgH+jxURncG7sDDKLbiY+ifuQIDAQAB` | |
-| TXT | `_dmarc` | `v=DMARC1; p=none;` | |
-
-GoDaddy wants the name **without** `.operis.live` (just `send`, `api`, `_dmarc`). Propagation is usually 5–30 minutes. Check with:
+Both Vercel projects live in the **Host Engineer** team. Deploys are made from the repo root (the API imports `contracts/` and `services/`):
 ```bash
-dig +short api.operis.live CNAME
-dig +short operis.live MX
+npx vercel deploy --prod --yes                                                        # API (root is linked to operis-api)
+VERCEL_ORG_ID=team_MzpxNSNWXaxrfns5sZ2S6ZrN VERCEL_PROJECT_ID=prj_muMT6UwKIRPVApCW7mjmVfFv5YAD npx vercel deploy --prod --yes   # web
 ```
 
-## 4. Connect the agents (after DNS resolves)
+## Environment variables
 
-```bash
-# point local config at production, then:
-API_BASE_URL=https://api.operis.live npm run agents:setup -- --write-env
-```
-This creates the vault credential for `api.operis.live`, the 5 agents (Ops gets Andrew's `worker-sourcing@1` skill; `send_blast` = ask), the CEO team, the Naïve webhook, the daily report, and Ops' re-blast schedule (disabled until outreach is live). Copy the printed `NAIVE_AGENT_*` ids into Vercel env and redeploy. **Send the Ops id to Andrew.**
+**operis-api**: `DATABASE_URL` (Neon), `API_BASE_URL=https://api.operis.live`, `PUBLIC_BASE_URL=https://operis.live` (worker links), `NAIVE_API_KEY` (Operis org), `NAIVE_AGENT_{CEO,OPS,VERIFIER,FINANCE,SALES,DISPUTES}`, `INTERNAL_MCP_KEY`, `LINK_SIGNING_SECRET`, `NAIVE_WEBHOOK_SECRET`, `CALLBACK_SIGNING_SECRET`, `ADMIN_KEY`, `CRON_SECRET`, `MONID_API_KEY`, `AGENTMAIL_INBOX=ops@mail.operis.live`, `OUTREACH_LIVE` (`false` = demo mode: only `OUTREACH_TEST_ALLOWLIST` is really emailed), `OUTREACH_TEST_ALLOWLIST`, `OUTREACH_MAX_SPEND_USD`, `USE_MOCKS=false`, `MOCK_PAYMENTS=false`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Cameron, sensitive), `VERIFIER_BASE_URL=https://api.vetta.sh/v1/proxy/openai/v1`, `VERIFIER_API_KEY` (Naïve key), `VERIFIER_MODEL=anthropic/claude-haiku-5.5`, limits (`MAX_OPEN_JOBS_PER_CUSTOMER`, `MAX_JOBS_PER_CUSTOMER_PER_DAY`, `MAX_JOBS_PER_DAY`, `GEOFENCE_*`), optional `AUTO_APPROVE_TOOLS`.
 
-Then verify the email domain and create the inboxes: `POST /v1/domains/dom_cargcf4dfrmk3mkrv09ksg6s19/verify`, then identities "Operis Sales" / "Operis Ops" with inboxes `sales@operis.live` / `ops@operis.live` (`wake: true`, owned by the Sales / Ops agent). Put the Ops identity and inbox ids in `NAIVE_OPS_IDENTITY_ID` / `NAIVE_OPS_INBOX_ID` so Andrew's outreach email sends from ops@.
+**operis-web**: `API_URL=https://api.operis.live`, `NEXT_PUBLIC_MCP_URL=https://operis.live/mcp`, `BLOB_READ_WRITE_TOKEN` (Blob store), optional `NEXT_PUBLIC_WORKER_LOGIN=required` once worker accounts exist.
 
-**Vendor webhooks:**
-- Mobilerun → `https://api.operis.live/webhooks/mobilerun` (events `sms.received`, `sms.send.failed`), secret → `MOBILERUN_WEBHOOK_SECRET`
-- Stripe → `https://api.operis.live/webhooks/stripe` (`checkout.session.completed`), secret → `STRIPE_WEBHOOK_SECRET`
+Kill switches: `PAUSE_OUTREACH=true` (no messages), `OUTREACH_LIVE=false` (dry run), `MOCK_TOOLS=a,b` (force a tool back to its mock), `USE_MOCKS=true` (all mocks).
 
-## 5. Check it's live
+## Scheduled work (operis-api `vercel.json`)
 
-- [ ] `curl https://api.operis.live/api/health` → `"ok": true`, tools listed as real or mock
-- [ ] `https://api.operis.live` shows the landing page; `/llms.txt` shows the guide with `api.operis.live` URLs
-- [ ] Self-serve key: `curl -X POST https://api.operis.live/v1/customers -H 'Content-Type: application/json' -d '{"name":"Test","contact_email":"you@x.com"}'` → `api_key`
-- [ ] From another machine: `claude mcp add --transport http operis https://api.operis.live/mcp --header "Authorization: Bearer opk_…"`, then ask it to list tools → `request_human`, `get_job`, `cancel_job`
-- [ ] `API=https://api.operis.live npm run smoke` → 20/20 (creates test jobs in prod; fine for now)
-- [ ] One job through the real agents: `request_human`, then `npm run simulate -- <job_id>` with `API` pointed at prod
+| Path | Every | Does |
+|---|---|---|
+| `/api/cron/sweep` | 5 min | Overdue jobs → cancelled / expired + refunded; jobs stuck in outreach wake Ops at 15 and 45 min |
+| `/api/cron/approvals` | 1 min | Pulls agent activity from Naïve into the feed; applies `AUTO_APPROVE_TOOLS` (off unless set) |
 
-## 6. Tell other teams
+Plus a Naïve deployment: the CEO's daily report at 08:00 PT.
 
-Share **`https://api.operis.live/llms.txt`** (agents can read it directly) or [`docs/CONNECT.md`](CONNECT.md). It covers getting a key, connecting from Claude Code, Cursor, Naïve or raw JSON-RPC, the tool reference, the job lifecycle and the rules. The Sales agent can email the same link from sales@operis.live.
+## Naïve agents
+
+- Applied from `agents/agents.json` + `agents/prompts/*.md` with `API_BASE_URL=https://api.operis.live npm run agents:setup`. Safe to re-run; it re-binds the vault key, updates agents (new versions), re-pins the CEO's team, and registers the webhook.
+- Ops loads Andrew's skill `worker-sourcing@2` (upload with `POST /v1/skills` + `/versions` in the Operis org).
+- **Approvals:** Naïve pauses calls it flags `read_people` (find_people, board_write with an assignee, approve_proof, payouts...) for a human even when set to `allow`. Approve from the founder console (`https://api.operis.live/admin?key=…` → Agent approvals) or `npm run approvals -- allow-all --session`. Founder emails go to `FOUNDER_EMAIL`.
+- The team originally lived in the "meaning of life" org; `scripts/cleanup-old-naive-org.sh` removes it from there.
+
+## Rebuilding from scratch (order matters)
+
+1. Neon: create the DB (Vercel → operis-api → Storage → Neon), then `DATABASE_URL=… npm run db:migrate`.
+2. operis-api: set the env above, deploy, add domain `api.operis.live`.
+3. Naïve (Operis org): create an admin key → `NAIVE_API_KEY`; upload the skill; `npm run agents:setup -- --write-env`; copy the `NAIVE_AGENT_*` ids to Vercel; redeploy.
+4. operis-web: create the project (root `apps/web`), set its env, create the Blob store, deploy, add `operis.live` + `www` (`scripts/move-domain-to-web.sh` if they're on operis-api).
+5. Stripe (Cameron): webhook → `https://api.operis.live/webhooks/stripe` with `checkout.session.completed`, `payment_intent.canceled`, `charge.refunded`, `refund.created`, `refund.updated`, `account.updated`, `charge.dispute.*`, `identity.verification_session.*`.
+6. DNS email records: `scripts/dns-restore-m365.sh`, `scripts/dns-agentmail.sh`.
+7. Run [TEST_PLAN.md](TEST_PLAN.md).

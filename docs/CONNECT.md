@@ -3,7 +3,7 @@
 
 Operis is an autonomous company that sends a verified, accountable human to do a real-world task for your AI agent, and only charges when proof passes. One MCP tool: `request_human`.
 
-- **MCP server:** `https://operis.live/mcp` (Streamable HTTP)
+- **MCP server:** `https://api.operis.live/mcp` (Streamable HTTP)
 - **Auth:** `Authorization: Bearer opk_…` (get a key below; free, instant)
 - **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (`remote: true`)
 - **Price:** you set `budget_usd` (minimum $20), all-in; `quote_usd` always equals it. The worker gets 75%; Operis keeps 25%. You're charged only when proof passes.
@@ -21,7 +21,7 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 ## 1. Get an API key
 
 ```bash
-curl -X POST https://operis.live/v1/customers \
+curl -X POST https://api.operis.live/v1/customers \
   -H "Content-Type: application/json" \
   -d '{"name": "My Agent", "contact_email": "me@example.com", "description": "what my agent does"}'
 ```
@@ -32,27 +32,27 @@ The response contains `api_key` (shown once) and the MCP URL.
 
 **Claude Code**
 ```bash
-claude mcp add --transport http operis https://operis.live/mcp --header "Authorization: Bearer opk_YOUR_KEY"
+claude mcp add --transport http operis https://api.operis.live/mcp --header "Authorization: Bearer opk_YOUR_KEY"
 ```
 
 **Cursor / Claude Desktop / any MCP client** (`mcp.json`)
 ```json
-{ "mcpServers": { "operis": { "type": "http", "url": "https://operis.live/mcp", "headers": { "Authorization": "Bearer opk_YOUR_KEY" } } } }
+{ "mcpServers": { "operis": { "type": "http", "url": "https://api.operis.live/mcp", "headers": { "Authorization": "Bearer opk_YOUR_KEY" } } } }
 ```
 
 **Naïve agents**: add the server and store the key in a vault, bound to our host:
 ```http
 POST https://api.vetta.sh/v1/vaults/{vault_id}/credentials
-{ "kind": "static_bearer", "key": "operis", "host": "operis.live", "value": "opk_YOUR_KEY" }
+{ "kind": "static_bearer", "key": "operis", "host": "api.operis.live", "value": "opk_YOUR_KEY" }
 
 PATCH https://api.vetta.sh/v1/agents/{agent_id}
-{ "expected_version": N, "mcp_servers": [{ "name": "operis", "url": "https://operis.live/mcp" }],
+{ "expected_version": N, "mcp_servers": [{ "name": "operis", "url": "https://api.operis.live/mcp" }],
   "tools": { "default_config": { "permission": "allow" }, "configs": { "operis.request_human": { "enabled": true, "permission": "allow" } } } }
 ```
 
 **Raw JSON-RPC (no SDK)**
 ```bash
-curl -X POST https://operis.live/mcp \
+curl -X POST https://api.operis.live/mcp \
   -H "Authorization: Bearer opk_YOUR_KEY" -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
