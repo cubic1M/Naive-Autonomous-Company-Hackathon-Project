@@ -41,7 +41,9 @@ export interface CheckProofOut {
   profile: Record<string, unknown> | null;
 }
 
-export type ApproveProofOut = { job_id: string; status: 'approved' } | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' };
+export type ApproveProofOut =
+  | { job_id: string; status: 'approved' }
+  | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' | 'identity_unverified' };
 export type PayoutOut =
   | { job_id: string; status: 'paid'; worker_pay_usd: number; fee_usd: number }
   | { error: 'needs_bank_setup'; onboarding_url: string }
@@ -123,6 +125,7 @@ export function createContractTools(deps: ToolDeps): ContractTools {
           if (err.message.startsWith('outside_geofence')) return { error: 'outside_geofence' };
           if (err.message.startsWith('below_threshold')) return { error: 'below_threshold' };
           if (err.message.startsWith('reused_media')) return { error: 'reused_media' };
+          if (err.message.startsWith('identity_unverified')) return { error: 'identity_unverified' };
         }
         throw err;
       }

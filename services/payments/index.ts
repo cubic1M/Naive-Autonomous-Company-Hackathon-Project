@@ -52,8 +52,9 @@ export async function createPayoutLink(workerId: string): Promise<{ url: string 
  * Drop-in body for apps/api/src/app/webhooks/stripe/route.ts:
  *   export const POST = (req: Request) => stripeWebhook(req, { sql, transition, baseUrl: baseUrl(), log: console.log });
  * Verifies the signature over the raw body, dedupes on event id, handles checkout.session.completed,
- * payment_intent.canceled, charge.refunded, account.updated and charge.dispute.*, and moves the job
- * through ctx.transition().
+ * payment_intent.canceled, charge.refunded, refund.created/updated, account.updated, charge.dispute.* and
+ * identity.verification_session.verified/requires_input/canceled (worker identity, services/verify), and
+ * moves the job through ctx.transition().
  */
 export function stripeWebhook(req: Request, ctx: ApiContext): Promise<Response> {
   return handleStripeWebhook(depsFromApiContext(ctx), req);

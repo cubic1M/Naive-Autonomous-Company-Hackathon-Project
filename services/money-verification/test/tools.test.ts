@@ -182,6 +182,52 @@ describe('tool layer', () => {
     expect(sent).toMatchObject({ status: 'under_review', submitted: true });
   });
 
+  it('verify_identity starts a Stripe Identity session and reports verified after the webhook', async () => {
+    const { world, tools } = worldWithTools();
+    world.repo.seedWorker(makeWorker());
+    const start = await tools.verify_identity({ worker_id: WORKER_ID });
+    expect(start).toEqual({
+      worker_id: WORKER_ID,
+      url: expect.stringMatching(/^https:\/\/verify\.stripe\.test\//),
+      status: 'pending',
+      session_id: expect.stringMatching(/^vs_test_/),
+    });
+    const event = world.stripe.identityVerifiedEvent(start.session_id as string, { first_name: 'Pat', last_name: 'Example' });
+    expect((await handleStripeWebhook(world.deps, webhookRequest(world, event))).status).toBe(200);
+    expect(await tools.verify_identity({ worker_id: WORKER_ID })).toEqual({ worker_id: WORKER_ID, url: null, status: 'verified', session_id: start.session_id });
+    expect(world.stripe.callsTo('identity.verificationSessions.create')).toHaveLength(1);
+
+    let caught: unknown;
+    await callTool(world.deps, 'verify_identity', { worker_id: 'not-a-uuid' }).catch((e: unknown) => (caught = e));
+    expect(describeToolError(caught)).toMatchObject({ code: 'invalid_input' });
+  });
+
+  it('verify_notary reports which name it compared', async () => {
+    const { world, tools } = worldWithTools();
+    await world.repo.upsertNotary({
+      commission_number: '2301234', full_name: 'SMITH, JANE A', name_normalized: 'jane a smith',
+      county: null, city: null, business_name: null, commission_expires: new Date('2028-03-15T00:00:00Z'), raw: {},
+    });
+    const typed = await tools.verify_notary({ worker_id: WORKER_ID, commission_number: '2301234', name: 'Jane Smith', job_date: '2026-11-07T18:00:00Z' });
+    expect(typed).toMatchObject({ worker_id: WORKER_ID, status: 'verified', name_source: 'typed', reasons: [] });
+    await seedVerifiedIdentity(world, { firstName: 'Mary', lastName: 'Jones' });
+    const byId = await tools.verify_notary({ worker_id: WORKER_ID, commission_number: '2301234', name: 'Jane Smith', job_date: '2026-11-07T18:00:00Z' });
+    expect(byId).toMatchObject({ status: 'failed', name_source: 'verified_identity' });
+    expect(byId.reasons[0]).toBe('name_mismatch');
+  });
+
+  it('get_proof_review carries each check\'s data, so the tier is readable', async () => {
+    const { world, tools } = worldWithTools({ vision: passingScorer });
+    world.repo.seedJob(makeJob({ budget_cents: 3000 }));
+    world.repo.seedWorker(makeWorker());
+    world.repo.seedProof(makeProof());
+    // tier 0, no readMedia: device GPS and captured_at carry the deterministic checks, the scorer passes 0.95 >= 0.8
+    expect(await tools.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: 'tier 0 on device data' })).toMatchObject({ decision: 'approved' });
+    const review = await tools.get_proof_review({ job_id: JOB_ID });
+    expect(review?.checks.find((c) => c.name === 'profile')?.data).toMatchObject({ tier: 0, confidence_threshold: 0.8 });
+    expect(review?.checks.find((c) => c.name === 'geofence')?.data).toMatchObject({ distance_m: 0 });
+  });
+
   it('validates input with zod and resolves aliases', async () => {
     const { world } = worldWithTools();
     let caught: unknown;

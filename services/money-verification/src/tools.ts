@@ -11,6 +11,7 @@ import { InvalidStateError, MoneyVerificationError, NotFoundError } from './erro
 import { captureEscrow, createEscrow, refund as refundEscrow, releaseEscrow, type EscrowDeps, type RefundResult } from './escrow.js';
 import { getDisputeBundle, submitDisputeEvidence, type DisputeDeps } from './disputes.js';
 import type { Hooks } from './hooks.js';
+import { startIdentityVerification } from './identity.js';
 import * as ledger from './ledger.js';
 import { payWorker, type PayoutDeps, type PayWorkerResult } from './payouts.js';
 import { approveProof, escalateProof, type DecideDeps } from './proof/decide.js';
@@ -66,7 +67,7 @@ function reviewOut(r: ProofReview | null): ToolOutput<'get_proof_review'> {
     job_id: r.job_id,
     decision: r.decision,
     confidence: r.confidence,
-    checks: r.checks.map((c) => ({ name: c.name, status: c.status, pass: c.pass, detail: c.detail })),
+    checks: r.checks.map((c) => ({ name: c.name, status: c.status, pass: c.pass, detail: c.detail, ...(c.data ? { data: c.data } : {}) })),
     reviewer: r.reviewer,
     created_at: r.created_at.toISOString(),
   };
@@ -180,7 +181,12 @@ export function createTools(deps: ToolDeps): Tools {
         { repo: deps.repo, now: deps.now },
         { workerId: worker_id, commissionNumber: commission_number, name, jobDate: new Date(job_date) },
       );
-      return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires) };
+      return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires), name_source: r.nameSource };
+    },
+    async verify_identity(raw) {
+      const { worker_id } = parse('verify_identity', raw);
+      const r = await startIdentityVerification(deps, worker_id);
+      return { worker_id, url: r.url, status: r.status, session_id: r.sessionId };
     },
     async check_eligibility(raw) {
       const { worker_id, job_id } = parse('check_eligibility', raw);

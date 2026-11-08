@@ -209,3 +209,16 @@ describe('the tier reaches the agent: check_proof evidence and check_eligibility
     expect(await checkEligibility({ repo: world.repo }, { workerId: WORKER_ID, jobId: JOB_ID })).toEqual({ eligible: true, reasons: [], tier: 1 });
   });
 });
+
+describe('contract adapters and the identity gate', () => {
+  it('approve_proof answers identity_unverified for a tier-2 proof whose worker has no verified identity', async () => {
+    const world = makeWorld();
+    world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    world.repo.seedWorker(makeWorker());
+    world.repo.seedProof(makeProof(twoPhotos));
+    const contract = createContractTools({ ...world.deps, vision: new CountingScorer(0.95) });
+    expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'identity_unverified' });
+    await seedVerifiedIdentity(world);
+    expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: 'id on file' })).toEqual({ job_id: JOB_ID, status: 'approved' });
+  });
+});
