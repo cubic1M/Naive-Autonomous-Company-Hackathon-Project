@@ -1,0 +1,18 @@
+{
+  "_comment": "PLACEHOLDER response. The lead replaces `response` with the real request_human result, then runs `node video/capture/terminal.mjs` to regenerate 01-terminal-mcp.mp4.",
+  "call": {
+    "title": "Fix our Next.js deploy bug",
+    "instructions": "Deploy fails on main. Fix it, link the PR.",
+    "location": null,
+    "remote": true,
+    "deadline": "2026-11-08T18:00:00Z",
+    "budget_usd": 100,
+    "proof": { "files": { "kinds": ["pr_link"] } }
+  },
+  "response": {
+    "job_id": "00000000-0000-0000-0000-000000000000",
+    "status": "awaiting_payment",
+    "quote": { "worker_pay_usd": 85, "platform_fee_usd": 15, "total_usd": 100 },
+    "escrow_url": "https://pay.example/PLACEHOLDER"
+  }
+}
