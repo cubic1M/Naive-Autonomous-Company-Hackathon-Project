@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "services/outreach",
+    "services/money-verification"
   ],
   "scripts": {
     "dev": "npm run dev -w @operis/api",

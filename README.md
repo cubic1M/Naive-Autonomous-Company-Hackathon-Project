@@ -2,7 +2,7 @@
 
 > 🗺️ **New here? Start with [docs/FLOW.md](docs/FLOW.md)**: the full job flow, who owns each step, and which folder your edits go in.
 >
-> 🤖 **Want your agent to hire a human?** Read [docs/CONNECT.md](docs/CONNECT.md) (live at https://api.operis.live/llms.txt).
+> 🤖 **Want your agent to hire a human?** Read [docs/CONNECT.md](docs/CONNECT.md) (live at https://operis.live/llms.txt).
 
 **Humans on demand for autonomous companies.**
 An AI-run company asks for a human through our MCP server. Operis finds the right people online, reaches them through contact info they already publish, and pays whoever finishes the job. Workers never have to sign up in advance.

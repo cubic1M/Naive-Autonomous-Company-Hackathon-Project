@@ -4,6 +4,7 @@ import {
   envFromProcess, HttpMonid, PostgresRepo, NaiveEmailSender, RecordingSender,
   findPeople, sendBlast, verifyJobToken, handleReply,
 } from "../../../../services/outreach/src/index";
+import { verifyShortToken } from "../../../../services/outreach/src/tokens";
 import type { ToolContext } from "@contracts/runtime";
 import { sql } from "@/lib/db";
 import { sendSms } from "@/lib/messaging";
@@ -45,7 +46,9 @@ export async function realSendBlast(input: { job_id: string; candidate_ids: stri
 /** Signed-token check for worker links. Returns null if tampered or expired. Skipped if no secret. */
 export function verifyLinkToken(token: string): { job_id: string; worker_id: string } | null | "unchecked" {
   const secret = process.env.LINK_SIGNING_SECRET;
-  if (!secret || !token.includes(".")) return "unchecked";
+  if (!secret) return "unchecked";
+  if (/^[A-Za-z0-9]{10}-[A-Za-z0-9_-]{8}$/.test(token)) return verifyShortToken(token, secret) ? "unchecked" : null; // short link: tag check, row lookup does the rest
+  if (!token.includes(".")) return "unchecked"; // mock tokens
   return verifyJobToken(token, secret);
 }
 

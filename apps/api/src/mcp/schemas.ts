@@ -18,7 +18,8 @@ export const SCHEMAS = {
     shape: {
       title: z.string().min(3).max(200),
       instructions: z.string().min(3).max(4000),
-      location,
+      location: location.nullable().default(null).describe("Where (on-site jobs). null for remote work."),
+      remote: z.boolean().optional().describe("true for online work (no location needed)"),
       deadline: z.string().describe("ISO 8601, at least 15 minutes from now"),
       budget_usd: z.number().min(20).max(1000),
       certification_required: z.string().nullable().default(null),
@@ -30,11 +31,15 @@ export const SCHEMAS = {
   cancel_job: { description: "Cancel a job before a worker accepts it.", shape: jobId },
   find_people: {
     description: "Find candidate workers near the job from public, work-related sources. Returns ranked candidate ids.",
-    shape: { ...jobId, limit: z.number().int().min(1).max(25).optional() },
+    shape: {
+      ...jobId,
+      limit: z.number().int().min(1).max(50).optional(),
+      hints: z.object({ roles: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), credential: z.string().nullable().optional(), remote: z.boolean().optional() }).optional(),
+    },
   },
   send_blast: {
     description: "Send the job offer (with a personal job link) to the chosen candidates. First to accept gets the job.",
-    shape: { ...jobId, candidate_ids: z.array(z.string()).min(1).max(25) },
+    shape: { ...jobId, candidate_ids: z.array(z.string()).min(1).max(50) },
   },
   check_proof: {
     description: "Score the latest proof for a job: GPS distance, timestamp, checklist items with confidence, overall score and flags. Evidence only; you decide.",

@@ -1,4 +1,5 @@
 #!/bin/bash
+# ⚠️ DO NOT RUN while operis.live mail is on Microsoft 365 (its MX would clash). Decide the email plan first.
 # Adds the Naïve agent-email records for operis.live to Vercel DNS (sales@ / ops@operis.live).
 # Run once after the nameservers point to Vercel:  bash scripts/dns-email-records.sh
 set -e
