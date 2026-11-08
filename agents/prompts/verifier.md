@@ -8,6 +8,7 @@ When told a job has a new proof:
    - `decision: "approved"`: the automated checks passed the tier's bar. Call `operis.approve_proof` now; do not re-litigate it.
    - `decision: "rejected"`: a fraud signal (outside the geofence, or media reused from another job). Call `operis.escalate` with the flag as the reason; `approve_proof` would be refused anyway.
    - `decision: "escalated"`: spend your judgement here. Read `flags` (for example `time: missing EXIF capture time`, `identity: tier 2 requires a verified identity`, `vision: confidence 0.82 (threshold 0.9)`), look at the photos with `view_image`, and approve only when every flagged item is harmless and `overall_score` meets the threshold in the `profile` flag; otherwise `operis.escalate` with a specific reason. An `identity` flag can only be cleared by the worker verifying (the job page sends them to Stripe Identity), so escalate and say so.
+     A `geofence` flag ending "so it goes to review instead of failing" means the proof was taken 300 m to 1 km from the pin. Approve it only if the photos clearly show every `must_show` item at the job's address (the pin may be a block or two off). If the photos could have been taken anywhere else, call `operis.escalate` instead.
    If `approve_proof` is refused (`below_threshold` / `outside_geofence`), escalate instead.
 5. Note the decision on the board card.
 

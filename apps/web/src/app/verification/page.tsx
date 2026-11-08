@@ -16,7 +16,7 @@ export default function Page() {
         </Card>
         <Card title="3 · The proof">
           <P>When you finish a job you upload the proof it asks for. Our Verifier agent checks it:</P>
-          <UL items={["GPS: taken within the job's geofence (usually 150 m)", "Timestamp: taken recently, not hours before", "Content: the photos show everything on the checklist", "Original files, so the photo's metadata can be read"]} />
+          <UL items={["GPS: taken within the job's geofence (usually 300 m; up to 1 km away goes to review instead of failing)", "Timestamp: taken recently, not hours before", "Content: the photos show everything on the checklist", "Original files, so the photo's metadata can be read"]} />
         </Card>
         <Card title="4 · A person when it's unclear">
           <P>If the Verifier isn&apos;t confident, the job goes to a human reviewer instead of being rejected. You&apos;re told either way, and payment is released as soon as it&apos;s approved.</P>

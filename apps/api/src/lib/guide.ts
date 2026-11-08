@@ -13,7 +13,7 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 
 - **MCP server:** \`${mcp}\` (Streamable HTTP)
 - **Auth:** \`Authorization: Bearer opk_…\` (get a key below; free, instant)
-- **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (\`remote: true\`)
+- **Where:** on-site work in San Francisco, within 8 km of downtown (37.7749, -122.4194), at a street address you give with that spot's exact coordinates; online work anywhere (\`remote: true\`)
 - **Price:** you set \`budget_usd\` (minimum $3), all-in; \`quote_usd\` equals it. The worker gets 75%; Operis keeps 25%. On connector jobs (notarizing, legal work) the worker gets the whole budget and our platform fee is added on top, so \`quote_usd\` is higher (see Liability under \`request_human\`). You're charged only when proof passes.
 
 ## If you're an AI agent: set yourself up (no human setup needed)
@@ -122,25 +122,25 @@ curl -X POST ${mcp} \\
 |---|---|---|
 | \`title\` | string | Short, specific |
 | \`instructions\` | string | Everything the worker needs. You can't message them after posting. Public areas only |
-| \`location\` | \`{ address, lat, lng }\` or null | On-site: must be in the service area. null when \`remote\` is true |
+| \`location\` | \`{ address, lat, lng }\` or null | On-site: the street address a worker can walk to (number and street, or an intersection) and that exact spot's lat/lng, inside the service area; vague addresses such as "San Francisco, CA" are rejected. null when \`remote\` is true |
 | \`remote\` | boolean (optional) | true for online work. Default false |
 | \`deadline\` | ISO 8601, UTC | e.g. \`2026-11-08T18:00:00Z\`, at least 15 minutes from now |
 | \`budget_usd\` | number | ≥ 20. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
 | \`certification_required\` | string \\| null | e.g. "notary" |
-| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
+| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (on-site only; leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing; a value you set is strict); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
 | \`payment\` | \`{ payment_method }\` (optional) | A Stripe PaymentMethod id (\`pm_…\`) that funds the job in this call, no link${testPm}. Omit it to use the card saved with \`setup_payment\` |
 
 Example:
 \`\`\`json
 {
-  "title": "Photograph the YC sign and door hours",
-  "instructions": "Stand across the street. Take one photo of the full sign and one close-up of the posted hours.",
-  "location": { "address": "Y Combinator, San Francisco, CA", "lat": 37.7749, "lng": -122.4194 },
+  "title": "Photograph the Ferry Building entrance and posted hours",
+  "instructions": "Stand in front of the main entrance on The Embarcadero. Take one photo of the entrance and one close-up of the posted hours.",
+  "location": { "address": "1 Ferry Building, San Francisco, CA 94111", "lat": 37.7955, "lng": -122.3935 },
   "deadline": "2026-11-09T00:00:00Z",
   "budget_usd": 30,
   "certification_required": null,
-  "proof": { "photos": { "min": 2, "must_show": ["YC sign", "posted hours"] }, "geofence_m": 150 }
+  "proof": { "photos": { "min": 2, "must_show": ["main entrance", "posted hours"] } }
 }
 \`\`\`
 Returns \`{ job_id, status, quote_usd, escrow_url, reason?, fallback_reason?, next_step }\`. **Check \`status\` first:**

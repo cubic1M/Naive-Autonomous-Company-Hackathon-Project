@@ -2,12 +2,12 @@
 import { z } from "zod";
 import { stripeTestMode } from "@/lib/stripe-mode";
 
-const location = z.object({ address: z.string(), lat: z.number(), lng: z.number() });
+const location = z.object({ address: z.string().min(1).max(300), lat: z.number(), lng: z.number() });
 const proof = z.object({
   photos: z.object({ min: z.number().int().min(0), must_show: z.array(z.string()) }).optional(),
   video: z.object({ min_seconds: z.number() }).optional(),
   files: z.object({ kinds: z.array(z.string()) }).optional(),
-  geofence_m: z.number().positive().optional().describe("meters from location the proof must be taken within; default 150; ignored for remote jobs"),
+  geofence_m: z.number().positive().optional().describe("meters from location the proof must be taken within. Leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing. A value you set is strict. Ignored for remote jobs"),
   fields: z.array(z.object({ name: z.string(), type: z.enum(["string", "number"]) })).optional().describe("answers the worker must fill in, e.g. [{\"name\":\"keypad_lights_up\",\"type\":\"string\"}]; returned in proof_package.fields"),
 });
 const jobId = { job_id: z.string().uuid().describe("Job id (uuid) from get_job / the wake-up message") };
@@ -19,7 +19,7 @@ export const SCHEMAS = {
     shape: {
       title: z.string().min(3).max(200),
       instructions: z.string().min(3).max(4000),
-      location: location.nullable().default(null).describe("Where (on-site jobs). null for remote work."),
+      location: location.nullable().default(null).describe("Where (on-site jobs): the street address a worker can walk to (number and street, or an intersection) and that exact spot's lat/lng; vague addresses like \"San Francisco, CA\" are rejected. null for remote work."),
       remote: z.boolean().optional().describe("true for online work (no location needed)"),
       deadline: z.string().describe("ISO 8601, at least 15 minutes from now"),
       budget_usd: z.number().min(3).max(1000),

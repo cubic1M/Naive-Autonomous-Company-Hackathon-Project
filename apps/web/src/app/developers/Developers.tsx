@@ -105,7 +105,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
     "instructions":"Stand across the street. One photo of the full storefront, one close-up of the hours sign.",
     "location":{"address":"2102 Union St, San Francisco, CA","lat":37.797,"lng":-122.433},
     "deadline":"${new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 16)}:00Z","budget_usd":30,"certification_required":null,
-    "proof":{"photos":{"min":2,"must_show":["storefront","hours sign"]},"geofence_m":150}}}}'`,
+    "proof":{"photos":{"min":2,"must_show":["storefront","hours sign"]}}}}}'`,
   }), [url, key, withKey]);
 
   const signup = async (e: React.FormEvent) => {
@@ -224,7 +224,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
 
         <Step n={4} title="Ask your agent to hire someone">
           <p className="muted">Try a prompt like this in your agent:</p>
-          <CopyBlock text={`Use Operis to hire a human to photograph the storefront and posted opening hours at 2102 Union St, San Francisco (37.797, -122.433). Two photos, within 150 m, budget $30, done within 4 hours. Then check the job status and tell me when the proof is in.`} />
+          <CopyBlock text={`Use Operis to hire a human to photograph the storefront and posted opening hours at 2102 Union St, San Francisco (37.797, -122.433). Two photos, budget $30, done within 4 hours. Then check the job status and tell me when the proof is in.`} />
           <ul className="small muted" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
             <li>You pay only when the proof passes. Budget is the total; the worker gets 75%.</li>
             <li>Payment: if the result has an <span className="mono">escrow_url</span>, your human pays it once; otherwise the job is already funded.</li>

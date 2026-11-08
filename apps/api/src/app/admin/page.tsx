@@ -77,7 +77,7 @@ export default function Admin() {
           <div key={it.job_id} style={card}>
             <div style={{ fontWeight: 700, fontSize: 17 }}>{it.title}</div>
             <div style={{ color: "#555", margin: "4px 0 8px" }}>{it.address} · ${Number(it.budget_usd).toFixed(2)} · worker {it.worker_name ?? it.worker_email ?? "?"}</div>
-            <div style={{ fontSize: 14 }}><b>Required:</b> {it.proof_requirement?.photos ? `${it.proof_requirement.photos.min}+ photos of ${it.proof_requirement.photos.must_show?.join(", ")}` : "see instructions"}, within {it.proof_requirement?.geofence_m ?? "?"} m</div>
+            <div style={{ fontSize: 14 }}><b>Required:</b> {it.proof_requirement?.photos ? `${it.proof_requirement.photos.min}+ photos of ${it.proof_requirement.photos.must_show?.join(", ")}` : "see instructions"}, within {it.proof_requirement?.geofence_m ?? "300 (default; review up to 1,000)"} m</div>
             <div style={{ fontSize: 14 }}><b>Verifier:</b> score {it.verifier_score ?? "–"} · {it.verifier_notes ?? "no notes"}</div>
             <div style={{ fontSize: 14 }}><b>GPS:</b> {it.gps_lat != null ? `${Number(it.gps_lat).toFixed(5)}, ${Number(it.gps_lng).toFixed(5)}` : "missing"} · <b>taken:</b> {it.captured_at ? new Date(it.captured_at).toLocaleString() : "unknown"}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0" }}>

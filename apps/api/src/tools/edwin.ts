@@ -2,7 +2,7 @@
 import type { Tools } from "@contracts/tools";
 import type { ToolContext } from "@contracts/runtime";
 import { checkSafety } from "@/lib/safety";
-import { inServiceArea } from "@/lib/geo";
+import { inServiceArea, isStreetAddress, serviceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
 import { unknownPaymentMethodText } from "@/lib/stripe-mode";
 import * as compliance from "@services/compliance/index";
@@ -110,8 +110,13 @@ export async function requestHuman(
   if (new Date(input.deadline).getTime() < Date.now() + 15 * 60 * 1000) return reject("Deadline must be at least 15 minutes from now.");
   const remote = input.remote === true;
   if (!remote && !input.location) return reject("On-site jobs need a location (address, lat, lng). For online work, pass remote: true.");
+  const area = serviceArea();
   if (!remote && input.location && !inServiceArea(input.location.lat, input.location.lng))
-    return reject("Outside our service area for on-site work (San Francisco, 8 km around the YC office). Online work can pass remote: true.");
+    return reject(`Outside our service area for on-site work (San Francisco, within ${area.radiusM / 1000} km of ${area.lat}, ${area.lng}). Online work can pass remote: true.`);
+  if (!remote && input.location && input.location.lat.toFixed(4) === area.lat.toFixed(4) && input.location.lng.toFixed(4) === area.lng.toFixed(4))
+    return reject(`${area.lat}, ${area.lng} is the centre of our service area, not the job's spot. Send the exact lat/lng of the street address, e.g. "1 Ferry Building, San Francisco, CA 94111" at 37.7955, -122.3935. Proof is checked against that pin.`);
+  if (!remote && input.location && !isStreetAddress(input.location.address))
+    return reject(`"${input.location.address.slice(0, 80)}" is not a street address. On-site jobs need the address a worker can walk to (number and street, e.g. "1 Ferry Building, San Francisco, CA 94111", or an intersection, e.g. "Haight St & Ashbury St") and that spot's exact lat/lng. Proof is checked against that pin.`);
   const loc = input.location ?? { address: "Remote", lat: null as any, lng: null as any };
   const safety = checkSafety(input.title, input.instructions);
   if (!safety.ok) return reject(`${safety.reason} (${safety.category})`);
@@ -144,7 +149,7 @@ export async function requestHuman(
                       certification_required, proof_requirement, status, callback_url)
     values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
             ${input.deadline}, ${input.budget_usd}, ${feeUsd}, ${workerPayUsd}, ${input.certification_required},
-            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? 150 })}, 'requested', ${input.callback_url ?? null})
+            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? null })}, 'requested', ${input.callback_url ?? null})
     returning id`;
   await compliance.recordIntake(job.id, q);
   const liabilityNote = "Our Compliance agent decides after funding whether Operis is the provider or only the marketplace for this job; get_job shows liability_model.";

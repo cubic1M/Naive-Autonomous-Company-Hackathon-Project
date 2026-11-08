@@ -19,7 +19,7 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  /** Meters from location the proof must be taken within. Optional (default 150); ignored for remote jobs. */
+  /** Meters from location the proof must be taken within. Leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing. A value you set is strict. Ignored for remote jobs. */
   geofence_m?: number;
   fields?: { name: string; type: "string" | "number" }[];
 }
