@@ -46,6 +46,15 @@ export async function GET(req: Request) {
            count(distinct customer_id)::int as companies
     from jobs`;
   const feed = await sql`select agent, type, summary, job_id, created_at from agent_events
-                         where agent is not null and type <> 'session.idle' order by created_at desc limit 40`;
-  return Response.json({ now: new Date().toISOString(), stats, companies, requests: rows, feed });
+                         where (agent is not null and type <> 'session.idle') or type = 'approval'
+                         order by created_at desc limit 60`;
+  const money = await sql`select kind, coalesce(sum(amount_usd),0)::float as total from ledger group by kind`;
+  const m = Object.fromEntries(money.map((r: any) => [r.kind, r.total]));
+  const stages = await sql`select status, count(*)::int as n from jobs
+                           where customer_id not in (select id from customers where name = 'smoke-test') group by status`;
+  return Response.json({
+    now: new Date().toISOString(), stats, companies, requests: rows, feed,
+    money: { revenue: m.capture ?? 0, payouts: m.payout ?? 0, fees: m.fee ?? 0, refunds: m.refund ?? 0, held: m.hold ?? 0 },
+    stages: Object.fromEntries(stages.map((r: any) => [r.status, r.n])),
+  });
 }
