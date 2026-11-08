@@ -15,8 +15,26 @@ const INFO = 'tikhub/api/v1/reddit/app/fetch_subreddit_info';
 /** The real AnyAPI subreddit_search response captured for services/outreach (4 posts from r/forhire). */
 const realSearch = () => fixture('anyapi__reddit.subreddit_search');
 
-// TikHub's rules responses are NOT captured yet: Monid's public card documents only the subreddit_name parameter.
-// These two shapes are INFERRED from Reddit's REST rules (short_name/description) and GraphQL (name/content.markdown).
+// No TikHub rules response is captured yet. Monid's guide (monid.ai/blog/guides/reddit-scraper, live run 2026-10-16)
+// says fetch_subreddit_style returned, per rule, a name, a one-line violationReason, a priority and the full text as
+// markdown and HTML, next to the sidebar widgets and the moderator list; it shows no JSON, so the nesting in
+// styleRules is INFERRED (Reddit's GraphQL). restRules is Reddit's REST shape (short_name/description).
+const styleRules = {
+  code: 200,
+  data: {
+    data: {
+      subredditInfoByName: {
+        id: 't5_x',
+        rules: [
+          { id: 'r1', name: 'Open Discussions', violationReason: 'Off topic', priority: 0, content: { markdown: 'Keep it about scraping.', html: '<p>Keep it about scraping.</p>' } },
+          { id: 'r2', name: 'Self-Promotions', violationReason: 'Self-promotion', priority: 1, content: { markdown: 'No self-promotion outside the pinned **monthly** thread.', html: '<p>No self-promotion outside the pinned <strong>monthly</strong> thread.</p>' } },
+        ],
+        widgets: { items: [{ kind: 'menu', data: [{ text: 'Beginners guide', url: 'https://www.reddit.com/r/webscraping/wiki' }] }, { kind: 'moderators', mods: [{ name: 'mod_one' }, { name: 'mod_two' }] }] },
+        styles: { icon: null, primaryColor: '#000' },
+      },
+    },
+  },
+};
 const restRules = {
   code: 200,
   router: '/api/v1/reddit/app/fetch_subreddit_style',
@@ -27,10 +45,6 @@ const restRules = {
     ],
     site_rules: ['Spam', 'Personal and confidential information'],
   },
-};
-const graphqlRules = {
-  code: 200,
-  data: { data: { subredditInfoByName: { id: 't5_x', styles: { icon: null }, rules: [{ id: 'r1', name: 'Self-promotion on Saturdays only', content: { markdown: 'Use the **Saturday** thread.' }, priority: 0 }] } } },
 };
 
 const cheap = (output: unknown) => ({ output, cost: 0.001 });
@@ -108,31 +122,28 @@ describe('reddit_research rules', () => {
     expect(r.spend_usd).toBe(0.001);
   });
 
-  it('finds rules nested in a GraphQL-style response', async () => {
-    const s = withMonid(new FakeMonid().override(STYLE, cheap(graphqlRules)));
-    const r = await redditResearch(s.deps, { op: 'rules', subreddit: 'SaaS' });
-    expect(r.rules).toEqual([{ title: 'Self-promotion on Saturdays only', description: 'Use the **Saturday** thread.' }]);
+  it('reads the rules from the documented style response, and nothing about the moderators', async () => {
+    const s = withMonid(new FakeMonid().override(STYLE, cheap(styleRules)));
+    const r = await redditResearch(s.deps, { op: 'rules', subreddit: 'webscraping' });
+    expect(r.rules).toEqual([
+      { title: 'Open Discussions', description: 'Keep it about scraping.' },
+      { title: 'Self-Promotions', description: 'No self-promotion outside the pinned **monthly** thread.' },
+    ]);
+    expect(JSON.stringify(r)).not.toMatch(/mod_one|mod_two/);
   });
 
-  it('falls back to subreddit info when the style response has no rules, and counts both calls', async () => {
+  it('makes one call: without a rules list the rules are unknown (fetch_subreddit_info has none either)', async () => {
     const m = new FakeMonid().override(STYLE, cheap({ code: 200, data: { styles: { primaryColor: '#000' } } })).override(INFO, cheap(restRules));
     const s = withMonid(m);
     const r = await redditResearch(s.deps, { op: 'rules', subreddit: 'SideProject' });
-    expect(m.calls.map((c) => `${c.provider}${c.endpoint}`)).toEqual([STYLE, INFO]);
-    expect(r.rules?.map((x) => x.title)).toEqual(['No low-effort self-promotion', 'Be civil']);
-    expect(r.spend_usd).toBe(0.002);
-  });
-
-  it('says the rules are unknown when neither response has them', async () => {
-    const m = new FakeMonid().override(STYLE, cheap({ code: 200, data: { styles: {} } })).override(INFO, cheap({ code: 200, data: { subscribers: 10 } }));
-    const s = withMonid(m);
-    const r = await redditResearch(s.deps, { op: 'rules', subreddit: 'SideProject' });
+    expect(m.calls.map((c) => `${c.provider}${c.endpoint}`)).toEqual([STYLE]);
     expect(r.rules).toEqual([]);
     expect(r.error).toMatch(/^rules_not_found/);
-    expect(r.error).toContain('subscribers');
+    expect(r.error).toContain('styles');
+    expect(r.spend_usd).toBe(0.001);
   });
 
-  it('reports a failed provider run as an error and makes no fallback call', async () => {
+  it('reports a failed provider run as an error', async () => {
     const m = new FakeMonid(); // nothing overridden: the fake answers FAILED, http 404
     const s = withMonid(m);
     const r = await redditResearch(s.deps, { op: 'rules', subreddit: 'nosuchsub123' });
@@ -152,6 +163,15 @@ describe('reddit_research inputs', () => {
     await expect(redditResearch(s.deps, { op: 'search', subreddit: 'SaaS' })).rejects.toThrow(/query/);
     await expect(redditResearch(s.deps, { op: 'search', subreddit: 'SaaS', query: '   ' })).rejects.toThrow(/query/);
     expect(m.calls).toHaveLength(0);
+  });
+
+  it('accepts every name Reddit allows: letters, digits and _, up to 21 characters', async () => {
+    const m = new FakeMonid().override(STYLE, cheap(restRules));
+    const s = withMonid(m);
+    await redditResearch(s.deps, { op: 'rules', subreddit: 'r/_underscore_first' });
+    await redditResearch(s.deps, { op: 'rules', subreddit: 'abcdefghijklmnopqrstu' });
+    expect(m.calls.map((c) => c.input.queryParams?.subreddit_name)).toEqual(['_underscore_first', 'abcdefghijklmnopqrstu']);
+    await expect(redditResearch(s.deps, { op: 'rules', subreddit: 'abcdefghijklmnopqrstuv' })).rejects.toThrow(/subreddit/);
   });
 
   it('fails clearly when Monid is not configured', async () => {

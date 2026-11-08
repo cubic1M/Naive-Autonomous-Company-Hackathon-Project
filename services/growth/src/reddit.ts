@@ -1,7 +1,7 @@
 /**
  * reddit_research: the Sales agent's READ-ONLY Reddit research through Monid (Reddit answers the agent's web_fetch
  * with HTTP 403).
- *   op "rules":  a subreddit's rules (TikHub fetch_subreddit_style, falling back to fetch_subreddit_info)
+ *   op "rules":  a subreddit's rules (TikHub fetch_subreddit_style; fetch_subreddit_info has no rules, despite its card)
  *   op "search": posts in one subreddit matching a query (AnyAPI reddit.subreddit_search)
  * Nothing here posts, comments, votes or messages: posting stays with Cameron's own account.
  *
@@ -67,15 +67,16 @@ interface Endpoint {
   /** Counted when a call throws or times out, since Monid may still charge it: the listed price, rounded up. */
   estimateUsd: number;
 }
-// Monid's public cards (api.monid.ai/public/v1/providers/{provider}/endpoints/{endpoint}): TikHub's two are GET with
+// Monid's public cards (api.monid.ai/public/v1/providers/{provider}/endpoints/{endpoint}): TikHub's is a GET with
 // subreddit_name, $0.001 a call; AnyAPI's is a POST body, $0.00035 on its default route, $0.0012 on the dearest.
+// Monid's guide (monid.ai/blog/guides/reddit-scraper, live run 2026-10-16): fetch_subreddit_style returned each rule's
+// name, violationReason, priority and full text; fetch_subreddit_info returned no rules key at all.
 const STYLE: Endpoint = { provider: 'tikhub', path: '/api/v1/reddit/app/fetch_subreddit_style', estimateUsd: 0.001 };
-const INFO: Endpoint = { provider: 'tikhub', path: '/api/v1/reddit/app/fetch_subreddit_info', estimateUsd: 0.001 };
 const SEARCH: Endpoint = { provider: 'anyapi', path: '/reddit.subreddit_search', estimateUsd: 0.0012 };
 
 /** No call starts with less than this left of today's budget: more than any one of these calls is listed at. */
 const CALL_RESERVE_USD = 0.002;
-/** One Monid call. The internal MCP route allows 60 s, and rules may make two calls. */
+/** One Monid call, well inside the internal MCP route's 60 s. */
 const CALL_TIMEOUT_MS = 15_000;
 const RULES_MAX = 15;
 const POSTS_DEFAULT = 8;
@@ -88,7 +89,8 @@ const SNIPPET_MAX = 200;
 /** apps/api's serveMcp cuts tool results at 7,000 characters (Naïve at 8,000): stay under both. */
 const OUTPUT_MAX = 6_500;
 
-const SUBREDDIT = /^[A-Za-z0-9][A-Za-z0-9_]{1,20}$/;
+/** Monid's guide: "must match ^[A-Za-z0-9_]+$ and run to at most 21 characters". */
+const SUBREDDIT = /^[A-Za-z0-9_]{2,21}$/;
 const INVISIBLE = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g; // soft hyphen, zero-width, bidi
 const CONTROL = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g;
 const MD_LINK = /\[([^\]\n]{0,200})\]\((?:https?:\/\/|www\.)[^)\s]*\)/gi;
@@ -311,15 +313,11 @@ export async function redditResearch(deps: GrowthDeps, input: RedditResearchInpu
     });
 
   if (req.op === 'rules') {
-    const shapes: string[] = [];
-    for (const ep of [STYLE, INFO]) {
-      const out = await call(ep, { queryParams: { subreddit_name: req.subreddit } });
-      if ('error' in out) return finish({ error: out.error, rules: [] });
-      const rules = findRules(out.output);
-      if (rules) return finish({ rules: rules.slice(0, RULES_MAX), truncated: rules.length > RULES_MAX });
-      shapes.push(shapeOf(out.output));
-    }
-    return finish({ error: `rules_not_found: treat r/${req.subreddit}'s rules as unknown. Responses: ${shapes.join(' | ')}`.slice(0, 400), rules: [] });
+    const out = await call(STYLE, { queryParams: { subreddit_name: req.subreddit } });
+    if ('error' in out) return finish({ error: out.error, rules: [] });
+    const rules = findRules(out.output);
+    if (!rules) return finish({ error: `rules_not_found: treat r/${req.subreddit}'s rules as unknown. Response: ${shapeOf(out.output)}`.slice(0, 400), rules: [] });
+    return finish({ rules: rules.slice(0, RULES_MAX), truncated: rules.length > RULES_MAX });
   }
 
   const body: Record<string, unknown> = { subreddit: req.subreddit, query: req.query, sort: req.sort };
