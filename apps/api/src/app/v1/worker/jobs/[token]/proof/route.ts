@@ -5,6 +5,7 @@
 import { outreachByToken } from "@/lib/worker";
 import { sql } from "@/lib/db";
 import { transition } from "@/lib/jobs";
+import { apiBaseUrl } from "@/lib/env";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -25,11 +26,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     capturedAt = (form.get("captured_at") as string) || null;
     fields = form.get("fields") ? JSON.parse(String(form.get("fields"))) : {};
     const files = form.getAll("files").filter((f): f is File => typeof f !== "string");
-    if (!process.env.BLOB_READ_WRITE_TOKEN) return Response.json({ error: "file storage not configured (BLOB_READ_WRITE_TOKEN)" }, { status: 501 });
-    const { put } = await import("@vercel/blob");
     for (const f of files) {
-      const blob = await put(`proofs/${o.job_id}/${Date.now()}-${f.name}`, f, { access: "public", addRandomSuffix: true });
-      media.push({ url: blob.url, kind: f.type || "application/octet-stream", name: f.name });
+      const kind = f.type || "application/octet-stream";
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const { put } = await import("@vercel/blob");
+        const blob = await put(`proofs/${o.job_id}/${Date.now()}-${f.name}`, f, { access: "public", addRandomSuffix: true });
+        media.push({ url: blob.url, kind, name: f.name });
+      } else {
+        // no Blob store: keep the original bytes (EXIF intact) in Postgres
+        const bytes = Buffer.from(await f.arrayBuffer());
+        const [row] = await sql`insert into proof_files (job_id, mime, name, bytes) values (${o.job_id}, ${kind}, ${f.name}, ${bytes}) returning id`;
+        media.push({ url: `${apiBaseUrl()}/v1/files/${row.id}`, kind, name: f.name });
+      }
     }
   } else {
     const b = await req.json();

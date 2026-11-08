@@ -41,7 +41,7 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     }
     const [j] = await ctx.sql`select status from jobs where id = ${job_id}`;
     if (j?.status === "held") await ctx.transition(job_id, "outreach");
-    return { sent: ids.length, skipped_opted_out: candidate_ids.length - ids.length, outreach_ids: ids };
+    return { sent: ids.length, skipped_opted_out: candidate_ids.length - ids.length, queued_manual: 0, outreach_ids: ids };
   },
 
   // ---- Cameron: verify ----

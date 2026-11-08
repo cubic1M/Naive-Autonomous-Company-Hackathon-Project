@@ -38,7 +38,11 @@ export async function requestHuman(
   const reject = (reason: string) => ({ job_id: "", status: "rejected" as const, quote_usd: 0, escrow_url: null, reason });
   if (input.budget_usd < MIN_JOB_USD) return reject(`Minimum job is $${MIN_JOB_USD}.`);
   if (new Date(input.deadline).getTime() < Date.now() + 15 * 60 * 1000) return reject("Deadline must be at least 15 minutes from now.");
-  if (!inServiceArea(input.location.lat, input.location.lng)) return reject("Outside our service area (San Francisco, 8 km around the YC office).");
+  const remote = input.remote === true;
+  if (!remote && !input.location) return reject("On-site jobs need a location (address, lat, lng). For online work, pass remote: true.");
+  if (!remote && input.location && !inServiceArea(input.location.lat, input.location.lng))
+    return reject("Outside our service area for on-site work (San Francisco, 8 km around the YC office). Online work can pass remote: true.");
+  const loc = input.location ?? { address: "Remote", lat: null as any, lng: null as any };
   const safety = checkSafety(input.title, input.instructions);
   if (!safety.ok) return reject(`${safety.reason} (${safety.category})`);
 
@@ -56,7 +60,7 @@ export async function requestHuman(
   const [job] = await ctx.sql`
     insert into jobs (customer_id, title, instructions, address, lat, lng, deadline, budget_usd, fee_usd, worker_pay_usd,
                       certification_required, proof_requirement, status, callback_url)
-    values (${customerId}, ${input.title}, ${input.instructions}, ${input.location.address}, ${input.location.lat}, ${input.location.lng},
+    values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
             ${input.deadline}, ${input.budget_usd}, ${fee}, ${input.budget_usd - fee}, ${input.certification_required},
             ${ctx.sql.json(input.proof)}, 'requested', ${input.callback_url ?? null})
     returning id`;
