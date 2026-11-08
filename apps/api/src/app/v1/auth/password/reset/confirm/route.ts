@@ -11,5 +11,5 @@ export async function POST(req: Request) {
   const [a] = await sql`update worker_accounts set password_hash = ${hashPassword(b.password)}, email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
                         where id = ${l.account_id} returning *`;
   await sql`delete from worker_sessions where account_id = ${a.id}`; // sign out other devices
-  return signedIn(a);
+  return signedIn(a, true, 200, "password_reset");
 }

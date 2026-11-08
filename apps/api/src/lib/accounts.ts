@@ -67,9 +67,21 @@ export const json = (body: unknown, status = 200, cookie?: string) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...(cookie ? { "Set-Cookie": cookie } : {}) } });
 export const loginRequired = () => json({ ok: false, error: "login_required" }, 401);
 
-/** Respond with the user and a fresh session cookie. */
-export async function signedIn(a: Account, remember = true, status = 200) {
-  return json({ ok: true, user: userJson(a) }, status, await startSession(a.id, remember));
+export type LoginMethod = "password" | "google" | "email_link" | "password_reset" | "signup";
+
+/** Record a sign-in (method + time), keeping the one before it so the account page can show both. */
+export async function noteLogin(accountId: string, method: LoginMethod): Promise<Account> {
+  const [a] = await sql`update worker_accounts
+                        set prev_login_at = last_login_at, prev_login_method = last_login_method,
+                            last_login_at = now(), last_login_method = ${method}
+                        where id = ${accountId} returning *`;
+  return a;
+}
+
+/** Record the sign-in, then respond with the user and a fresh session cookie. */
+export async function signedIn(a: Account, remember = true, status = 200, method: LoginMethod = "password") {
+  const fresh = await noteLogin(a.id, method).catch(() => a);
+  return json({ ok: true, user: userJson(fresh ?? a) }, status, await startSession(a.id, remember));
 }
 
 // ---------- the user the web app renders ----------
@@ -91,6 +103,15 @@ export function userJson(a: Account) {
     radius: p.radius ?? "",
     quiet_hours: p.quiet_hours ?? "",
     agreed_terms_at: a.agreed_terms_at ?? null,
+    // How this person signs in, and when they last did (shown on My account and after each sign-in).
+    sign_in: {
+      google: a.google_sub ? { connected: true, since: a.google_connected_at ?? a.created_at ?? null } : { connected: false, since: null },
+      password: Boolean(a.password_hash),
+      email_verified: Boolean(a.email_verified_at),
+      member_since: a.created_at ?? null,
+      last: a.last_login_at ? { at: a.last_login_at, method: a.last_login_method ?? null } : null,
+      previous: a.prev_login_at ? { at: a.prev_login_at, method: a.prev_login_method ?? null } : null,
+    },
     onboarding_step: p.onboarding_step ?? 0,
     onboarding_done: p.onboarding_done ?? false,
   };
@@ -161,3 +182,16 @@ export async function sendAccountEmail(to: string, kind: "login" | "reset", url:
 
 export const linkUrl = (token: string) => `${baseUrl()}/api/v1/auth/link/verify?t=${encodeURIComponent(token)}`;
 export const resetUrl = (token: string) => `${baseUrl()}/reset-password?t=${encodeURIComponent(token)}`;
+
+// ---------- job links ----------
+/** Link the signed-in account to the link's worker. False if the account already belongs to someone else's work. */
+export async function bindAccount(a: any, workerId: string, check = false): Promise<boolean> {
+  if (a.worker_id === workerId) return true;
+  const [w] = await sql`select email from workers where id = ${workerId}`;
+  const sameEmail = !!w?.email && w.email.toLowerCase() === String(a.email).toLowerCase();
+  const [busy] = a.worker_id ? await sql`select 1 from jobs where worker_id = ${a.worker_id} limit 1` : [];
+  if (!sameEmail && busy) return false; // this account already did jobs as another worker
+  if (check) return true;
+  await sql`update worker_accounts set worker_id = ${workerId}, updated_at = now() where id = ${a.id}`;
+  return true;
+}

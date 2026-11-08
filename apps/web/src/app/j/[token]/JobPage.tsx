@@ -118,9 +118,9 @@ export default function JobPage({ token }: { token: string }) {
 
   const { job, can_accept, reply_code, viewer } = load.data;
   const s = load.data.state;
-  // Worker accounts (docs/ACCOUNTS_API.md) aren't in the API yet; until they are, the job link itself is the
-  // credential (as the API enforces). NEXT_PUBLIC_WORKER_LOGIN=required turns the login gate back on.
-  const loginRequired = process.env.NEXT_PUBLIC_WORKER_LOGIN === "required";
+  // Accepting or declining needs a worker account (docs/ACCOUNTS_API.md; the API answers 401 login_required).
+  // NEXT_PUBLIC_WORKER_LOGIN=optional turns the gate off again (the job link alone is the credential).
+  const loginRequired = process.env.NEXT_PUBLIC_WORKER_LOGIN !== "optional";
   const loggedIn = !!user || !loginRequired;
   const deadline = deadlineText(job.deadline);
   const proofPath = `${jobPath}/proof`;
@@ -359,7 +359,7 @@ export default function JobPage({ token }: { token: string }) {
                       {user ? (
                         <span><strong>Signed in as {user.name || user.email}</strong><br /><span style={{ color: "#5B635C" }}>Not you? Log out from the menu.</span></span>
                       ) : (
-                        // worker accounts aren't live yet: the personal job link is the credential (NEXT_PUBLIC_WORKER_LOGIN unset)
+                        // only reached with NEXT_PUBLIC_WORKER_LOGIN=optional: the personal job link is the credential
                         <span><strong>Using your personal job link</strong><br /><span style={{ color: "#5B635C" }}>Don&apos;t share it; it&apos;s how we know the job is yours.</span></span>
                       )}
                     </li>

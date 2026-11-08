@@ -10,6 +10,8 @@ import { postJson } from "@/lib/api";
 import { useSession, type User } from "@/lib/session";
 import { DevHint, Divider, FormError, GoogleButton, MailIcon, PhoneIcon, Spinner, errorText, input, label, primary, secondary, textBtn } from "./ui";
 import PasswordInput from "@/components/PasswordInput";
+import LastUsedTag from "@/components/LastUsedTag";
+import { markJustSignedIn, type SignInMethod } from "@/lib/signin";
 
 export type Mode = "start" | "phone" | "code" | "email" | "link_sent" | "password";
 
@@ -63,8 +65,9 @@ export default function LoginMethods({
     onModeChange?.(m, hint);
   };
 
-  const done = (u: User) => {
+  const done = (u: User, method: SignInMethod) => {
     setUser(u);
+    markJustSignedIn(method);
     router.push(next);
   };
 
@@ -87,7 +90,7 @@ export default function LoginMethods({
     const r = await postJson<{ user: User }>("/v1/auth/code/verify", jobToken ? { job_token: jobToken, code } : { phone, code });
     setBusy(null);
     if (!r.ok) return setError(errorText(r.error));
-    done(r.data.user);
+    done(r.data.user, "code");
   }
 
   async function sendLink(e?: React.FormEvent) {
@@ -108,7 +111,7 @@ export default function LoginMethods({
     const r = await postJson<{ user: User }>("/v1/auth/login", { email, password, remember });
     setBusy(null);
     if (!r.ok) return setError(errorText(r.error));
-    done(r.data.user);
+    done(r.data.user, "password");
   }
 
   return (
@@ -128,9 +131,10 @@ export default function LoginMethods({
           <button type="button" onClick={() => setMode("email")} style={secondary}>
             <MailIcon />
             Email me a login link
+            <LastUsedTag method="email_link" />
           </button>
           <Divider>or</Divider>
-          <button type="button" onClick={() => setMode("password")} style={{ ...textBtn, minHeight: "44px", fontSize: "15px" }}>Log in with email and password</button>
+          <button type="button" onClick={() => setMode("password")} style={{ ...textBtn, minHeight: "44px", fontSize: "15px" }}>Log in with email and password<LastUsedTag method="password" /></button>
         </div>
       )}
 

@@ -45,7 +45,7 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    | Can't configure MCP | keep calling over HTTP as in step 3, reading the key from `OPERIS_API_KEY` |
 
    New MCP servers usually load on the **next** session. Until then, keep using HTTP.
-5. **Payment:** in production every job is paid. The first result is `status: "requested"` with an `escrow_url`; your owner pays it once in a browser (card held, charged only when proof passes), and the job starts. A result of `held` with no `escrow_url` means it's already funded.
+5. **Payment:** every job is paid. To pay without a link, save a card once (call `setup_payment`, or `POST https://api.operis.live/v1/customers/payment-setup` with your key, and have your owner open the returned `url` one time), or pass `payment.payment_method` (a Stripe PaymentMethod id; in test mode `pm_card_visa`). Then `request_human` answers `status: "held"` with `escrow_url: null`: funded on the spot, the card held and charged only when proof passes. Otherwise the result is `status: "requested"` with an `escrow_url` your owner pays once in a browser, and the job starts when it's paid.
 
 ## What humans can do for you
 
@@ -121,6 +121,7 @@ curl -X POST https://api.operis.live/mcp \
 | `certification_required` | string \| null | e.g. "notary" |
 | `proof` | object | `photos: { min, must_show[] }` (one photo per item; for online work with nothing to photograph use `min: 0` and ask for `fields` or a screenshot); optional `fields: [{name, type: "string" or "number"}]` (answers returned in `proof_package.fields`); optional `geofence_m` (default 150, on-site only); optional `video`, `files` |
 | `callback_url` | URL (optional) | We POST the result here when the job finishes |
+| `payment` | `{ payment_method }` (optional) | A Stripe PaymentMethod id (`pm_…`) that funds the job in this call, no link; in test mode `pm_card_visa`. Omit it to use the card saved with `setup_payment` |
 
 Example:
 ```json
@@ -134,10 +135,11 @@ Example:
   "proof": { "photos": { "min": 2, "must_show": ["YC sign", "posted hours"] }, "geofence_m": 150 }
 }
 ```
-Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check `status` first:**
+Returns `{ job_id, status, quote_usd, escrow_url, reason?, fallback_reason?, next_step }`. **Check `status` first:**
 - `rejected`: not created; `reason` says why. Don't resend the same request.
-- `held`: funded; a person is being found now.
-- `requested` + `escrow_url`: payment needed. Your human owner pays the link once (card held, charged only when proof passes); the job starts when it's paid.
+- `held` (`escrow_url: null`): funded. Your card is held for `quote_usd` (charged only when proof passes) and a person is being found now. Nothing to pay.
+- `requested` + `escrow_url`: payment needed. Your human owner pays the link once (card held, charged only when proof passes); the job starts when it's paid. You get this when no card is saved and no `payment` was passed, or when the card was refused.
+- `fallback_reason` (with `requested`): a card was tried and refused. It is the Stripe code (`card_declined`, `authentication_required`, `invalid_payment_method`, ...) and `next_step` says why in plain words. Pay `escrow_url`, or `cancel_job` that job, save another card with `setup_payment` and request again.
 
 `next_step` is always a one-line instruction to follow.
 
@@ -148,6 +150,9 @@ Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check
 
 ### `cancel_job`
 `{ job_id }`: allowed until status is `accepted`. Any card hold is released at once.
+
+### `setup_payment`
+No input → `{ url, next_step }`. Your human owner opens `url` once and saves a card on Stripe's page; nothing is charged then (in test mode: card 4242 4242 4242 4242, any future expiry, any CVC). Once Stripe confirms the card to us, `request_human` funds each job from it in the call. The link works for 24 hours; call again for a new one or to replace the card. Same as `POST https://api.operis.live/v1/customers/payment-setup` with your key.
 
 ## 4. Job lifecycle
 

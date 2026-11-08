@@ -1,5 +1,5 @@
 // Every minute (Vercel cron): pull agent activity from Naïve once, then apply the founder auto-approve policy
-// every ~8 s for ~50 s, so routine calls wait seconds, not a minute. No-op when no policy is on.
+// every ~25 s for ~50 s (Naïve rate-limits faster polling), so routine calls wait seconds, not a minute. No-op when no policy is on.
 import { autoApproveLoop } from "@/lib/approvals";
 import { syncAgentFeed } from "@/lib/agentFeed";
 import { authAdmin } from "@/lib/auth";

@@ -67,8 +67,19 @@ export interface Tools {
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;
+      /** Optional: a Stripe PaymentMethod id (pm_...) that funds the job in this call, no payment link. Without it the card saved with setup_payment is used; without either, pay escrow_url. [proposed by Cameron] */
+      payment?: { payment_method: string };
     },
-    { job_id: string; status: "requested" | "held" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string; next_step?: string }
+    {
+      job_id: string;
+      status: "requested" | "held" | "rejected";
+      quote_usd: number;
+      escrow_url: string | null;
+      reason?: string;
+      /** Set when a passed or saved card could not be charged and escrow_url is the fallback: card_declined, authentication_required, invalid_payment_method, ... */
+      fallback_reason?: string;
+      next_step?: string;
+    }
   >;
 
   get_job: ToolSpec<
@@ -77,6 +88,9 @@ export interface Tools {
   >;
 
   cancel_job: ToolSpec<{ job_id: string }, { job_id: string; status: "cancelled" }>;
+
+  /** A one-time link where the customer's human owner saves a card; then request_human funds jobs with no link. Also POST /v1/customers/payment-setup. [proposed by Cameron] */
+  setup_payment: ToolSpec<Record<string, never>, { url: string | null; next_step: string }>;
 
   // INTERNAL: Ops → services/outreach (Andrew)
   find_people: ToolSpec<
@@ -181,6 +195,7 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   request_human:   { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
   get_job:         { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer", "ceo", "ops", "verifier", "finance"] },
   cancel_job:      { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
+  setup_payment:   { owner: "edwin",  folder: "apps/api/src/mcp/public.ts", calledBy: ["customer"] },
   find_people:     { owner: "andrew",  folder: "services/outreach",          calledBy: ["ops"] },
   send_blast:      { owner: "andrew",  folder: "services/outreach",          calledBy: ["ops"] },
   check_proof:     { owner: "cameron", folder: "services/verify",            calledBy: ["verifier"] },
@@ -195,8 +210,8 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   list_prospects:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   send_marketing:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   suppress_contact: { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
-  recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
-  recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
+  recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
+  recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
   redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
 };

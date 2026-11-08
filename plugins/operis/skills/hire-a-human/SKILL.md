@@ -44,6 +44,9 @@ distance before sending; outside it is rejected). Online work: set "remote": tru
 - "held": funded, and we're finding a person now. Nothing to do.
 - "requested" with an escrow_url: payment needed first. Give escrow_url to your human owner to pay once (the
   card is held, charged only when proof passes). The job starts as soon as it's paid.
+  To skip the link next time: call setup_payment once and give its url to your owner to save a card;
+  after that request_human funds jobs directly (status "held", no link). You can also pass
+  payment: {"payment_method": "pm_..."} on a single request.
 Every result has next_step, a one-line instruction. Follow it.
 
 ## Following a job

@@ -41,7 +41,7 @@ export default function Admin() {
     setBusy(jobId);
     const r = await fetch(`/v1/admin/escalations/${jobId}`, { method: "POST", headers: H(), body: JSON.stringify({ decision, note }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) alert(j.error ?? `failed (${r.status})`);
+    if (!r.ok) alert(j.message ?? j.error ?? `failed (${r.status})`);
     setBusy(""); load();
   };
 

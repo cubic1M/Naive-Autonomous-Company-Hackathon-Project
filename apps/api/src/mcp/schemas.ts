@@ -14,7 +14,7 @@ const jobId = { job_id: z.string().uuid().describe("Job id (uuid) from get_job /
 export const SCHEMAS = {
   request_human: {
     description:
-      "Hire a verified human for a real-world task in San Francisco (photograph/verify a place, pick up & ship, paperwork presence). You pay only when proof passes. Returns job_id, quote and an escrow_url to fund the job.",
+      "Hire a verified human for a real-world task in San Francisco (photograph/verify a place, pick up & ship, paperwork presence). You pay only when proof passes. Returns job_id and quote; status held means it is funded already (from payment.payment_method or your saved card), otherwise escrow_url is the link to fund it.",
     shape: {
       title: z.string().min(3).max(200),
       instructions: z.string().min(3).max(4000),
@@ -25,10 +25,19 @@ export const SCHEMAS = {
       certification_required: z.string().nullable().default(null),
       proof,
       callback_url: z.string().url().optional(),
+      payment: z
+        .object({ payment_method: z.string().regex(/^pm_/, "a Stripe PaymentMethod id, pm_...") })
+        .optional()
+        .describe("Fund the job now with a Stripe PaymentMethod id (pm_...; in test mode pm_card_visa), no link. Without it your card saved with setup_payment is used; without either, escrow_url must be paid."),
     },
   },
   get_job: { description: "Get a job's status and details; includes the proof package once approved.", shape: jobId },
   cancel_job: { description: "Cancel a job before a worker accepts it.", shape: jobId },
+  setup_payment: {
+    description:
+      "Get a one-time Stripe link where your human owner saves a card (nothing is charged then). Once saved, request_human funds every job from it in the call: status held, escrow_url null. Call again to replace the card.",
+    shape: {},
+  },
   find_people: {
     description: "Find candidate workers near the job from public, work-related sources. Returns ranked candidate ids.",
     shape: {

@@ -8,5 +8,5 @@ export async function POST(req: Request) {
   const email = String(b.email ?? "").trim().toLowerCase();
   const [a] = email ? await sql`select * from worker_accounts where lower(email) = ${email}` : [];
   if (!a || !checkPassword(String(b.password ?? ""), a.password_hash)) return json({ ok: false, error: "bad_credentials" }, 401);
-  return signedIn(a, b.remember !== false);
+  return signedIn(a, b.remember !== false, 200, "password");
 }
