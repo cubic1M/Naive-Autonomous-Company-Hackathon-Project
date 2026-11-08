@@ -6,6 +6,22 @@ import { inServiceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
 
 const FEE_RATE = 0.25;
+
+/** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
+export const STATUS_MEANING: Record<string, string> = {
+  requested: "Created but not funded yet: pay the escrow_url to start it.",
+  held: "Funded (payment held, not charged). We're finding a person now. Nothing to do; check again in a few minutes.",
+  outreach: "Offers sent to nearby verified people; waiting for someone to accept.",
+  accepted: "A worker accepted and is doing the task. It can no longer be cancelled.",
+  proof_submitted: "The worker uploaded proof; it's being verified.",
+  approved: "Proof passed verification; payment is being captured.",
+  escalated: "Proof needs a human reviewer; usually decided within the hour.",
+  paid: "Done. proof_package has the photo URLs, fields and verifier score; your card was charged.",
+  rejected: "Proof failed verification; you are refunded automatically.",
+  expired: "The deadline passed without accepted proof; you are refunded automatically.",
+  refunded: "Refunded in full.",
+  cancelled: "Cancelled; any payment hold was released.",
+};
 const MIN_JOB_USD = 20;
 
 export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): Promise<Tools["get_job"]["out"]> {
@@ -21,7 +37,7 @@ export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): P
     worker_id: j.worker_id,
   };
   // extra context for our own agents (kept short: Naïve truncates tool output at 8k chars)
-  Object.assign(out, { instructions: j.instructions, proof_requirement: j.proof_requirement, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) });
+  Object.assign(out, { status_meaning: STATUS_MEANING[j.status] ?? "", instructions: j.instructions, proof_requirement: j.proof_requirement, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) });
   if (["approved", "paid"].includes(j.status)) {
     const [p] = await ctx.sql`select media, fields, verifier_score from proofs where job_id = ${j.id} and status = 'approved' order by created_at desc limit 1`;
     if (p) out.proof_package = { media_urls: (p.media ?? []).map((m: any) => m.url), fields: p.fields ?? {}, verifier_score: Number(p.verifier_score) };
@@ -35,7 +51,8 @@ export async function requestHuman(
   customerId: string,
   createHold?: (jobId: string) => Promise<{ escrow_url: string }>,
 ): Promise<Tools["request_human"]["out"]> {
-  const reject = (reason: string) => ({ job_id: "", status: "rejected" as const, quote_usd: 0, escrow_url: null, reason });
+  const reject = (reason: string) => ({ job_id: "", status: "rejected" as const, quote_usd: 0, escrow_url: null, reason,
+    next_step: "Not created. Fix the request using the reason, or tell your owner; don't resend the same request." });
   if (input.budget_usd < MIN_JOB_USD) return reject(`Minimum job is $${MIN_JOB_USD}.`);
   if (new Date(input.deadline).getTime() < Date.now() + 15 * 60 * 1000) return reject("Deadline must be at least 15 minutes from now.");
   const remote = input.remote === true;
@@ -62,18 +79,20 @@ export async function requestHuman(
                       certification_required, proof_requirement, status, callback_url)
     values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
             ${input.deadline}, ${input.budget_usd}, ${fee}, ${input.budget_usd - fee}, ${input.certification_required},
-            ${ctx.sql.json(input.proof)}, 'requested', ${input.callback_url ?? null})
+            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? 150 })}, 'requested', ${input.callback_url ?? null})
     returning id`;
 
   // Payments: Cameron's createHold returns a Stripe Checkout URL; the Stripe webhook moves the job to `held`.
   // Without it (or with MOCK_PAYMENTS), we treat the hold as instant so the loop runs end to end.
   if (createHold && !flag("MOCK_PAYMENTS") && !flag("USE_MOCKS")) {
     const { escrow_url } = await createHold(job.id);
-    return { job_id: job.id, status: "requested", quote_usd: input.budget_usd, escrow_url };
+    return { job_id: job.id, status: "requested", quote_usd: input.budget_usd, escrow_url,
+      next_step: "Payment needed: give escrow_url to your human owner to pay once (the card is held, charged only when proof passes). The job starts as soon as it's paid." };
   }
   await ctx.ledger(job.id, "hold", input.budget_usd, "mock");
   await ctx.transition(job.id, "held");
-  return { job_id: job.id, status: "requested", quote_usd: input.budget_usd, escrow_url: null };
+  return { job_id: job.id, status: "held", quote_usd: input.budget_usd, escrow_url: null,
+    next_step: "Funded. We're finding a verified person now. Call get_job every 2-5 minutes (or wait for your callback_url); status 'paid' means proof is ready." };
 }
 
 export async function cancelJob(input: Tools["cancel_job"]["in"], ctx: ToolContext, customerId: string): Promise<Tools["cancel_job"]["out"]> {

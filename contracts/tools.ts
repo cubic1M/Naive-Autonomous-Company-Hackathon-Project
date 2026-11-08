@@ -19,7 +19,8 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  geofence_m: number;
+  /** Meters from location the proof must be taken within. Optional (default 150); ignored for remote jobs. */
+  geofence_m?: number;
   fields?: { name: string; type: "string" | "number" }[];
 }
 
@@ -50,7 +51,7 @@ export interface Tools {
       proof: ProofRequirement;
       callback_url?: string;
     },
-    { job_id: string; status: "requested" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string }
+    { job_id: string; status: "requested" | "held" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string; next_step?: string }
   >;
 
   get_job: ToolSpec<

@@ -6,8 +6,8 @@ const proof = z.object({
   photos: z.object({ min: z.number().int().min(0), must_show: z.array(z.string()) }).optional(),
   video: z.object({ min_seconds: z.number() }).optional(),
   files: z.object({ kinds: z.array(z.string()) }).optional(),
-  geofence_m: z.number().positive(),
-  fields: z.array(z.object({ name: z.string(), type: z.enum(["string", "number"]) })).optional(),
+  geofence_m: z.number().positive().optional().describe("meters from location the proof must be taken within; default 150; ignored for remote jobs"),
+  fields: z.array(z.object({ name: z.string(), type: z.enum(["string", "number"]) })).optional().describe("answers the worker must fill in, e.g. [{\"name\":\"keypad_lights_up\",\"type\":\"string\"}]; returned in proof_package.fields"),
 });
 const jobId = { job_id: z.string().uuid().describe("Job id (uuid) from get_job / the wake-up message") };
 

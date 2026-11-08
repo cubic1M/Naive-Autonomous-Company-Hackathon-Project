@@ -7,8 +7,8 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 
 - **MCP server:** \`${mcp}\` (Streamable HTTP)
 - **Auth:** \`Authorization: Bearer opk_…\` (get a key below; free, instant)
-- **Where:** San Francisco, within 8 km of the YC office (for now)
-- **Price:** you set \`budget_usd\` (minimum $20). The worker gets 75%; Operis keeps 25%.
+- **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (\`remote: true\`)
+- **Price:** you set \`budget_usd\` (minimum $20), all-in; \`quote_usd\` always equals it. The worker gets 75%; Operis keeps 25%. You're charged only when proof passes.
 
 ## What humans can do for you
 
@@ -66,12 +66,13 @@ curl -X POST ${mcp} \\
 | Field | Type | Notes |
 |---|---|---|
 | \`title\` | string | Short, specific |
-| \`instructions\` | string | What to do, step by step |
-| \`location\` | \`{ address, lat, lng }\` | Must be in the service area |
-| \`deadline\` | ISO 8601 | At least 15 minutes from now |
-| \`budget_usd\` | number | ≥ 20. What you pay in total |
+| \`instructions\` | string | Everything the worker needs. You can't message them after posting. Public areas only |
+| \`location\` | \`{ address, lat, lng }\` or null | On-site: must be in the service area. null when \`remote\` is true |
+| \`remote\` | boolean (optional) | true for online work. Default false |
+| \`deadline\` | ISO 8601, UTC | e.g. \`2026-11-08T18:00:00Z\`, at least 15 minutes from now |
+| \`budget_usd\` | number | ≥ 20. Total you pay, all-in |
 | \`certification_required\` | string \\| null | e.g. "notary" |
-| \`proof\` | object | \`photos: { min, must_show[] }\`, \`geofence_m\` (meters from the location), optional \`video\`, \`files\`, \`fields\` |
+| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
 
 Example:
@@ -86,18 +87,33 @@ Example:
   "proof": { "photos": { "min": 2, "must_show": ["YC sign", "posted hours"] }, "geofence_m": 150 }
 }
 \`\`\`
-Returns \`{ job_id, status, quote_usd, escrow_url, reason? }\`. If \`status\` is \`rejected\`, \`reason\` says why. If \`escrow_url\` is a URL, pay it to fund the job (your card is held and only charged when proof passes). If it's \`null\`, no payment is needed (test mode).
+Returns \`{ job_id, status, quote_usd, escrow_url, reason?, next_step }\`. **Check \`status\` first:**
+- \`rejected\`: not created; \`reason\` says why. Don't resend the same request.
+- \`held\`: funded; a person is being found now.
+- \`requested\` + \`escrow_url\`: payment needed. Your human owner pays the link once (card held, charged only when proof passes); the job starts when it's paid.
+
+\`next_step\` is always a one-line instruction to follow.
 
 ### \`get_job\`
-\`{ job_id }\` → status, details, and once approved a \`proof_package\`: \`{ media_urls, fields, verifier_score }\`.
+\`{ job_id }\` → status, \`status_meaning\` (what it means and whether to act), details, and once approved a \`proof_package\`: \`{ media_urls, fields, verifier_score }\`.
 
 ### \`cancel_job\`
-\`{ job_id }\`: allowed until a worker accepts.
+\`{ job_id }\`: allowed until status is \`accepted\`.
 
 ## 4. Job lifecycle
 
-\`requested → held → outreach → accepted → proof_submitted → approved → paid\`
-(or \`escalated\` to a human reviewer, \`rejected\`, \`cancelled\`, \`expired\`, \`refunded\`).
+| Status | Meaning |
+|---|---|
+| \`requested\` | Created, not funded: pay \`escrow_url\` |
+| \`held\` | Funded; finding a person |
+| \`outreach\` | Offers sent; waiting for someone to accept |
+| \`accepted\` | A worker is on it (can't cancel now) |
+| \`proof_submitted\` | Proof is being verified |
+| \`approved\` | Proof passed; payment being captured |
+| \`paid\` | Done: \`proof_package\` is ready |
+| \`escalated\` | A human reviewer decides |
+| \`rejected\` / \`expired\` | Proof failed / deadline passed; refunded automatically |
+| \`cancelled\` | Cancelled; hold released |
 Poll \`get_job\` every 2–5 minutes, or use \`callback_url\`.
 
 **Callbacks:** we POST \`{ job_id, status, proof_package? }\` to your \`callback_url\` when a job is paid, refunded, rejected or cancelled, signed with \`X-Operis-Signature: sha256=<hmac>\`.
