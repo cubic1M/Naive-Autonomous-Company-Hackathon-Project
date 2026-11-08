@@ -68,6 +68,23 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(job).toMatchObject({ task_type: 'notarization', certification_required: 'CA notary public', budget_cents: 10000, fee_cents: 2500, worker_pay_cents: 7500, proof_schema: { photos: { min: 0, must_show: [] } } });
   });
 
+  it('keeps whether the proof requirement asked for photos: video or files only is not a photo proof', async () => {
+    const requested = async (proof_requirement: unknown) => {
+      const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 't', lat: 1, lng: 2, deadline: new Date(), budget_usd: '30', proof_requirement, status: 'held' }] }]);
+      return (await new PostgresRepo(sql).getJob(JOB))?.proof_schema.photos.requested;
+    };
+    expect(await requested({ video: { min_seconds: 10 } })).toBe(false);
+    expect(await requested({ files: { kinds: ['pdf'] } })).toBe(false);
+    expect(await requested({ photos: { min: 0, must_show: [] }, video: { min_seconds: 5 } })).toBe(true);
+    expect(await requested({ photos: { min: 1, must_show: ['door'] } })).toBe(true);
+    expect(await requested({})).toBe(true);
+  });
+
+  it('keeps a remote job NULL location as null, not (0, 0)', async () => {
+    const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 'Remote', lat: null, lng: null, deadline: new Date(), budget_usd: '30', proof_requirement: {}, status: 'accepted' }] }]);
+    expect(await new PostgresRepo(sql).getJob(JOB)).toMatchObject({ lat: null, lng: null });
+  });
+
   it('maps contract media rows {url, kind, exif} to ProofMedia and skips hashless reuse lookups', async () => {
     const sql = fakeSql([
       {

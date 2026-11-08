@@ -5,8 +5,9 @@
  * commission number and name are then checked against the imported registry before they may take
  * a notarization job. We never ask for or store anything about a notary's journal (policy).
  */
-import { verifiedIdentityName } from '../identity.js';
+import { refreshVerifiedName, verifiedIdentityName } from '../identity.js';
 import type { Repo } from '../repo.js';
+import type { StripeClient } from '../stripe-client.js';
 import type { NotaryRecord, VerificationStatus } from '../types.js';
 import { matchNames, normalizeName, type NameMatch } from './names.js';
 
@@ -318,14 +319,20 @@ function californiaDay(instant: Date): number {
  * Only a full name match verifies automatically; a partial match needs human review.
  */
 export async function verifyNotary(
-  deps: { repo: Pick<Repo, 'getNotary' | 'getWorkerVerification' | 'upsertWorkerVerification'>; now?: () => Date },
+  deps: {
+    repo: Pick<Repo, 'getNotary' | 'getWorkerVerification' | 'upsertWorkerVerification'>;
+    now?: () => Date;
+    /** Refetches a verified name the identity webhook could not fetch (refreshVerifiedName). */
+    stripe?: Pick<StripeClient, 'identity'>;
+  },
   input: VerifyNotaryInput,
 ): Promise<VerifyNotaryResult> {
   const now = deps.now ?? (() => new Date());
   const commission = normalizeCommissionNumber(input.commissionNumber);
   const record = commission === '' ? null : await deps.repo.getNotary(commission);
 
-  const nameOnId = verifiedIdentityName(await deps.repo.getWorkerVerification(input.workerId, 'identity'));
+  const identity = await refreshVerifiedName(deps, input.workerId);
+  const nameOnId = verifiedIdentityName(identity);
   const nameSource: NotaryNameSource = nameOnId ? 'verified_identity' : 'typed';
   const nameToCheck = nameOnId ?? input.name;
   const typedVsId: NameMatch | null = nameOnId ? matchNames(input.name, nameOnId).match : null;
@@ -356,6 +363,9 @@ export async function verifyNotary(
       status = 'failed';
       reasons = ['name_mismatch'];
     }
+  }
+  if (identity?.status === 'verified' && !nameOnId) {
+    reasons.push('id_name_unavailable: the identity is verified but Stripe gave no name for it (verified_outputs); the typed name was compared with the commission');
   }
   if (nameOnId && typedVsId !== 'full') {
     reasons.push(
