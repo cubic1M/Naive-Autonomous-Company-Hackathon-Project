@@ -3,7 +3,7 @@
 // Admin flow: the Google email must be on ADMIN_EMAILS; hand the backoffice a founder token in the URL fragment.
 import { allowedAdminEmails, issueSession } from "@/lib/adminSession";
 import { STATE_COOKIE, cookie, cookieValue, exchangeCode, readState, redirect } from "@/lib/googleAuth";
-import { startSession, upsertGoogleAccount } from "@/lib/workerAccounts";
+import { startSession, upsertGoogleAccount } from "@/lib/accounts";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {

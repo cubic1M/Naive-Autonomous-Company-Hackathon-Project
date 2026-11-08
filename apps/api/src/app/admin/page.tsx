@@ -46,7 +46,7 @@ export default function Admin() {
   };
 
   return (
-    <main style={{ fontFamily: "ui-sans-serif, system-ui", background: "#f5f5f7", minHeight: "100vh", padding: 20 }}>
+    <main style={{ background: "#f5f5f7", minHeight: "100vh", padding: 20 }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ fontWeight: 800, letterSpacing: 2 }}>OPERIS · FOUNDER CONSOLE</div>
         {!key && <div style={card}>Open <code>/admin?key=YOUR_ADMIN_KEY</code> to sign in.</div>}

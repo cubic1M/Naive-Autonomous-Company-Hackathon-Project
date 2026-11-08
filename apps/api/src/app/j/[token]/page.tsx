@@ -117,7 +117,7 @@ export default function JobPage({ params }: { params: Promise<{ token: string }>
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main style={{ fontFamily: "ui-sans-serif, system-ui", background: "#f5f5f7", minHeight: "100vh", padding: "24px 16px" }}>
+    <main style={{ background: "#f5f5f7", minHeight: "100vh", padding: "24px 16px" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ fontWeight: 800, letterSpacing: 2, marginBottom: 16 }}>OPERIS</div>
         {children}

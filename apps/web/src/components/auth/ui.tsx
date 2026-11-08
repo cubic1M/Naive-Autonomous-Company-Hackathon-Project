@@ -87,9 +87,14 @@ export const ERRORS: Record<string, string> = {
   too_many_tries: "Too many tries. Send a new code.",
   link_expired: "That link has expired. Request a new one.",
   network: "We couldn't reach Operis. Check your connection and try again.",
-  use_google: "Email, text and password sign-in are coming soon. Use Continue with Google for now.",
   google_failed: "Google sign-in didn't go through. Please try again.",
   google_cancelled: "Google sign-in was cancelled. Try again whenever you're ready.",
-  google_not_configured: "Google sign-in isn't switched on yet. Please try again shortly.",
+  google_not_configured: "Google sign-in isn't switched on yet. Use your email and password for now.",
+  not_a_founder: "That Google account isn't on the founders list.",
+  sms_unavailable: "Text codes aren't available yet. Use an email link or your password instead.",
+  email_unavailable: "We couldn't send the email just now. Try again in a minute, or use your password.",
+  rate_limited: "Too many emails in a short time. Wait a few minutes and try again.",
+  login_required: "Log in to continue.",
+  identity_unavailable: "ID verification isn't available right now. Try again in a few minutes.",
 };
 export const errorText = (code: string) => ERRORS[code] ?? "Something went wrong. Please try again.";
