@@ -179,7 +179,7 @@ export function createTools(deps: ToolDeps): Tools {
     async verify_notary(raw) {
       const { worker_id, commission_number, name, job_date } = parse('verify_notary', raw);
       const r = await verifyNotary(
-        { repo: deps.repo, now: deps.now },
+        { repo: deps.repo, now: deps.now, stripe: deps.stripe },
         { workerId: worker_id, commissionNumber: commission_number, name, jobDate: new Date(job_date) },
       );
       return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires), name_source: r.nameSource };
