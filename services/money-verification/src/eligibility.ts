@@ -15,7 +15,7 @@ export interface EligibilityResult {
  * the deadline, and for a tier-2 job (over $150 or any certification) a verified Stripe Identity (verify_identity).
  */
 export async function checkEligibility(
-  deps: { repo: Pick<Repo, 'getJob' | 'getWorker' | 'getWorkerVerification'> },
+  deps: { repo: Pick<Repo, 'getJob' | 'getWorker' | 'getWorkerVerification' | 'getJobLiability'> },
   input: { workerId: string; jobId: string },
 ): Promise<EligibilityResult> {
   const [job, worker] = await Promise.all([deps.repo.getJob(input.jobId), deps.repo.getWorker(input.workerId)]);
@@ -26,13 +26,18 @@ export async function checkEligibility(
   const reasons: string[] = [];
   if (worker.suspended) reasons.push('worker_suspended');
   if (worker.tier < job.required_tier) reasons.push(`tier_too_low: worker tier ${worker.tier}, job requires ${job.required_tier}`);
-  if (job.task_type === 'notarization') {
-    const v = await deps.repo.getWorkerVerification(worker.id, 'notary_commission');
-    if (!v || v.status !== 'verified') reasons.push(`notary_not_verified: ${v?.status ?? 'no verification on file'}`);
+  // Licences the job's liability tags require (src/liability/policy.ts): L1 a notary commission, also when task_type
+  // is not notarization; L2 an active State Bar licence (verify_attorney). No intake row means no tags.
+  const rules = (await deps.repo.getJobLiability(job.id))?.tags.rules ?? [];
+  const licence = async (kind: 'notary_commission' | 'attorney_license', label: 'notary' | 'attorney', missing: string) => {
+    const v = await deps.repo.getWorkerVerification(worker.id, kind);
+    if (!v || v.status !== 'verified') reasons.push(`${label}_not_verified: ${v?.status ?? missing}`);
     else if (v.expires_at && v.expires_at.getTime() < job.deadline.getTime()) {
-      reasons.push('notary_commission_expires_before_deadline');
+      reasons.push(label === 'notary' ? 'notary_commission_expires_before_deadline' : 'attorney_check_expires_before_deadline');
     }
-  }
+  };
+  if (job.task_type === 'notarization' || rules.includes('L1')) await licence('notary_commission', 'notary', 'no verification on file');
+  if (rules.includes('L2')) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
   if (profile.identityRequired) {
     const v = await deps.repo.getWorkerVerification(worker.id, 'identity');
     if (!v || v.status !== 'verified') {

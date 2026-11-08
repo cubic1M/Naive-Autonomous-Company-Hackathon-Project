@@ -1,0 +1,49 @@
+// services/money-verification/test/eligibility.test.ts
+// Licences the per-job liability tags require before accept (docs/specs/2026-11-08-liability-model-design.md).
+// The tier and identity gate are covered in proof-tiers.test.ts and tools.test.ts.
+import { describe, expect, it } from 'vitest';
+import { checkEligibility } from '../src/eligibility.js';
+import { InMemoryRepo } from '../src/repo/memory.js';
+import { HOUR_MS, JOB_ID, T0, WORKER_ID, makeJob, makeWorker } from './helpers.js';
+
+describe('licences required by the liability tags', () => {
+  const setup = async (rules: string[]) => {
+    const repo = new InMemoryRepo();
+    repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));
+    repo.seedWorker(makeWorker());
+    await repo.insertJobLiability({ job_id: JOB_ID, tags: { rules, forced: 'connector' }, pricing: 'connector' });
+    return repo;
+  };
+  const attorneyCheck = (expires_at: Date) => ({
+    worker_id: WORKER_ID, kind: 'attorney_license' as const, status: 'verified' as const, provider_ref: '999001', details: {}, verified_at: T0, expires_at,
+  });
+
+  it('refuses an L2 job without a verified attorney licence', async () => {
+    const repo = await setup(['L2']);
+    const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(r.eligible).toBe(false);
+    expect(r.reasons.some((x) => x.startsWith('attorney_not_verified'))).toBe(true);
+  });
+  it('accepts an L2 job with a verified attorney licence that outlasts the deadline', async () => {
+    const repo = await setup(['L2']);
+    await repo.upsertWorkerVerification(attorneyCheck(new Date(T0.getTime() + 30 * 24 * 3600 * 1000)));
+    const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(r.reasons.filter((x) => x.startsWith('attorney'))).toEqual([]);
+  });
+  it('refuses an L2 job when the State Bar check expires before the deadline', async () => {
+    const repo = await setup(['L2']);
+    await repo.upsertWorkerVerification(attorneyCheck(new Date(T0.getTime() + HOUR_MS))); // the deadline is T0 + 4h
+    expect((await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).reasons).toContain('attorney_check_expires_before_deadline');
+  });
+  it('requires a notary commission for an L1 tag even when task_type is not notarization', async () => {
+    const repo = await setup(['L1']);
+    const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
+  });
+  it('changes nothing for a job without tags', async () => {
+    const repo = new InMemoryRepo();
+    repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));
+    repo.seedWorker(makeWorker());
+    expect((await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).eligible).toBe(true);
+  });
+});
