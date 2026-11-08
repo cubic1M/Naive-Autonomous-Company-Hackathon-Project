@@ -1,4 +1,5 @@
 import { AuthButtons, LogoPill } from "@/components/SiteHeader";
+import FontRoller from "@/components/FontRoller";
 import LaunchHands, { HandsClip, RippleLine } from "@/components/LaunchHands";
 import HowItWorks from "./HowItWorks";
 import QuickStart from "@/components/QuickStart";
@@ -39,7 +40,7 @@ export default function Home() {
             <span aria-hidden="true" style={{ width: "18px", height: "18px", borderRadius: "5px", background: "#FF8800", color: "#F7F4EE", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
             <strong style={{ fontWeight: "600", color: "#1F2A22" }}>autonomous companies</strong> and the people they hire
           </span>
-          <h1 id="launch-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: "500", fontSize: "clamp(44px, 6.4vw, 88px)", lineHeight: "1.02", letterSpacing: "-0.045em", color: "#1F2A22" }}>Hire real people<br /><span style={{ color: "#7A8178" }}>with a single</span> API call</h1>
+          <h1 id="launch-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: "500", fontSize: "clamp(44px, 6.4vw, 88px)", lineHeight: "1.02", letterSpacing: "-0.045em", color: "#1F2A22" }}>Hire <FontRoller /><br /><span style={{ color: "#7A8178" }}>with a single</span> API call</h1>
           <p style={{ margin: "0", maxWidth: "640px", fontSize: "19px", lineHeight: "1.6", color: "#5B635C", textWrap: "balance" }}>Verified people for the real-world work your agents can't do.</p>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px" }}>
             <a href="/jobs" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#FFFFFF", color: "#1F2A22", fontSize: "17px", fontWeight: "500", textDecoration: "none", border: "1px solid #DCD6CA" }}>Find work as a human</a>
@@ -115,7 +116,7 @@ export default function Home() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "14px" }}>
               <div style={{ background: "rgba(18, 26, 20, 0.82)", border: "1px solid #2E3D33", borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: "16px", fontWeight: "600" }}>Post a request</span><span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "#A3ADA4" }}>TypeScript</span></div>
-                <pre style={{ margin: "0", padding: "14px", borderRadius: "10px", background: "#0F1511", fontFamily: "var(--font-mono)", fontSize: "14.5px", lineHeight: "1.7", color: "#D6DED3", whiteSpace: "pre-wrap", overflowX: "auto" }}><span style={{ color: "#8E958C" }}>{"// from your agent"}</span>
+                <pre style={{ margin: "0", padding: "14px", borderRadius: "10px", background: "#0F1511", fontFamily: "var(--font-code)", fontSize: "14.5px", lineHeight: "1.7", color: "#D6DED3", whiteSpace: "pre-wrap", overflowX: "auto" }}><span style={{ color: "#8E958C" }}>{"// from your agent"}</span>
 {"\nawait operis.requests.create({\n  service: "}<span style={{ color: "#C9DDB8" }}>{'"notary"'}</span>{",\n  location: "}<span style={{ color: "#C9DDB8" }}>{'"San Jose, CA"'}</span>{",\n  when: "}<span style={{ color: "#C9DDB8" }}>{'"2026-11-13T10:00"'}</span>{",\n  rate: { usdPerHour: "}<span style={{ color: "#FF8800" }}>60</span>{" },\n  requires: ["}<span style={{ color: "#C9DDB8" }}>{'"ca_notary_commission"'}</span>{"],\n  proof: "}<span style={{ color: "#C9DDB8" }}>{'"photo_of_signed_page"'}</span>{"\n})"}</pre>
               </div>
 
