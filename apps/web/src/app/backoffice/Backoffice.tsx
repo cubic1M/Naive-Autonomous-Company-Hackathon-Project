@@ -14,6 +14,7 @@ const LABEL: Record<string, string> = {
   proof_submitted: "Proof in", approved: "Approved", paid: "Paid", escalated: "Needs review",
   rejected: "Rejected", cancelled: "Cancelled", expired: "Expired", refunded: "Refunded",
 };
+const AGENT_TONE: Record<string, string> = { ceo: "good", ops: "info", verifier: "warn", finance: "good", sales: "" };
 const TONE: Record<string, string> = {
   paid: "good", approved: "good", escalated: "warn", rejected: "bad", expired: "bad", refunded: "info", cancelled: "",
 };
@@ -24,12 +25,15 @@ type Req = {
   company: string | null; contact_email: string | null; worker_name: string | null; invited: number;
   wakes: { event: string; at: string; session: string | null }[] | null;
   proof: { media: { url: string; kind: string }[] | null; score: number | null; status: string; notes: string | null } | null;
+  activity: { agent: string; type: string; summary: string; at: string }[] | null;
 };
+type FeedItem = { agent: string; type: string; summary: string; job_id: string | null; created_at: string };
 type Data = {
   now: string;
   stats: { today: number; open: number; paid: number; escalated: number; companies: number };
   companies: { id: string; name: string; requests: number; paid: number; spend: number; last_request_at: string | null }[];
   requests: Req[];
+  feed: FeedItem[];
 };
 
 export default function Backoffice() {
@@ -146,6 +150,19 @@ export default function Backoffice() {
           </div>
         </section>
 
+        <div className="stack">
+        <section className="card stack">
+          <div className="row between"><h2>Agent activity</h2><span className="small muted">5 Naïve agents</span></div>
+          <ul className="feed" style={{ maxHeight: 420 }}>
+            {(data?.feed ?? []).length === 0 && <li className="muted small">No agent activity yet. It appears here within a minute of a job being funded.</li>}
+            {(data?.feed ?? []).map((f, i) => (
+              <li key={`${f.created_at}-${i}`}>
+                <div className="row between"><span className={`pill ${AGENT_TONE[f.agent] ?? ""}`}>{f.agent}</span><span className="small muted">{ago(f.created_at)}</span></div>
+                <div className="small" style={{ wordBreak: "break-word" }}>{f.summary.replace(new RegExp(`^${f.agent}\\s*`), "")}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
         <section className="card stack">
           <h2>Companies</h2>
           <ul className="feed">
@@ -158,6 +175,7 @@ export default function Backoffice() {
             ))}
           </ul>
         </section>
+        </div>
       </div>
       <style>{`@media (min-width: 1000px) { .bo-grid { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) !important; } }`}</style>
     </main>
@@ -179,6 +197,18 @@ function Detail({ q }: { q: Req }) {
       {!!q.wakes?.length && (
         <div className="small"><span className="eyebrow">Agents woken</span>{" "}
           {q.wakes.map((w) => <span key={w.event} className="pill" style={{ marginRight: 6 }}>{w.event.replace("_", " ")} · {ago(w.at)}</span>)}
+        </div>
+      )}
+      {!!q.activity?.length && (
+        <div className="stack" style={{ gap: 4 }}>
+          <span className="eyebrow">What the agents did</span>
+          {q.activity.map((a, i) => (
+            <div key={i} className="small" style={{ display: "grid", gridTemplateColumns: "90px 1fr 70px", gap: 8 }}>
+              <span className={`pill ${AGENT_TONE[a.agent] ?? ""}`} style={{ justifySelf: "start" }}>{a.agent}</span>
+              <span style={{ wordBreak: "break-word" }}>{a.summary.replace(new RegExp(`^${a.agent}\\s*`), "")}</span>
+              <span className="muted">{ago(a.at)}</span>
+            </div>
+          ))}
         </div>
       )}
       {q.proof && (

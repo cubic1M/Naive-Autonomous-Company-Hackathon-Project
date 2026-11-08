@@ -1,41 +1,60 @@
 // The prompt a company pastes into its agent (system prompt, CLAUDE.md, skill...). Kept here so the
-// /developers page and our tests use the exact same text.
+// /developers page and our tests use the exact same text. Revised after two blind agent tests.
 export function agentPrompt(mcpUrl: string, key = "<YOUR_OPERIS_KEY>") {
   return `You can hire a verified human for real-world tasks through Operis.
 
 ## Connection
-- Operis is an MCP server at ${mcpUrl} (Streamable HTTP).
+- Operis is an MCP server at ${mcpUrl} (Streamable HTTP). Tools: request_human, get_job, cancel_job.
 - Send this header on every request: Authorization: Bearer ${key}
-- If you can't add MCP servers, call it as JSON-RPC: POST ${mcpUrl} with headers
-  "Content-Type: application/json" and "Accept: application/json, text/event-stream", body
-  {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}.
-  The tool result is JSON text in result.content[0].text.
+- If you can't add MCP servers, call it as JSON-RPC (no initialize or session needed):
+  POST ${mcpUrl}
+  Headers: Content-Type: application/json, Accept: application/json, text/event-stream, Authorization as above
+  Body: {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}
+  The tool's answer is JSON text in result.content[0].text. If result.isError is true, that text is the error.
 
 ## When to use it
-Use Operis when a task needs a person in the physical world: photograph or verify a place, pick up and ship
-an item, or receive/scan/mail paperwork. On-site work is San Francisco only (within 8 km of the YC office).
-Online work (e.g. a quick expert review) can pass "location": null and "remote": true.
+When a task needs a person: photograph or verify a place, pick up and ship an item, receive/scan/mail paperwork,
+or a short expert check done online. On-site work: San Francisco, within 8 km of 37.7749, -122.4194 (check the
+distance before sending; outside it is rejected). Online work: set "remote": true and "location": null.
 
-## How to hire someone
-1. Call request_human with:
-   - title: short and specific
-   - instructions: exactly what the person should do, step by step
-   - location: {"address", "lat", "lng"} (or null with "remote": true)
-   - deadline: ISO 8601, at least 15 minutes from now
-   - budget_usd: what you will pay in total, at least 20 (the worker gets 75%)
-   - certification_required: null unless a license is needed (e.g. "notary")
-   - proof: what proves it was done, e.g. {"photos": {"min": 2, "must_show": ["storefront", "posted hours"]}, "geofence_m": 150}
-   - callback_url (optional): we POST the result there when the job finishes
-2. Read the result:
-   - status "rejected": the reason says why (fix it or tell your user; don't retry the same request).
-   - escrow_url is null: the job is funded and a person is being found now.
-   - escrow_url is a link: payment is needed first. Give that link to your human owner to pay once.
-3. Check progress with get_job {"job_id"} every few minutes (or wait for the callback).
-   When status is "paid", proof_package has the photo URLs, extracted fields and the verifier score.
-4. cancel_job {"job_id"} works until a worker accepts.
+## request_human: arguments
+- title (string): short and specific.
+- instructions (string): everything the worker needs, step by step. You can't message the worker after posting,
+  so include all details here. Workers stay in public areas; ask for nothing that needs entering private property.
+- location ({"address", "lat", "lng"}) for on-site work, or null when remote is true.
+- remote (boolean, optional): true for online work. Default false.
+- deadline (string): ISO 8601 in UTC, e.g. "2026-11-08T18:00:00Z", at least 15 minutes from now.
+- budget_usd (number): the total you pay, all-in, at least 20. quote_usd always equals it. The worker gets 75%,
+  Operis keeps 25%. You're charged only if the proof passes.
+- certification_required (string or null): e.g. "notary"; null if no license is needed.
+- proof (object), what the worker must hand in:
+  - photos: {"min": N, "must_show": ["item 1", "item 2"]}. Ask for at least one photo per must_show item. If an item
+    may not exist (e.g. a sign), phrase it as "the sign, or the spot where it would be". Remote jobs can ask for screenshots.
+  - fields (optional): answers the worker fills in, e.g. [{"name": "keypad_lights_up", "type": "string"}]
+    (types: "string" or "number"). They come back in proof_package.fields.
+  - geofence_m (optional, on-site only): how close to the location the photos must be taken. Default 150.
+- callback_url (optional): we POST {job_id, status, proof_package} there when the job ends.
 
-## Rules
-Never ask Operis for: CAPTCHAs, verification/OTP codes, signing up or logging in to accounts, impersonating
-anyone, handling cards/bank logins/ID documents, following or photographing specific people, entering private
-property, licensed or dangerous work, or signing contracts. Those are rejected automatically.`;
+## Reading the result. Check status first:
+- "rejected": not created. reason says why. Fix it or tell your owner; don't resend the same request.
+- "held": funded, and we're finding a person now. Nothing to do.
+- "requested" with an escrow_url: payment needed first. Give escrow_url to your human owner to pay once (the
+  card is held, charged only when proof passes). The job starts as soon as it's paid.
+Every result has next_step, a one-line instruction. Follow it.
+
+## Following a job
+Call get_job {"job_id"} every 2-5 minutes, or wait for your callback. Each response includes status_meaning.
+Statuses: requested (unpaid) → held (funded) → outreach (offers sent) → accepted (a worker took it; can no longer
+be cancelled) → proof_submitted (being verified) → approved → paid (done: proof_package has photo URLs, fields and
+the verifier score). Other endings: escalated (a human reviewer decides), rejected or expired (deadline passed;
+both refunded automatically), cancelled.
+cancel_job {"job_id"} works until status is accepted.
+
+## Never request
+CAPTCHAs, verification/OTP codes, signing up or logging in to accounts, impersonating anyone, handling cards, bank
+logins or ID documents, following or photographing specific people, entering private property, licensed or
+dangerous work, or signing contracts. These are rejected automatically.
+
+## Limits
+3 open jobs and 10 jobs per day per key.`;
 }
