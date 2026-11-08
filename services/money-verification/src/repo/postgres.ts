@@ -114,16 +114,39 @@ function mapJob(r: Row): Job {
   };
 }
 
-/** media rows may carry {url, kind, exif} (contract) or {url, sha256, mime} (this package). */
+const MIME_BY_EXTENSION = new Map([
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['heic', 'image/heic'],
+  ['heif', 'image/heif'],
+  ['webp', 'image/webp'],
+  ['mp4', 'video/mp4'],
+  ['mov', 'video/quicktime'],
+  ['webm', 'video/webm'],
+  ['pdf', 'application/pdf'],
+]);
+
+const extensionMime = (path: unknown): string | null => {
+  if (typeof path !== 'string') return null;
+  const ext = /\.([a-z0-9]+)$/.exec(path.toLowerCase().split('?')[0] ?? '')?.[1];
+  return (ext && MIME_BY_EXTENSION.get(ext)) || null;
+};
+
+/**
+ * media rows may carry {url, kind, name} (apps/api's proof route: kind is the upload's MIME type, and without a Blob
+ * store the url is <api>/v1/files/<uuid>, which has no extension), {url, kind, exif} (contract: kind photo | video)
+ * or {url, sha256, mime} (this package). Readers key off the prefix: image/ (EXIF, completeness, vision), video/ (frames).
+ */
 function mimeOf(m: Record<string, unknown>): string {
   if (typeof m.mime === 'string' && m.mime) return m.mime;
-  const kind = typeof m.kind === 'string' ? m.kind.toLowerCase() : '';
-  const url = typeof m.url === 'string' ? (m.url.toLowerCase().split('?')[0] ?? '') : '';
-  if (kind === 'video' || /\.(mp4|mov|webm)$/.test(url)) return 'video/mp4';
-  if (kind === 'photo' || kind === 'image' || /\.(jpe?g|png|heic|webp)$/.test(url)) {
-    return url.endsWith('.png') ? 'image/png' : 'image/jpeg';
-  }
-  return 'application/octet-stream';
+  const kind = typeof m.kind === 'string' ? (m.kind.split(';')[0] ?? '').trim().toLowerCase() : '';
+  // A MIME type is the answer, except the route's stand-in for "the browser sent no type": then the file name decides.
+  if (kind.includes('/') && kind !== 'application/octet-stream') return kind;
+  const byExtension = extensionMime(m.name) ?? extensionMime(m.url);
+  if (kind === 'video') return 'video/mp4';
+  if (kind === 'photo' || kind === 'image') return byExtension?.startsWith('image/') ? byExtension : 'image/jpeg';
+  return byExtension ?? 'application/octet-stream';
 }
 
 function mapMedia(v: unknown): ProofMedia[] {
