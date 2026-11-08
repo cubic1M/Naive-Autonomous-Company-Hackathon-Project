@@ -14,7 +14,7 @@ describe('send_blast sends the designed HTML email', () => {
     expect(r.sent).toBe(1);
     const m = email.sent[0]!;
     expect(m.html).toContain('View job &amp; accept');
-    expect(m.html).toContain('A job that<br>fits you');
+    expect(m.html).toContain("You've been<br>selected");
     expect(m.html).toMatch(/href="https:\/\/operis\.live\/j\/[A-Za-z0-9]{10}-[A-Za-z0-9_-]{8}"/);
     expect(m.html).not.toContain('How it works');
     expect(m.body).toContain('https://operis.live/j/');

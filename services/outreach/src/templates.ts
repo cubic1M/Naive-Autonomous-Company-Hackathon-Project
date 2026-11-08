@@ -112,6 +112,18 @@ export const COMPANY = {
   address: 'Operis · San Francisco, CA',
 } as const;
 
+/** Short urgency for the hero: "Today" / "Tomorrow" / "Sun Nov 8" (Pacific time), or "Open now". */
+export function urgencyLabel(deadline: string | null, now: Date = new Date()): string {
+  if (!deadline) return 'Open now';
+  const d = new Date(deadline);
+  if (Number.isNaN(d.getTime())) return 'Open now';
+  const day = (x: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(x);
+  if (d.getTime() < now.getTime()) return 'Open now';
+  if (day(d) === day(now)) return 'Today';
+  if (day(d) === day(new Date(now.getTime() + 24 * 3600 * 1000))) return 'Tomorrow';
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric' }).format(d).replace(',', '');
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -195,7 +207,8 @@ export function renderEmailHtml(ctx: MessageContext): string {
   <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
 
   <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,0.16) 0%,rgba(214,226,206,0) 55%),linear-gradient(135deg,#3b4f3f 0%,#243026 45%,#19211a 75%,#0e130f 100%);border-radius:16px;padding:56px 28px">
-    <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">A job that<br>fits you</div>
+    <div style="font-family:${sans};font-size:12px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#cfd9cc;margin-bottom:14px">${esc(`${pay} · ${urgencyLabel(job.deadline)}`)}</div>
+    <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">You've been<br>selected</div>
   </td></tr>
 
   <tr><td align="center" style="padding:22px 20px 26px;font-family:${sans};font-size:16px;line-height:1.5;color:${C.body}">

@@ -145,3 +145,15 @@ describe('greeting names', () => {
     expect(greetingName({ name: 'attack! event staffing', kind: 'business' })).toBe('attack! event staffing');
   });
 });
+
+describe('urgencyLabel', () => {
+  it('says Today / Tomorrow / a date / Open now (Pacific time)', async () => {
+    const { urgencyLabel } = await import('../src/templates.js');
+    const now = new Date('2026-11-08T18:00:00Z'); // Sun 10am PT
+    expect(urgencyLabel('2026-11-08T23:00:00Z', now)).toBe('Today');
+    expect(urgencyLabel('2026-11-09T20:00:00Z', now)).toBe('Tomorrow');
+    expect(urgencyLabel('2026-11-12T20:00:00Z', now)).toBe('Thu Nov 12');
+    expect(urgencyLabel(null, now)).toBe('Open now');
+    expect(urgencyLabel('2026-11-01T00:00:00Z', now)).toBe('Open now');
+  });
+});
