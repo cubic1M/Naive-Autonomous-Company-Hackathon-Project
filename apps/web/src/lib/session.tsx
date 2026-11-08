@@ -37,6 +37,14 @@ export interface User {
   agreed_terms_at: string | null;
   onboarding_step: number;
   onboarding_done: boolean;
+  sign_in?: {
+    google: { connected: boolean; since: string | null };
+    password: boolean;
+    email_verified: boolean;
+    member_since: string | null;
+    last: { at: string; method: string | null } | null;
+    previous: { at: string; method: string | null } | null;
+  };
 }
 
 interface Session {

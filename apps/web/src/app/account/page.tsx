@@ -8,7 +8,8 @@ import { useEffect } from "react";
 
 import { AuthFooter, SimpleHeader, headerLink } from "@/components/auth/AuthPage";
 import { ACCENT } from "@/components/auth/ui";
-import { initials, useSession } from "@/lib/session";
+import { initials, useSession, type User } from "@/lib/session";
+import { METHOD_LABEL, when } from "@/lib/signin";
 
 const ID_TEXT: Record<string, [string, string]> = {
   verified: ["Identity verified", "#2F4A37"],
@@ -85,11 +86,47 @@ export default function AccountPage() {
 
           <section style={card}>
             <div style={row}><h2 style={{ margin: "0", fontSize: "16px", fontWeight: 700, fontFamily: "var(--font)", letterSpacing: "normal" }}>Sign-in</h2><Link href={`/forgot-password?email=${encodeURIComponent(user.email)}`} style={{ fontSize: "14px", fontWeight: 600, color: "#3B5A44", textDecoration: "none" }}>{user.has_password ? "Change password" : "Set a password"}</Link></div>
-            <span style={{ fontSize: "15px", color: "#3C443E" }}>Log in with a text code, an email link{user.has_password ? ", your password" : ""}{user.email.endsWith("@gmail.com") ? " or Google" : ""}.</span>
+            <SignInDetails user={user} />
           </section>
         </main>
         <AuthFooter />
       </div>
+    </div>
+  );
+}
+
+// Sign-in methods and history: Google connected (and since when), password, last and previous sign-in.
+function SignInDetails({ user }: { user: User }) {
+  const si = user.sign_in;
+  const row = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", flexWrap: "wrap" as const, fontSize: "15px", padding: "8px 0", borderTop: "1px solid #E4DED2" };
+  const ok = (on: boolean, yes: string, no: string) => <span style={{ fontWeight: 600, color: on ? "#2F4A37" : "#8E958C" }}>{on ? yes : no}</span>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ ...row, borderTop: "none" }}>
+        <span style={{ color: "#3C443E" }}>Google</span>
+        {ok(!!si?.google.connected, `Connected as ${user.email}${si?.google.since ? ` · since ${when(si.google.since)}` : ""}`, "Not connected")}
+      </div>
+      <div style={row}>
+        <span style={{ color: "#3C443E" }}>Password</span>
+        {ok(!!si?.password, "Set", "Not set")}
+      </div>
+      <div style={row}>
+        <span style={{ color: "#3C443E" }}>Email link</span>
+        {ok(true, `Sent to ${user.email}`, "")}
+      </div>
+      {si?.last && (
+        <div style={row}>
+          <span style={{ color: "#3C443E" }}>Last sign-in</span>
+          <span style={{ color: "#232824" }}>{METHOD_LABEL[si.last.method ?? ""] ?? "Signed in"}, {when(si.last.at)}</span>
+        </div>
+      )}
+      {si?.previous && (
+        <div style={row}>
+          <span style={{ color: "#3C443E" }}>Before that</span>
+          <span style={{ color: "#5B635C" }}>{METHOD_LABEL[si.previous.method ?? ""] ?? "Signed in"}, {when(si.previous.at)}</span>
+        </div>
+      )}
+      {si?.member_since && <div style={{ ...row, color: "#8E958C", fontSize: "13px" }}>Member since {new Date(si.member_since).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
     </div>
   );
 }

@@ -19,5 +19,5 @@ export async function POST(req: Request) {
   const workerId = await workerFor(name, email, phone);
   const [a] = await sql`insert into worker_accounts (worker_id, name, email, phone, password_hash)
                         values (${workerId}, ${name}, ${email}, ${phone}, ${hashPassword(b.password)}) returning *`;
-  return signedIn(a, true, 201);
+  return signedIn(a, true, 201, "signup");
 }

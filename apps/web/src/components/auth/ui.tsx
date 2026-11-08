@@ -1,6 +1,8 @@
 // Form pieces from the design's Auth / LoginFromJob / Onboarding artboards, shared by the account screens.
 import type { CSSProperties, ReactNode } from "react";
 
+import LastUsedTag from "@/components/LastUsedTag";
+
 export const ACCENT = "#46664F";
 
 export const label: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", fontSize: "14px", fontWeight: 600 };
@@ -64,6 +66,7 @@ export function GoogleButton({ next, flow, label = "Continue with Google" }: { n
     <a href={`/api/v1/auth/google/start?${q}`} style={{ ...secondary, background: "#FFFFFF", border: "1px solid #C9C2B4" }}>
       <GoogleIcon />
       {label}
+      {flow !== "admin" && <LastUsedTag method="google" />}
     </a>
   );
 }
@@ -94,6 +97,7 @@ export const ERRORS: Record<string, string> = {
   email_unavailable: "We couldn't send the email just now. Try again in a minute, or use your password.",
   rate_limited: "Too many emails in a short time. Wait a few minutes and try again.",
   login_required: "Log in to continue.",
+  wrong_account: "This job link was sent to someone else. Log in with the account it was sent to.",
   identity_unavailable: "ID verification isn't available right now. Try again in a few minutes.",
 };
 export const errorText = (code: string) => ERRORS[code] ?? "Something went wrong. Please try again.";
