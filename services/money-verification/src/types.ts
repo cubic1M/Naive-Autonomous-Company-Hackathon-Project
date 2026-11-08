@@ -28,6 +28,8 @@ export interface ProofSchema {
 /** Read-only view of teammates' `jobs` table. */
 export interface Job {
   id: string;
+  /** The customer whose agent requested the job (jobs.customer_id); its card on file funds the escrow without Checkout. */
+  customer_id: string | null;
   task_type: TaskType;
   budget_cents: number;
   worker_pay_cents: number;
@@ -54,6 +56,18 @@ export interface Worker {
   stripe_connect_account: string | null;
   tier: number;
   suspended: boolean;
+}
+
+/**
+ * Read-only view of teammates' `customers` table plus the two columns migration 0002 adds for this package:
+ * the Stripe Customer and the default PaymentMethod saved through the payment-setup Checkout session.
+ */
+export interface CustomerPayment {
+  customer_id: string;
+  name: string | null;
+  email: string | null;
+  stripe_customer_id: string | null;
+  default_payment_method_id: string | null;
 }
 
 export interface ProofMedia {

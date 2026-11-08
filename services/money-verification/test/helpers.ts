@@ -32,11 +32,13 @@ export const YC = { lat: 37.7749, lng: -122.4194 };
 export const JOB_ID = '00000000-0000-4000-8000-000000000001';
 export const WORKER_ID = '00000000-0000-4000-8000-000000000002';
 export const PROOF_ID = '00000000-0000-4000-8000-000000000003';
+export const CUSTOMER_ID = '00000000-0000-4000-8000-0000000000c1';
 
 export function makeJob(overrides: Partial<Job> = {}): Job {
   const q = quote(overrides.budget_cents ?? 6_000);
   return {
     id: JOB_ID,
+    customer_id: CUSTOMER_ID,
     task_type: 'inspection',
     budget_cents: q.priceCents,
     worker_pay_cents: q.workerPayCents,

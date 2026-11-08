@@ -111,3 +111,42 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(upsert?.params[6]).toBe('2028-03-15');
   });
 });
+
+const CUSTOMER = '00000000-0000-4000-8000-0000000000c1';
+
+describe('PostgresRepo: customers (card on file, migration 0002)', () => {
+  const jobRow = { id: JOB, title: 'x', lat: 0, lng: 0, deadline: new Date(), budget_usd: '60', proof_requirement: {}, status: 'requested' };
+
+  it('maps customer_id from the jobs row, null when the column is absent', async () => {
+    const withCustomer = fakeSql([{ match: 'from jobs', rows: [{ ...jobRow, customer_id: CUSTOMER }] }]);
+    expect((await new PostgresRepo(withCustomer).getJob(JOB))?.customer_id).toBe(CUSTOMER);
+    const without = fakeSql([{ match: 'from jobs', rows: [jobRow] }]);
+    expect((await new PostgresRepo(without).getJob(JOB))?.customer_id).toBeNull();
+  });
+
+  it('reads customers with select *, so a row from before the migration means no card on file', async () => {
+    const sql = fakeSql([{ match: 'from customers', rows: [{ id: CUSTOMER, name: 'Acme Agent', contact_email: 'ops@acme.test', api_key_hash: 'h' }] }]);
+    const c = await new PostgresRepo(sql).getCustomerPayment(CUSTOMER);
+    expect(c).toEqual({ customer_id: CUSTOMER, name: 'Acme Agent', email: 'ops@acme.test', stripe_customer_id: null, default_payment_method_id: null });
+    expect(sql.calls[0]?.text).toMatch(/select \* from customers where id = \$1/);
+    expect(sql.calls[0]?.params).toEqual([CUSTOMER]);
+    expect(await new PostgresRepo(fakeSql([])).getCustomerPayment(CUSTOMER)).toBeNull();
+  });
+
+  it('maps the stored Stripe customer and default payment method', async () => {
+    const sql = fakeSql([{ match: 'from customers', rows: [{ id: CUSTOMER, name: null, contact_email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' }] }]);
+    expect(await new PostgresRepo(sql).getCustomerPayment(CUSTOMER)).toEqual({
+      customer_id: CUSTOMER, name: null, email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1',
+    });
+  });
+
+  it('setCustomerPayment updates only the given columns (coalesce keeps the others)', async () => {
+    const sql = fakeSql([]);
+    await new PostgresRepo(sql).setCustomerPayment(CUSTOMER, { default_payment_method_id: 'pm_1' });
+    const call = sql.calls[0];
+    expect(call?.text).toMatch(/update customers set/);
+    expect(call?.text).toContain('coalesce($2, stripe_customer_id)');
+    expect(call?.text).toContain('coalesce($3, default_payment_method_id)');
+    expect(call?.params).toEqual([CUSTOMER, null, 'pm_1']);
+  });
+});

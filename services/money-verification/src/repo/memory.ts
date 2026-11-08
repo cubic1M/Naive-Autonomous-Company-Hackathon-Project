@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
+  CustomerPayment,
   Dispute,
   Escrow,
   EscrowStatus,
@@ -23,6 +24,7 @@ import type {
  */
 export class InMemoryRepo implements Repo {
   jobs = new Map<string, Job>();
+  customers = new Map<string, CustomerPayment>();
   workers = new Map<string, Worker>();
   proofs = new Map<string, Proof>();
   escrows = new Map<string, Escrow>();
@@ -44,6 +46,10 @@ export class InMemoryRepo implements Repo {
   seedWorker(worker: Worker): Worker {
     this.workers.set(worker.id, worker);
     return worker;
+  }
+  seedCustomer(customer: CustomerPayment): CustomerPayment {
+    this.customers.set(customer.customer_id, { ...customer });
+    return customer;
   }
   seedProof(proof: Proof): Proof {
     this.proofs.set(proof.id, proof);
@@ -73,6 +79,16 @@ export class InMemoryRepo implements Repo {
     const w = this.workers.get(workerId);
     if (!w) throw new Error(`worker ${workerId} not found`);
     w.stripe_connect_account = accountId;
+  }
+  async getCustomerPayment(customerId: string) {
+    const c = this.customers.get(customerId);
+    return c ? { ...c } : null;
+  }
+  async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
+    const c = this.customers.get(customerId);
+    if (!c) throw new Error(`customer ${customerId} not found`);
+    if (patch.stripe_customer_id != null) c.stripe_customer_id = patch.stripe_customer_id;
+    if (patch.default_payment_method_id != null) c.default_payment_method_id = patch.default_payment_method_id;
   }
 
   async getEscrow(jobId: string) {
