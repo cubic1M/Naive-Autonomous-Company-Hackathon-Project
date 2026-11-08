@@ -241,13 +241,92 @@ describe('PostgresRepo: customers (card on file, migration 0002)', () => {
     });
   });
 
-  it('setCustomerPayment updates only the given columns (coalesce keeps the others)', async () => {
+  it('setCustomerPayment updates only the given columns (coalesce keeps the others within one mode)', async () => {
     const sql = fakeSql([]);
     await new PostgresRepo(sql).setCustomerPayment(CUSTOMER, { default_payment_method_id: 'pm_1' });
     const call = sql.calls[0];
     expect(call?.text).toMatch(/update customers set/);
     expect(call?.text).toContain('coalesce($2, stripe_customer_id)');
     expect(call?.text).toContain('coalesce($3, default_payment_method_id)');
-    expect(call?.params).toEqual([CUSTOMER, null, 'pm_1']);
+    expect(call?.params).toEqual([CUSTOMER, null, 'pm_1', false]);
+  });
+});
+
+describe('PostgresRepo: Stripe ids are scoped to the key mode (migration 0005)', () => {
+  const WORKER = '00000000-0000-4000-8000-000000000002';
+  const customerRow = (livemode: unknown) => ({ id: 'c1', name: 'Acme', contact_email: 'ops@acme.test', stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1', stripe_livemode: livemode });
+  const workerRow = (livemode: unknown) => ({ id: WORKER, name: 'Pat', phone: '+1', stripe_connect_account: 'acct_1', stripe_connect_livemode: livemode, tier: 0, suspended: false });
+  const identityRow = (livemode: unknown, kind = 'identity') => ({ worker_id: WORKER, kind, status: 'verified', provider_ref: 'vs_1', details: {}, verified_at: null, expires_at: null, stripe_livemode: livemode });
+  /** Fails any statement naming the mode columns with 42703, as Postgres does before migration 0005. */
+  const preMigration = (): SqlClient & { calls: string[] } => {
+    const calls: string[] = [];
+    return {
+      calls,
+      async query<R extends Record<string, unknown>>(text: string) {
+        calls.push(text);
+        if (/livemode/.test(text)) throw Object.assign(new Error('column "stripe_livemode" does not exist'), { code: '42703' });
+        return { rows: [] as R[] };
+      },
+    };
+  };
+
+  it('a live repo hides customer ids stored in test mode or before the migration, and shows live ones', async () => {
+    const live = (row: Record<string, unknown>) => new PostgresRepo(fakeSql([{ match: 'customers', rows: [row] }]), { stripeMode: 'live' });
+    for (const old of [null, false, undefined]) {
+      expect(await live(customerRow(old)).getCustomerPayment('c1')).toMatchObject({ stripe_customer_id: null, default_payment_method_id: null });
+    }
+    expect(await live(customerRow(true)).getCustomerPaymentForJob('j1')).toMatchObject({ stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' });
+    // Default (test) repo: pre-migration rows are the sandbox's, unchanged behaviour.
+    expect(await new PostgresRepo(fakeSql([{ match: 'from customers', rows: [customerRow(null)] }])).getCustomerPayment('c1')).toMatchObject({ stripe_customer_id: 'cus_1' });
+  });
+
+  it('setCustomerPayment stamps the mode and drops the other mode\'s ids instead of merging with them', async () => {
+    const sql = fakeSql([]);
+    await new PostgresRepo(sql, { stripeMode: 'live' }).setCustomerPayment('c1', { stripe_customer_id: 'cus_live' });
+    const [call] = sql.calls;
+    expect(call?.params).toEqual(['c1', 'cus_live', null, true]);
+    expect(call?.text).toContain('stripe_livemode = $4');
+    expect(call?.text).toMatch(/when coalesce\(stripe_livemode, false\) = \$4 then coalesce\(\$3, default_payment_method_id\) else \$3 end/);
+  });
+
+  it('a live repo hides a test-mode Connect account, by worker id and by account id', async () => {
+    const live = (row: Record<string, unknown>) => new PostgresRepo(fakeSql([{ match: 'from workers', rows: [row] }]), { stripeMode: 'live' });
+    expect((await live(workerRow(null)).getWorker(WORKER))?.stripe_connect_account).toBeNull();
+    expect(await live(workerRow(false)).getWorkerByConnectAccount('acct_1')).toBeNull();
+    expect((await live(workerRow(true)).getWorkerByConnectAccount('acct_1'))?.id).toBe(WORKER);
+    const sql = fakeSql([]);
+    await new PostgresRepo(sql, { stripeMode: 'live' }).setWorkerConnectAccount(WORKER, 'acct_live');
+    expect(sql.calls[0]).toMatchObject({ params: [WORKER, 'acct_live', true] });
+    expect(sql.calls[0]?.text).toContain('stripe_connect_livemode = $3');
+  });
+
+  it('a live repo hides a test-mode Identity row; notary rows are not Stripe objects and stay visible', async () => {
+    const live = (row: Record<string, unknown>) => new PostgresRepo(fakeSql([{ match: 'from worker_verifications', rows: [row] }]), { stripeMode: 'live' });
+    expect(await live(identityRow(null)).getWorkerVerification(WORKER, 'identity')).toBeNull();
+    expect(await live(identityRow(true)).getWorkerVerification(WORKER, 'identity')).toMatchObject({ status: 'verified' });
+    expect(await live(identityRow(null, 'notary_commission')).getWorkerVerification(WORKER, 'notary_commission')).toMatchObject({ status: 'verified' });
+
+    const sql = fakeSql([{ match: 'insert into worker_verifications', rows: [identityRow(true)] }]);
+    const repo = new PostgresRepo(sql, { stripeMode: 'live' });
+    const v = { worker_id: WORKER, kind: 'identity' as const, status: 'pending' as const, provider_ref: 'vs_1', details: {}, verified_at: null, expires_at: null };
+    await repo.upsertWorkerVerification(v);
+    await repo.upsertWorkerVerification({ ...v, kind: 'notary_commission' });
+    expect(sql.calls.map((c) => c.params[7])).toEqual([true, null]);
+    expect(sql.calls[0]?.text).toContain('stripe_livemode = excluded.stripe_livemode');
+  });
+
+  it('before migration 0005 a test repo falls back to the old statements; a live repo refuses (fail closed)', async () => {
+    const v = { worker_id: WORKER, kind: 'identity' as const, status: 'pending' as const, provider_ref: 'vs_1', details: {}, verified_at: null, expires_at: null };
+    const test = preMigration();
+    const repo = new PostgresRepo(test);
+    await repo.setCustomerPayment('c1', { stripe_customer_id: 'cus_1' });
+    await repo.setWorkerConnectAccount(WORKER, 'acct_1');
+    await expect(repo.upsertWorkerVerification(v)).rejects.toThrow('returned no row'); // fallback ran (the fake returns no row)
+    expect(test.calls.filter((t) => !/livemode/.test(t))).toHaveLength(3);
+
+    const live = new PostgresRepo(preMigration(), { stripeMode: 'live' });
+    await expect(live.setCustomerPayment('c1', { stripe_customer_id: 'cus_1' })).rejects.toMatchObject({ code: '42703' });
+    await expect(live.setWorkerConnectAccount(WORKER, 'acct_1')).rejects.toMatchObject({ code: '42703' });
+    await expect(live.upsertWorkerVerification(v)).rejects.toMatchObject({ code: '42703' });
   });
 });

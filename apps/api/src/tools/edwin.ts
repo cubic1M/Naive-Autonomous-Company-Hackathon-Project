@@ -4,6 +4,7 @@ import type { ToolContext } from "@contracts/runtime";
 import { checkSafety } from "@/lib/safety";
 import { inServiceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
+import { unknownPaymentMethodText } from "@/lib/stripe-mode";
 import * as compliance from "@services/compliance/index";
 import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
 
@@ -69,14 +70,16 @@ const CARD_NOT_CHARGED: Record<string, string> = {
   incorrect_cvc: "the card's security code was refused",
   processing_error: "the card network had an error; trying again later may work",
   authentication_required: "the card's bank wants the cardholder to confirm this payment, which needs a person",
-  invalid_payment_method: "that payment method is unknown to Operis's Stripe account (pass a pm_... created there; in test mode pm_card_visa)",
 };
 
 /** next_step while a human still has to pay escrow_url: why the card was not charged, if one was tried, and how to skip the link. */
 function paymentNeeded(fallbackReason?: string): string {
   const pay = "have your human owner pay escrow_url once (the card is held, charged only when proof passes); the job starts as soon as it's paid";
   if (!fallbackReason) return `Payment needed: ${pay}. To skip the link next time, call setup_payment once and have your owner save a card.`;
-  const why = CARD_NOT_CHARGED[fallbackReason] ?? `the card could not be charged (${fallbackReason})`;
+  const why =
+    fallbackReason === "invalid_payment_method"
+      ? unknownPaymentMethodText()
+      : CARD_NOT_CHARGED[fallbackReason] ?? `the card could not be charged (${fallbackReason})`;
   return `Your card was not charged: ${why}. To fund this job, ${pay}. Or cancel_job it, save another card with setup_payment and request again.`;
 }
 
@@ -112,7 +115,7 @@ export async function requestHuman(
   const safety = checkSafety(input.title, input.instructions);
   if (!safety.ok) return reject(`${safety.reason} (${safety.category})`);
 
-  // usage limits: protect the team's agent budgets while payments run in test mode
+  // usage limits: cap how many jobs one key (and Operis overall) can open; in live mode they also bound real card holds
   const [{ open, today }] = await ctx.sql`
     select count(*) filter (where status not in ('paid','refunded','cancelled','rejected','expired'))::int as open,
            count(*) filter (where created_at > now() - interval '24 hours')::int as today

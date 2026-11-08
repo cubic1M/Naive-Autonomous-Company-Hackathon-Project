@@ -35,3 +35,4 @@ export type { Repo, LedgerQuery } from './repo.js';
 export { InMemoryRepo } from './repo/memory.js';
 export { PostgresRepo, type SqlClient } from './repo/postgres.js';
 export { fromStripe, type StripeClient } from './stripe-client.js';
+export * from './stripe-mode.js';
