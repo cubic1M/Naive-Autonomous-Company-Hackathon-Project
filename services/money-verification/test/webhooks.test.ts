@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUTHORIZATION_TTL_MS, createEscrow } from '../src/escrow.js';
+import { AUTHORIZATION_TTL_MS, createEscrow, refund } from '../src/escrow.js';
 import { handleStripeWebhook, createStripeWebhookHandler } from '../src/webhooks/stripe.js';
 import {
   JOB_ID,
@@ -124,15 +124,68 @@ describe('payment_intent.canceled', () => {
   });
 });
 
-describe('charge.refunded', () => {
-  it('marks the escrow refunded and writes a 6000 refund line', async () => {
+describe('refund.created + charge.refunded (dashboard refund)', () => {
+  it('refund.created writes the 6000 line, charge.refunded flips the status, hook fires once', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const rf = await world.stripe.refunds.create({ payment_intent: paymentIntentId, amount: 6000 });
+    const created = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.refundCreatedEvent(rf.id)));
+    expect(created.status).toBe(200);
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.chargeRefundedEvent(paymentIntentId)));
+    expect(res.status).toBe(200);
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('refunded');
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([6000]);
+    expect(firedNamed(world, 'onEscrowReleased')).toHaveLength(1);
+  });
+
+  it('charge.refunded alone reconciles the status but writes no line (refund.created must be subscribed)', async () => {
     const world = makeWorld();
     const job = world.repo.seedJob(makeJob());
     const { paymentIntentId } = await fundAndCapture(world, job);
     const res = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.chargeRefundedEvent(paymentIntentId)));
     expect(res.status).toBe(200);
     expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('refunded');
-    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([6000]);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(0);
+  });
+});
+
+describe('charge.refunded after a tool refund', () => {
+  it('does not double count: refund lines still sum to 6000', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const result = await refund(world.deps, JOB_ID, 'proof rejected');
+    await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.refundCreatedEvent(result.stripeRefundId as string)));
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.chargeRefundedEvent(paymentIntentId)));
+    expect(res.status).toBe(200);
+    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
+    expect(lines).toHaveLength(1);
+    expect(lines.reduce((acc, l) => acc + l.amount_cents, 0)).toBe(6000);
+    expect(firedNamed(world, 'onEscrowReleased')).toHaveLength(1);
+  });
+});
+
+describe('charge.refunded delivered while the tool refund is in flight', () => {
+  it('counts the refund once and fires onEscrowReleased once', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const create = world.stripe.refunds.create.bind(world.stripe.refunds);
+    // Stripe's echo lands after its refund exists but before the tool writes its ledger line.
+    world.stripe.refunds.create = async (params, options) => {
+      const rf = await create(params, options);
+      const created = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.refundCreatedEvent(rf.id)));
+      expect(created.status).toBe(200);
+      const res = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.chargeRefundedEvent(paymentIntentId)));
+      expect(res.status).toBe(200);
+      return rf;
+    };
+    const result = await refund(world.deps, JOB_ID, 'proof rejected');
+    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
+    expect(lines.reduce((acc, l) => acc + l.amount_cents, 0)).toBe(6000);
+    expect(result.refundedTotalCents).toBe(6000);
+    expect(firedNamed(world, 'onEscrowReleased')).toHaveLength(1);
   });
 });
 

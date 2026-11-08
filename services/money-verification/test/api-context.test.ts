@@ -71,7 +71,7 @@ describe('api-context: hooks become job-state transitions', () => {
     expect(transitions[3]).toMatchObject({ jobId: JOB_ID, to: 'paid' });
     expect(sql.some((q) => q.text.startsWith('update workers set jobs_done'))).toBe(true);
 
-    expect(await contract.refund({ job_id: JOB_ID, reason: 'test' })).toEqual({ job_id: JOB_ID, status: 'refunded', amount_usd: 60 });
+    expect(await contract.refund({ job_id: JOB_ID, reason: 'test', request_id: 'req-t' })).toMatchObject({ job_id: JOB_ID, status: 'refunded', amount_usd: 60, refunded_total_usd: 60 });
     expect(transitions[4]).toMatchObject({ jobId: JOB_ID, to: 'refunded' });
   });
 
@@ -85,8 +85,8 @@ describe('api-context: hooks become job-state transitions', () => {
     const sessionId = (await world.repo.getEscrow(JOB_ID))?.stripe_checkout_session_id as string;
     await handleStripeWebhook(deps, webhookRequest(world, world.stripe.completeCheckout(sessionId)));
 
-    const out = await createContractTools(deps).refund({ job_id: JOB_ID, reason: 'proof rejected' });
-    expect(out).toEqual({ job_id: JOB_ID, status: 'refunded', amount_usd: 60, released_hold: true });
+    const out = await createContractTools(deps).refund({ job_id: JOB_ID, reason: 'proof rejected', request_id: 'req-t' });
+    expect(out).toMatchObject({ job_id: JOB_ID, status: 'refunded', amount_usd: 60, refunded_total_usd: 60, released_hold: true });
     expect(world.stripe.callsTo('paymentIntents.cancel')).toHaveLength(1);
     expect(world.stripe.callsTo('refunds.create')).toHaveLength(0);
     expect(transitions.map((t) => t.to)).toEqual(['held', 'refunded']);

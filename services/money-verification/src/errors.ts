@@ -19,12 +19,18 @@ export class InvalidStateError extends MoneyVerificationError {
   }
 }
 
-/** Payout exceeds PAYOUT_CAP_CENTS; a human must approve in Naive, then call release_payout_large. */
+/**
+ * A payout, or a job's cumulative refunds, would exceed PAYOUT_CAP_CENTS. Above the cap the CEO agent approves by
+ * calling release_payout_large / refund_large with approved_by; no human is involved below the founders' hard ceiling.
+ */
 export class RequiresApprovalError extends MoneyVerificationError {
   readonly amountCents: number;
   readonly capCents: number;
-  constructor(amountCents: number, capCents: number) {
-    super('requires_approval', `payout of ${amountCents} cents exceeds cap of ${capCents} cents; requires human approval`);
+  readonly kind: 'payout' | 'refund' | 'amount';
+  constructor(amountCents: number, capCents: number, kind: 'payout' | 'refund' | 'amount' = 'amount') {
+    const tool = kind === 'refund' ? 'refund_large' : 'release_payout_large';
+    super('requires_approval', `${kind} of ${amountCents} cents exceeds the cap of ${capCents} cents; ask the CEO agent to approve it with ${tool}`);
+    this.kind = kind;
     this.amountCents = amountCents;
     this.capCents = capCents;
   }

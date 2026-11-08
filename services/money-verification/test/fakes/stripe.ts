@@ -103,7 +103,7 @@ export class FakeStripe implements StripeClient {
   readonly webhooks = new Stripe('sk_test_fake').webhooks;
 
   private readonly idCounters = new Map<string, number>();
-  private readonly idempotencyCache = new Map<string, unknown>();
+  private readonly idempotencyCache = new Map<string, { body: string; result: unknown }>();
 
   constructor(private readonly now: () => Date = () => new Date()) {}
 
@@ -121,15 +121,28 @@ export class FakeStripe implements StripeClient {
     this.calls.push({ method, params, idempotencyKey: options?.idempotencyKey });
   }
 
-  /** Same method + idempotency key -> the stored result object; no key -> always a fresh object. */
-  private idempotent<T>(method: string, options: Stripe.RequestOptions | undefined, factory: () => T): T {
+  /**
+   * Same method + key + params -> the stored result object; no key -> always a fresh object.
+   * Same key with DIFFERENT params throws idempotency_error, as real Stripe does, so a test
+   * cannot pass a retry sequence that production Stripe would reject.
+   */
+  private idempotent<T>(method: string, params: unknown, options: Stripe.RequestOptions | undefined, factory: () => T): T {
     const key = options?.idempotencyKey;
     if (key === undefined) return factory();
     const ck = `${method}:${key}`;
+    const body = JSON.stringify(canonical(params));
     const cached = this.idempotencyCache.get(ck);
-    if (cached !== undefined) return cached as T;
+    if (cached !== undefined) {
+      if (cached.body !== body) {
+        throw new Stripe.errors.StripeIdempotencyError({
+          type: 'idempotency_error',
+          message: `Keys for idempotent requests can only be used with the same parameters they were first used with. Try using a key other than '${key}' if you meant to execute a different request.`,
+        });
+      }
+      return cached.result as T;
+    }
     const result = factory();
-    this.idempotencyCache.set(ck, result);
+    this.idempotencyCache.set(ck, { body, result });
     return result;
   }
 
@@ -208,6 +221,13 @@ export class FakeStripe implements StripeClient {
     return this.event('charge.refunded', charge);
   }
 
+  /** Stripe's own record of a refund (ours or a dashboard one), as the refund.created webhook delivers it. */
+  refundCreatedEvent(refundId: string): Stripe.Event {
+    const rf = this.rfStore.get(refundId);
+    if (!rf) throw new Error(`No such refund: ${refundId}`);
+    return this.event('refund.created', rf);
+  }
+
   /** Express onboarding finished: payouts enabled. */
   enablePayouts(accountId: string): Stripe.Event {
     const acct = this.acctStore.get(accountId);
@@ -266,7 +286,7 @@ export class FakeStripe implements StripeClient {
         options?: Stripe.RequestOptions,
       ): Promise<Stripe.Checkout.Session> => {
         this.record('checkout.sessions.create', params, options);
-        return this.idempotent('checkout.sessions.create', options, () => {
+        return this.idempotent('checkout.sessions.create', params, options, () => {
           const id = this.nextId('cs_test');
           const piId = this.nextId('pi_test');
           const amount_total = (params.line_items ?? []).reduce(
@@ -313,7 +333,7 @@ export class FakeStripe implements StripeClient {
       options?: Stripe.RequestOptions,
     ): Promise<Stripe.PaymentIntent> => {
       this.record('paymentIntents.capture', { id, params }, options);
-      return this.idempotent('paymentIntents.capture', options, () => {
+      return this.idempotent('paymentIntents.capture', { id, params }, options, () => {
         const pi = this.piStore.get(id);
         if (!pi || pi.status !== 'requires_capture') {
           throw new Error(`PaymentIntent ${id} cannot be captured in status ${pi?.status ?? 'unknown'}`);
@@ -330,7 +350,7 @@ export class FakeStripe implements StripeClient {
       options?: Stripe.RequestOptions,
     ): Promise<Stripe.PaymentIntent> => {
       this.record('paymentIntents.cancel', { id, params }, options);
-      return this.idempotent('paymentIntents.cancel', options, () => {
+      return this.idempotent('paymentIntents.cancel', { id, params }, options, () => {
         const pi = this.piStore.get(id);
         if (!pi || (pi.status !== 'requires_capture' && pi.status !== 'requires_payment_method')) {
           throw new Error(`PaymentIntent ${id} cannot be canceled in status ${pi?.status ?? 'unknown'}`);
@@ -345,7 +365,7 @@ export class FakeStripe implements StripeClient {
   readonly refunds = {
     create: async (params: Stripe.RefundCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Refund> => {
       this.record('refunds.create', params, options);
-      return this.idempotent('refunds.create', options, () => {
+      return this.idempotent('refunds.create', params, options, () => {
         const piId = params.payment_intent ?? '';
         const pi = this.piStore.get(piId);
         if (!pi || pi.status !== 'succeeded') {
@@ -372,7 +392,7 @@ export class FakeStripe implements StripeClient {
   readonly transfers = {
     create: async (params: Stripe.TransferCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Transfer> => {
       this.record('transfers.create', params, options);
-      return this.idempotent('transfers.create', options, () => {
+      return this.idempotent('transfers.create', params, options, () => {
         // Real Stripe accepts transfers to accounts whose payouts are not enabled yet (funds wait on the balance).
         const id = this.nextId('tr_test');
         const tr: FakeTr = {
@@ -394,7 +414,7 @@ export class FakeStripe implements StripeClient {
   readonly accounts = {
     create: async (params: Stripe.AccountCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Account> => {
       this.record('accounts.create', params, options);
-      return this.idempotent('accounts.create', options, () => {
+      return this.idempotent('accounts.create', params, options, () => {
         const id = this.nextId('acct_test');
         const acct: FakeAcct = {
           id,
@@ -422,7 +442,7 @@ export class FakeStripe implements StripeClient {
   readonly accountLinks = {
     create: async (params: Stripe.AccountLinkCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.AccountLink> => {
       this.record('accountLinks.create', params, options);
-      return this.idempotent('accountLinks.create', options, () => {
+      return this.idempotent('accountLinks.create', params, options, () => {
         const created = this.unix();
         return {
           object: 'account_link',
@@ -441,7 +461,7 @@ export class FakeStripe implements StripeClient {
         options?: Stripe.RequestOptions,
       ): Promise<Stripe.Identity.VerificationSession> => {
         this.record('identity.verificationSessions.create', params, options);
-        return this.idempotent('identity.verificationSessions.create', options, () => {
+        return this.idempotent('identity.verificationSessions.create', params, options, () => {
           const id = this.nextId('vs_test');
           return {
             id,
@@ -459,7 +479,7 @@ export class FakeStripe implements StripeClient {
   readonly disputes = {
     update: async (id: string, params: Stripe.DisputeUpdateParams, options?: Stripe.RequestOptions): Promise<Stripe.Dispute> => {
       this.record('disputes.update', { id, params }, options);
-      return this.idempotent('disputes.update', options, () => {
+      return this.idempotent('disputes.update', { id, params }, options, () => {
         const dp = this.dpStore.get(id);
         if (!dp) throw new Error(`No such dispute: ${id}`);
         if (params.evidence) Object.assign(dp.evidence, params.evidence);
@@ -472,4 +492,17 @@ export class FakeStripe implements StripeClient {
       });
     },
   };
+}
+
+/** Key-order-insensitive form of request params, so equal bodies compare equal as in Stripe. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([k, v]) => [k, canonical(v)]),
+    );
+  }
+  return value;
 }

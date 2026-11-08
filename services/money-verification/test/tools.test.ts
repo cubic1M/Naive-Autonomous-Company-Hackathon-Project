@@ -17,6 +17,11 @@ function worldWithTools(opts: { vision?: VisionScorer | null } = {}) {
 }
 
 describe('tool layer', () => {
+  it('describeToolError maps Stripe idempotency_error to an actionable code', () => {
+    const err = Object.assign(new Error('Keys for idempotent requests can only be used with the same parameters'), { rawType: 'idempotency_error' });
+    expect(describeToolError(err)).toMatchObject({ code: 'idempotency_conflict' });
+  });
+
   it('runs a $60 job end to end: hold -> webhook -> approve (override) -> settle -> ledger', async () => {
     const { world, tools } = worldWithTools();
     world.repo.seedJob(makeJob());
@@ -93,6 +98,25 @@ describe('tool layer', () => {
 
     const paid = await tools.release_payout_large({ job_id: job.id, approved_by: 'cameron' });
     expect(paid).toMatchObject({ status: 'paid', worker_pay_cents: 18000, fee_cents: 6000 });
+  });
+
+  it('refund: partial via amount_cents, requires_approval over the cap, refund_large with approved_by', async () => {
+    const { world, tools } = worldWithTools();
+    const job = world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    await tools.create_escrow({ job_id: job.id });
+    const sessionId = (await world.repo.getEscrow(job.id))?.stripe_checkout_session_id as string;
+    await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.completeCheckout(sessionId)));
+    await tools.capture_escrow({ job_id: job.id });
+
+    const partial = await tools.refund({ job_id: job.id, reason: 'partial credit', request_id: 'req-t', amount_cents: 2000 });
+    expect(partial).toEqual({ job_id: job.id, status: 'partially_refunded', amount_cents: 2000, refunded_total_cents: 2000 });
+
+    let caught: unknown;
+    await tools.refund({ job_id: job.id, reason: 'the rest', request_id: 'req-rest' }).catch((e: unknown) => (caught = e));
+    expect(describeToolError(caught)).toMatchObject({ code: 'requires_approval' });
+
+    const rest = await tools.refund_large({ job_id: job.id, reason: 'the rest', request_id: 'req-rest', approved_by: 'ceo-agent' });
+    expect(rest).toEqual({ job_id: job.id, status: 'refunded', amount_cents: 22000, refunded_total_cents: 24000 });
   });
 
   it('first payout for a worker with no account returns pending_onboarding', async () => {

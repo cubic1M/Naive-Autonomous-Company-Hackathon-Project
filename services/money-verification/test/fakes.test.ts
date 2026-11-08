@@ -27,6 +27,17 @@ describe('test scaffolding: FakeStripe + helpers', () => {
     expect(world.stripe.callsTo('checkout.sessions.create')).toHaveLength(3);
   });
 
+  it('rejects a reused idempotency key with different params, as Stripe does', async () => {
+    const world = makeWorld();
+    const mk = (unit_amount: number) => ({
+      mode: 'payment' as const,
+      line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount, product_data: { name: 'x' } } }],
+    });
+    await world.stripe.checkout.sessions.create(mk(6000), { idempotencyKey: 'k1' });
+    await expect(world.stripe.checkout.sessions.create(mk(7000), { idempotencyKey: 'k1' })).rejects.toThrow(/same parameters/);
+    expect(world.stripe.csStore.size).toBe(1);
+  });
+
   it('rejects (not throws synchronously) on invalid state', async () => {
     const world = makeWorld();
     await expect(world.stripe.paymentIntents.capture('pi_missing')).rejects.toThrow(/cannot be captured/);

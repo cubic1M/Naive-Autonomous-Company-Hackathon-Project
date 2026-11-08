@@ -26,6 +26,16 @@ const payoutResult = z.discriminatedUnion('status', [
   }),
   z.object({ status: z.literal('pending_onboarding'), job_id: uuid, onboarding_url: z.string().url(), worker_pay_cents: cents }),
 ]);
+/** Optional replay key: a retried call with the same id returns the first refund instead of creating another. */
+/** Required: the idempotency token. A retry reuses it (true replay); a second intended refund uses a new one. */
+const requestId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+
+const refundResult = z.object({
+  job_id: uuid,
+  status: z.enum(['refunded', 'partially_refunded']),
+  amount_cents: cents,
+  refunded_total_cents: cents,
+});
 const disputeEvidence = z
   .object({
     product_description: z.string().optional(),
@@ -58,9 +68,23 @@ export const toolSchemas = {
     output: z.object({ job_id: uuid, status: z.literal('released') }),
   },
   refund: {
-    description: 'Full refund of a captured charge. Permission: ask.',
-    input: z.object({ job_id: uuid, reason: z.string().min(3) }).strict(),
-    output: z.object({ job_id: uuid, status: z.literal('refunded'), amount_cents: cents }),
+    description: 'Refund a captured charge, in full or partially (amount_cents). Once a job\'s refunds would pass the cap (PAYOUT_CAP_CENTS, $150 by default) it fails with requires_approval: ask the CEO agent for refund_large. request_id is required: reuse the SAME id when retrying a failed call, a new id for a second intended refund.',
+    input: z.object({ job_id: uuid, reason: z.string().min(3), amount_cents: cents.positive().optional(), request_id: requestId }).strict(),
+    output: refundResult,
+  },
+  refund_large: {
+    description: 'Refund past the cap after the CEO agent\'s approval. approved_by is logged, not verified or stored; the control is which agent Naive lets call this tool.',
+    input: z
+      .object({
+        job_id: uuid,
+        reason: z.string().min(3),
+        amount_cents: cents.positive().optional(),
+        request_id: requestId,
+        approved_by: z.string().min(1),
+        approval_note: z.string().optional(),
+      })
+      .strict(),
+    output: refundResult,
   },
   release_payout: {
     description: 'Pay the worker their 75% (<= $150). First payout returns an onboarding URL instead.',
@@ -68,7 +92,7 @@ export const toolSchemas = {
     output: payoutResult,
   },
   release_payout_large: {
-    description: 'Pay a worker more than $150 after founder approval.',
+    description: 'Pay a worker past the cap after the CEO agent\'s approval. approved_by is logged, not verified or stored.',
     input: z.object({ job_id: uuid, approved_by: z.string().min(1), approval_note: z.string().optional() }).strict(),
     output: payoutResult,
   },

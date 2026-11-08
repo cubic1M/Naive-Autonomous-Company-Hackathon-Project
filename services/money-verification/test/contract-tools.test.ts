@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createContractTools } from '../src/contract-tools.js';
+import { RequiresApprovalError } from '../src/errors.js';
 import type { VisionScorer } from '../src/proof/vision.js';
 import { createTools } from '../src/tools.js';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
@@ -69,7 +70,26 @@ describe('contracts/tools.ts adapters', () => {
     expect(await contract.capture_payment({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, captured_usd: 60 });
     expect(await contract.payout({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, status: 'paid', worker_pay_usd: 45, fee_usd: 15 });
     expect(await contract.ledger({})).toEqual({ revenue_usd: 60, payouts_usd: 45, fees_usd: 15, costs_usd: 0, jobs_paid: 1 });
-    expect(await contract.refund({ job_id: JOB_ID, reason: 'customer unhappy' })).toEqual({ job_id: JOB_ID, status: 'refunded', amount_usd: 60 });
+    expect(await contract.refund({ job_id: JOB_ID, reason: 'customer unhappy', request_id: 'req-t' })).toMatchObject({ job_id: JOB_ID, status: 'refunded', amount_usd: 60, refunded_total_usd: 60 });
+  });
+
+  it('refund supports a partial amount and rejects over $150 with RequiresApprovalError', async () => {
+    const { world, contract } = await fundedWorld();
+    await world.repo.upsertProofReview(approvedReview());
+    await contract.capture_payment({ job_id: JOB_ID });
+    expect(await contract.refund({ job_id: JOB_ID, reason: 'partial credit', request_id: 'req-t', amount_cents: 2000 })).toEqual({
+      job_id: JOB_ID,
+      status: 'refunded',
+      amount_usd: 20,
+      partial: true,
+      refunded_total_usd: 20,
+    });
+
+    const big = await fundedWorld({ budget: 24000 });
+    await big.world.repo.upsertProofReview(approvedReview());
+    await big.contract.capture_payment({ job_id: JOB_ID });
+    await expect(big.contract.refund({ job_id: JOB_ID, reason: 'too big', request_id: 'req-t' })).rejects.toBeInstanceOf(RequiresApprovalError);
+    expect(big.world.stripe.callsTo('refunds.create')).toHaveLength(0);
   });
 
   it('payout reports needs_bank_setup with the onboarding link, and over_limit above $150', async () => {

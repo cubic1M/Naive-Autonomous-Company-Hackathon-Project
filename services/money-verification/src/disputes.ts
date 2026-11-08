@@ -114,8 +114,8 @@ export async function getDisputeBundle(deps: Pick<DisputeDeps, 'repo'>, disputeI
 }
 
 /**
- * Draft (default) or submit evidence to Stripe. Drafting first lets the agent iterate and a founder do the
- * irreversible submit. No idempotency key: successive drafts carry different evidence and must not be replayed.
+ * Draft (default) or submit evidence to Stripe. Drafting first lets the agent iterate; the Disputes prompt decides who submits the
+ * irreversible version (the agent itself up to $150, the CEO agent above). No idempotency key: successive drafts carry different evidence and must not be replayed.
  */
 export async function submitDisputeEvidence(
   deps: DisputeDeps,

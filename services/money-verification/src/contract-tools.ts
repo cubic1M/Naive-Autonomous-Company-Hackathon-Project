@@ -4,12 +4,23 @@
  * so each mock can be swapped for the real tool without reshaping anything. USD numbers at this
  * boundary, integer cents inside. Errors the contract models as `{ error }` are returned, not thrown.
  */
+import { createHash } from 'node:crypto';
 import { InvalidStateError, NotFoundError, RequiresApprovalError } from './errors.js';
 import { reviewProof } from './proof/decide.js';
 import { createTools, type ToolDeps } from './tools.js';
 import type { ProofCheck, ProofDecision, ProofReview } from './types.js';
 
 const usd = (cents: number): number => Math.round(cents) / 100;
+
+/**
+ * Why: the contract refund shape has no idempotency token, and escrow.refund's count-based key double-refunds when a
+ * retry follows a webhook echo. Deriving the token from the request makes a blind retry a true Stripe replay; the cost
+ * is that an identical second partial (same job, reason, amount) also replays, which errs toward under-refunding.
+ * Callers wanting a deliberate repeat pass their own request_id.
+ */
+function derivedRequestId(jobId: string, reason: string, amountCents: number | undefined): string {
+  return `auto-${createHash('sha256').update(`${jobId}|${reason}|${amountCents ?? 'full'}`).digest('hex').slice(0, 32)}`;
+}
 
 export interface CheckProofOut {
   proof_id: string;
@@ -38,7 +49,15 @@ export interface ContractTools {
   capture_payment(input: { job_id: string }): Promise<{ job_id: string; captured_usd: number }>;
   payout(input: { job_id: string }): Promise<PayoutOut>;
   /** released_hold is set when nothing had been captured yet and the authorization was cancelled instead. */
-  refund(input: { job_id: string; reason: string }): Promise<{ job_id: string; status: 'refunded'; amount_usd: number; released_hold?: true }>;
+  refund(input: { job_id: string; reason: string; amount_cents?: number; request_id?: string }): Promise<{
+    job_id: string;
+    status: 'refunded';
+    amount_usd: number;
+    /** Set when only part of the charge went back; the total so far is refunded_total_usd. */
+    partial?: true;
+    refunded_total_usd: number;
+    released_hold?: true;
+  }>;
   ledger(input: { since?: string }): Promise<{ revenue_usd: number; payouts_usd: number; fees_usd: number; costs_usd: number; jobs_paid: number }>;
 }
 
@@ -122,15 +141,17 @@ export function createContractTools(deps: ToolDeps): ContractTools {
       return { job_id, status: 'paid', worker_pay_usd: usd(out.worker_pay_cents), fee_usd: usd(out.fee_cents) };
     },
 
-    async refund({ job_id, reason }) {
+    /** Over-cap refunds throw RequiresApprovalError: the calling agent then asks the CEO agent for refund_large. */
+    async refund({ job_id, reason, amount_cents, request_id }) {
       // A rejected or expired job was never captured: release the hold. contracts/states.ts still ends it `refunded`.
       const escrow = await deps.repo.getEscrow(job_id);
       if (escrow && (escrow.status === 'pending' || escrow.status === 'authorized')) {
         await tools.release_escrow({ job_id, reason });
-        return { job_id, status: 'refunded', amount_usd: usd(escrow.amount_cents), released_hold: true };
+        return { job_id, status: 'refunded', amount_usd: usd(escrow.amount_cents), refunded_total_usd: usd(escrow.amount_cents), released_hold: true };
       }
-      const out = await tools.refund({ job_id, reason });
-      return { job_id, status: 'refunded', amount_usd: usd(out.amount_cents) };
+      const out = await tools.refund({ job_id, reason, amount_cents, request_id: request_id ?? derivedRequestId(job_id, reason, amount_cents) });
+      const base = { job_id, status: 'refunded' as const, amount_usd: usd(out.amount_cents), refunded_total_usd: usd(out.refunded_total_cents) };
+      return out.status === 'partially_refunded' ? { ...base, partial: true as const } : base;
     },
 
     /** revenue_usd = everything captured from customers (payouts + fees); fees_usd = our share before costs. */

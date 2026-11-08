@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 import type { Env } from '../env.js';
 import { recordDisputeEvent, idOf } from '../disputes.js';
-import { markAuthorized, markRefunded, markReleased } from '../escrow.js';
+import { markAuthorized, markRefunded, markReleased, recordStripeRefund } from '../escrow.js';
 import { WebhookSignatureError } from '../errors.js';
 import { fire, type Hooks } from '../hooks.js';
 import { completePendingPayoutsForWorker } from '../payouts.js';
@@ -62,6 +62,13 @@ async function onChargeRefunded(deps: WebhookDeps, charge: Stripe.Charge): Promi
   return { handled: true };
 }
 
+/** One ledger line per Stripe refund (tool-made or dashboard), keyed so the tool's own write is the same row. */
+async function onRefundEvent(deps: WebhookDeps, refund: Stripe.Refund): Promise<Outcome> {
+  const escrow = await recordStripeRefund(deps, refund);
+  if (!escrow) return unhandled(`no escrow for refund ${refund.id}`);
+  return { handled: true, detail: `${refund.id} ${refund.status ?? ''}`.trim() };
+}
+
 /** Connect onboarding finished: tell the worker pipeline and flush payouts parked as pending_onboarding. */
 async function onAccountUpdated(deps: WebhookDeps, account: Stripe.Account): Promise<Outcome> {
   if (account.payouts_enabled !== true || account.capabilities?.transfers !== 'active') {
@@ -88,6 +95,9 @@ export async function handleStripeEvent(deps: WebhookDeps, event: Stripe.Event):
         return onPaymentIntentCanceled(deps, event.data.object as Stripe.PaymentIntent);
       case 'charge.refunded':
         return onChargeRefunded(deps, event.data.object as Stripe.Charge);
+      case 'refund.created':
+      case 'refund.updated':
+        return onRefundEvent(deps, event.data.object as Stripe.Refund);
       case 'account.updated':
         return onAccountUpdated(deps, event.data.object as Stripe.Account);
       case 'charge.dispute.created':
