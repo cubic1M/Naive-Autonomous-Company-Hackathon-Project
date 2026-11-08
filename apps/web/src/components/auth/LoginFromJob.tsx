@@ -32,8 +32,8 @@ export default function LoginFromJob({ token, next }: { token: string; next: str
   const deadline = job ? deadlineText(job.deadline) : null;
 
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <SimpleHeader action={<Link href={next} style={headerLink}>Back to job</Link>} />
 
         <div style={{ background: "#E9EFE4", borderBottom: "1px solid #DCE6D8" }}>

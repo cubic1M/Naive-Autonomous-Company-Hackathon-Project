@@ -1,69 +1,120 @@
 "use client";
 
-// Light backoffice: requests trickling in from different companies' agents, live.
-// Admin key is asked once and kept in this browser (localStorage "operis_admin", shared with /admin on the API).
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+// Founders' backoffice (admin.operis.live). Same look as operis.live: warm paper, forest accents,
+// Inter Tight numbers, mono eyebrows, a dark ink panel for live agent activity.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Logo } from "@/components/Icon";
+import { Logo } from "@/components/SiteHeader";
 import { ago, usd } from "@/lib/format";
 
 const POLL_MS = 3000;
-const HAPPY = ["requested", "held", "outreach", "accepted", "proof_submitted", "approved", "paid"];
+
+// Fixed palette, like the launch page (doesn't follow system dark mode).
+const C = {
+  paper: "#ECE8DF", card: "#FBF9F5", card2: "#F3EFE7", ink: "#17211A", inkCard: "#1F2A22", inkLine: "#2F3D33",
+  border: "#DCD6CA", text: "#232824", heading: "#1F2A22", muted: "#5B635C", faint: "#8E958C",
+  accent: "#46664F", accentSoft: "#E2EADE", accentInk: "#2F4A37", sage: "#A9C0A2",
+  warn: "#8A5300", warnSoft: "#F6EAD3", bad: "#A12A22", badSoft: "#F6E1DE", info: "#3E5C5A", infoSoft: "#E2EBE8",
+};
+const mono: React.CSSProperties = { fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" };
+const display: React.CSSProperties = { fontFamily: "var(--font-display)", letterSpacing: "-0.035em", fontWeight: 500 };
+const card: React.CSSProperties = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 16 };
+const btn: React.CSSProperties = { border: 0, borderRadius: 10, padding: "10px 16px", fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: "inherit" };
+
+const FLOW = ["requested", "held", "outreach", "accepted", "proof_submitted", "approved", "paid"] as const;
 const LABEL: Record<string, string> = {
   requested: "Awaiting payment", held: "Funded", outreach: "Finding people", accepted: "Worker on it",
   proof_submitted: "Proof in", approved: "Approved", paid: "Paid", escalated: "Needs review",
   rejected: "Rejected", cancelled: "Cancelled", expired: "Expired", refunded: "Refunded",
 };
-const AGENT_TONE: Record<string, string> = { ceo: "good", ops: "info", verifier: "warn", finance: "good", sales: "" };
-const TONE: Record<string, string> = {
-  paid: "good", approved: "good", escalated: "warn", rejected: "bad", expired: "bad", refunded: "info", cancelled: "",
-};
+const DONE = new Set(["paid", "rejected", "cancelled", "expired", "refunded"]);
+function tone(status: string): [string, string] {
+  if (status === "paid" || status === "approved") return [C.accentSoft, C.accentInk];
+  if (status === "escalated") return [C.warnSoft, C.warn];
+  if (status === "rejected" || status === "expired") return [C.badSoft, C.bad];
+  if (status === "cancelled" || status === "refunded" || status === "requested") return [C.card2, C.muted];
+  return [C.infoSoft, C.info];
+}
+const AGENT_COLOR: Record<string, string> = { ceo: "#A9C0A2", ops: "#9EC3C0", verifier: "#E8C88A", finance: "#C9D8C3", sales: "#D8C3D3", disputes: "#E7A9A2", policy: "#8E958C" };
 
 type Req = {
   id: string; title: string; instructions: string; status: string; address: string; lat: number | null; lng: number | null;
-  deadline: string; budget_usd: string; fee_usd: string; created_at: string; updated_at: string;
+  deadline: string; budget_usd: string; fee_usd: string; worker_pay_usd: string; created_at: string; updated_at: string;
   company: string | null; contact_email: string | null; worker_name: string | null; invited: number;
-  wakes: { event: string; at: string; session: string | null }[] | null;
   proof: { media: { url: string; kind: string }[] | null; score: number | null; status: string; notes: string | null } | null;
   activity: { agent: string; type: string; summary: string; at: string }[] | null;
 };
-type FeedItem = { agent: string; type: string; summary: string; job_id: string | null; created_at: string };
+type Feed = { agent: string | null; type: string; summary: string; job_id?: string | null; created_at?: string; at?: string };
 type Data = {
-  now: string;
   stats: { today: number; open: number; paid: number; escalated: number; companies: number };
   companies: { id: string; name: string; requests: number; paid: number; spend: number; last_request_at: string | null }[];
-  requests: Req[];
-  feed: FeedItem[];
+  requests: Req[]; feed: Feed[];
+  money?: { revenue: number; payouts: number; fees: number; refunds: number; held: number };
+  stages?: Record<string, number>;
 };
+
+// Raw tool events → readable lines.
+const TOOL_WORDS: Record<string, string> = {
+  "operis.get_job": "read the job", "operis.find_people": "searched for people", "operis.send_blast": "sent job offers",
+  "operis.check_proof": "checked the proof", "operis.approve_proof": "approved the proof", "operis.escalate": "escalated to a founder",
+  "operis.capture_payment": "captured the payment", "operis.payout": "paid the worker", "operis.refund": "refunded the customer",
+  "operis.ledger": "checked the books", "operis.release_payout_large": "released a large payout", "operis.refund_large": "approved a large refund",
+  "operis.get_proof_review": "read the proof review", "operis.get_dispute": "opened a dispute", "operis.submit_dispute_evidence": "drafted dispute evidence",
+  board_read: "read the board", send_to_agent: "messaged a teammate", view_image: "looked at a photo", web_search: "searched the web",
+  ask_operator: "asked a founder", "email.send": "sent an email", wait_for_agents: "waited for teammates", list_agents: "looked up the team",
+};
+type Line = { who: string; text: string; kind: "action" | "wait" | "say" | "auto"; at: string };
+function humanize(f: Feed): Line | null {
+  const at = f.created_at ?? f.at ?? new Date().toISOString();
+  const s = f.summary ?? "";
+  if (f.type === "approval") return { who: "policy", text: s.includes("auto-approved") ? "auto-approved a routine step" : s.replace(/^allow \((call|session)\): /, "approved: "), kind: "auto", at };
+  const who = f.agent ?? "agent";
+  const rest = s.startsWith(who) ? s.slice(who.length).trim() : s;
+  if (f.type === "tool.confirm") return { who, text: `waiting for approval: ${(rest.split(":").pop() ?? "").trim()}`, kind: "wait", at };
+  if (rest.startsWith("✓") || rest === "finished") return null; // completions are implied by the next action
+  const m = rest.match(/^→\s*(\S+)\s*(.*)$/);
+  if (m) {
+    const [, tool, args] = m;
+    if (tool === "board_write") {
+      const op = args.match(/"op"\s*:\s*"(\w+)"/)?.[1] ?? "";
+      const words: Record<string, string> = { create: "created a board card", assign: "assigned a card", comment: "commented on a card", update: "updated a card" };
+      return { who, text: words[op] ?? "updated the board", kind: "action", at };
+    }
+    return { who, text: TOOL_WORDS[tool] ?? `used ${tool.replace("operis.", "")}`, kind: "action", at };
+  }
+  if (!rest.startsWith(":")) return rest ? { who, text: rest, kind: "action", at } : null;
+  const said = rest.slice(1).replace(/\*\*/g, "").trim();
+  return said ? { who, text: said, kind: "say", at } : null;
+}
 
 export default function Backoffice() {
   const [key, setKey] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [me, setMe] = useState<string | null>(null);
+  const [login, setLogin] = useState({ email: "", password: "" });
+  const [loginErr, setLoginErr] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [authErr, setAuthErr] = useState(false);
   const [data, setData] = useState<Data | null>(null);
   const [live, setLive] = useState(true);
-  const [authErr, setAuthErr] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
-  const [company, setCompany] = useState<string>("all");
-  const [, tick] = useState(0);
+  const [view, setView] = useState<"active" | "review" | "done" | "all">("active");
+  const [company, setCompany] = useState("all");
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
   const seen = useRef<Map<string, string>>(new Map());
   const first = useRef(true);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const [, tick] = useState(0);
 
-  useEffect(() => setKey(localStorage.getItem("operis_admin")), []);
+  useEffect(() => { setKey(localStorage.getItem("operis_admin")); setMe(localStorage.getItem("operis_admin_email")); }, []);
 
   const poll = useCallback(async () => {
     if (!key) return;
     try {
-      const r = await fetch("/api/v1/admin/requests?limit=150", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
+      const r = await fetch("/api/v1/admin/requests?limit=200", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
       if (r.status === 401) { setAuthErr(true); return; }
       const j: Data = await r.json();
-      // flash rows that are new or changed state since the last poll
       const f = new Set<string>();
-      for (const q of j.requests) {
-        const prev = seen.current.get(q.id);
-        if (!first.current && prev !== q.status) f.add(q.id);
-        seen.current.set(q.id, q.status);
-      }
+      for (const x of j.requests) { const prev = seen.current.get(x.id); if (!first.current && prev !== x.status) f.add(x.id); seen.current.set(x.id, x.status); }
       first.current = false;
       setFresh(f); setData(j); setLive(true); setAuthErr(false);
     } catch { setLive(false); }
@@ -78,155 +129,285 @@ export default function Backoffice() {
     return () => { alive = false; clearTimeout(t); clearInterval(clock); };
   }, [key, poll]);
 
+  const all = useMemo(() => (data?.requests ?? []).filter((x) => x.company !== "smoke-test"), [data]);
+  const reqs = useMemo(() => all.filter((x) => {
+    if (company !== "all" && x.company !== company) return false;
+    if (view === "active" && (DONE.has(x.status) || x.status === "escalated")) return false;
+    if (view === "review" && x.status !== "escalated") return false;
+    if (view === "done" && !DONE.has(x.status)) return false;
+    if (q && !`${x.title} ${x.company} ${x.address}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  }), [all, view, company, q]);
+  const counts = useMemo(() => ({
+    active: all.filter((x) => !DONE.has(x.status) && x.status !== "escalated").length,
+    review: all.filter((x) => x.status === "escalated").length,
+    done: all.filter((x) => DONE.has(x.status)).length,
+    all: all.length,
+  }), [all]);
+  const open = all.find((x) => x.id === openId) ?? null;
+
   if (!key || authErr) {
     return (
-      <main className="dash" style={{ maxWidth: 520 }}>
-        <span className="brand"><Logo /> operis. backoffice</span>
-        <form className="card stack" onSubmit={(e) => { e.preventDefault(); localStorage.setItem("operis_admin", draft.trim()); setKey(draft.trim()); setAuthErr(false); first.current = true; }}>
-          <h1>Founders only</h1>
-          {authErr && <div className="notice bad">That admin key didn&apos;t work.</div>}
-          <input type="password" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="ADMIN_KEY" autoFocus
-            style={{ font: "inherit", padding: 14, borderRadius: 10, border: "1px solid var(--border-strong)", background: "var(--surface)" }} />
-          <button className="btn">Open backoffice</button>
-        </form>
-      </main>
+      <Shell>
+        <div style={{ maxWidth: 420, margin: "10vh auto 0", ...card, padding: 28, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Logo /><span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 17, color: C.heading }}>operis.</span></div>
+          <span style={{ ...mono, color: C.muted }}>Founders only</span>
+          <h1 style={{ ...display, fontSize: 32, margin: 0, color: C.heading }}>Backoffice</h1>
+          <p style={{ margin: 0, color: C.muted }}>Sign in with your Operis founder email.</p>
+          {authErr && !loginErr && <Notice warn>Your session expired. Sign in again.</Notice>}
+          {loginErr && <Notice>{loginErr}</Notice>}
+          <form style={{ display: "flex", flexDirection: "column", gap: 10 }} onSubmit={async (e) => {
+            e.preventDefault(); setSigningIn(true); setLoginErr("");
+            const r = await fetch("/api/v1/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
+            const j = await r.json().catch(() => ({}));
+            setSigningIn(false);
+            if (!r.ok || !j.token) return setLoginErr(j.error ?? `Sign-in failed (${r.status}).`);
+            localStorage.setItem("operis_admin", j.token); localStorage.setItem("operis_admin_email", j.email);
+            setMe(j.email); setKey(j.token); setAuthErr(false); first.current = true;
+          }}>
+            <Input type="email" required autoComplete="username" placeholder="Email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} autoFocus />
+            <Input type="password" required autoComplete="current-password" placeholder="Password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} />
+            <button disabled={signingIn} style={{ ...btn, background: C.accent, color: "#F7F4EE", minHeight: 50 }}>{signingIn ? "Signing in…" : "Sign in"}</button>
+          </form>
+        </div>
+      </Shell>
     );
   }
 
-  const reqs = (data?.requests ?? []).filter((q) => q.company !== "smoke-test" && (company === "all" || q.company === company));
-  const s = data?.stats;
-
+  const s = data?.stats; const m = data?.money; const st = data?.stages ?? {};
   return (
-    <main className="dash">
-      <header className="row between wrap">
-        <span className="brand"><Logo /> operis. backoffice</span>
-        <div className="row small muted" style={{ gap: 10 }}>
-          <span className={`live-dot ${live ? "" : "off"}`} aria-hidden />
-          {live ? "Live" : "Reconnecting…"}
-          <button className="pill" style={{ border: 0, cursor: "pointer" }} onClick={() => { localStorage.removeItem("operis_admin"); setKey(null); }}>Sign out</button>
+    <Shell>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px 8px 10px", ...card, borderRadius: 12 }}>
+          <Logo /><span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 17, letterSpacing: "-0.02em", color: C.heading }}>operis.</span>
+          <span style={{ ...mono, color: C.muted, marginLeft: 4 }}>Backoffice</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, color: C.muted, fontSize: 14, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span className={`live-dot ${live ? "" : "off"}`} aria-hidden />{live ? "Live" : "Reconnecting…"}
+          </span>
+          {me && <span>{me}</span>}
+          <button style={{ ...btn, background: C.card, border: `1px solid ${C.border}`, color: C.text, padding: "8px 14px" }}
+            onClick={() => { localStorage.removeItem("operis_admin"); localStorage.removeItem("operis_admin_email"); setKey(null); setMe(null); }}>Sign out</button>
         </div>
       </header>
 
-      <section className="tiles">
-        <Tile k="Requests · 24h" v={s?.today ?? "–"} />
-        <Tile k="In progress" v={s?.open ?? "–"} />
-        <Tile k="Paid" v={s?.paid ?? "–"} />
-        <Tile k="Companies" v={s?.companies ?? "–"} />
+      <section style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginTop: 28 }}>
+        <div>
+          <span style={{ ...mono, color: C.muted }}>Autonomous company · 6 Naïve agents</span>
+          <h1 style={{ ...display, fontSize: "clamp(32px, 4vw, 48px)", margin: "6px 0 0", color: C.heading, lineHeight: 1.05 }}>Requests coming in</h1>
+        </div>
+        {!!s?.escalated && (
+          <button onClick={() => setView("review")} style={{ ...btn, background: C.warnSoft, color: C.warn, border: "1px solid #EBD5A8" }}>
+            {s.escalated} proof{s.escalated > 1 ? "s" : ""} need a founder decision →
+          </button>
+        )}
       </section>
 
-      {!!s?.escalated && <div className="notice warn"><strong>{s.escalated} proof{s.escalated > 1 ? "s" : ""} need a founder decision.</strong> Review them in the founder console on the API (/admin).</div>}
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginTop: 18 }}>
+        <Kpi k="Requests · 24h" v={s?.today ?? "–"} />
+        <Kpi k="In progress" v={s?.open ?? "–"} />
+        <Kpi k="Needs review" v={s?.escalated ?? "–"} warn={!!s?.escalated} />
+        <Kpi k="Paid jobs" v={s?.paid ?? "–"} />
+        <Kpi k="Revenue" v={m ? usd(m.revenue) : "–"} sub={m ? `${usd(m.fees)} fees · ${usd(m.payouts)} to workers` : undefined} />
+        <Kpi k="Companies" v={s?.companies ?? "–"} />
+      </section>
 
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }} className="bo-grid">
-        <section className="card stack">
-          <div className="row between wrap">
-            <h2>Incoming requests</h2>
-            <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ font: "inherit", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)" }}>
+      <section style={{ ...card, marginTop: 10, padding: "12px 14px", display: "flex", gap: 6, alignItems: "stretch", overflowX: "auto" }}>
+        {FLOW.map((k, i) => {
+          const n = st[k] ?? 0;
+          return (
+            <div key={k} style={{ flex: "1 0 116px", display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ flex: 1, background: n ? C.accentSoft : C.card2, borderRadius: 10, padding: "9px 12px" }}>
+                <div style={{ ...mono, fontSize: 10, color: C.muted, whiteSpace: "nowrap" }}>{LABEL[k]}</div>
+                <div style={{ ...display, fontSize: 24, color: n ? C.accentInk : C.faint }}>{n}</div>
+              </div>
+              {i < FLOW.length - 1 && <span style={{ color: C.faint }}>›</span>}
+            </div>
+          );
+        })}
+      </section>
+
+      <div className="bo2-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, marginTop: 14, alignItems: "start" }}>
+        <section style={{ ...card, overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", gap: 4, background: C.card2, padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
+              {([["active", "Active"], ["review", "Needs review"], ["done", "Done"], ["all", "All"]] as const).map(([v, l]) => (
+                <button key={v} onClick={() => setView(v)} style={{ ...btn, padding: "7px 12px", fontSize: 13, background: view === v ? C.card : "transparent", color: view === v ? C.heading : C.muted, boxShadow: view === v ? "0 1px 2px rgba(0,0,0,0.08)" : "none" }}>
+                  {l} <span style={{ color: C.faint, marginLeft: 4 }}>{counts[v]}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ flex: 1 }} />
+            <Input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 180, padding: "9px 12px", fontSize: 14 }} />
+            <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ fontFamily: "inherit", fontSize: 14, padding: "9px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.card, color: C.text, maxWidth: 220 }}>
               <option value="all">All companies</option>
               {(data?.companies ?? []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
           </div>
-          <div className="scroll-x">
-            <table className="table">
-              <thead><tr><th>When</th><th>Company</th><th>Request</th><th>Where</th><th className="num">Budget</th><th>Status</th></tr></thead>
-              <tbody>
-                {reqs.length === 0 && <tr><td colSpan={6} className="muted">No requests yet. Share <span className="mono">/developers</span> with agent companies.</td></tr>}
-                {reqs.map((q) => (
-                  <Fragment key={q.id}>
-                    <tr onClick={() => setOpen(open === q.id ? null : q.id)} style={{ cursor: "pointer", animation: fresh.has(q.id) ? "flash 1.6s ease-out" : undefined }}>
-                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>{ago(q.created_at)}</td>
-                      <td><strong>{q.company ?? "?"}</strong></td>
-                      <td>{q.title}</td>
-                      <td className="small muted">{q.lat == null ? "Remote" : q.address}</td>
-                      <td className="num">{usd(Number(q.budget_usd))}</td>
-                      <td><span className={`pill ${TONE[q.status] ?? "info"}`}>{LABEL[q.status] ?? q.status}</span></td>
-                    </tr>
-                    {open === q.id && (
-                      <tr><td colSpan={6} style={{ background: "var(--surface-2)" }}><Detail q={q} /></td></tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {!data && <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading…</div>}
+          {data && reqs.length === 0 && (
+            <div style={{ padding: 40, textAlign: "center", color: C.muted }}>
+              {view === "review" ? "Nothing needs a founder decision." : view === "active" ? "No active requests right now." : "No requests here."}
+            </div>
+          )}
+          {reqs.map((x) => {
+            const [bg, fg] = tone(x.status);
+            return (
+              <button key={x.id} onClick={() => setOpenId(x.id)} className="bo2-row" style={{
+                all: "unset", cursor: "pointer", display: "grid", gridTemplateColumns: "124px minmax(0, 1fr) 84px 64px", gap: 14, alignItems: "center",
+                padding: "13px 16px", borderBottom: `1px solid ${C.border}`, width: "100%", boxSizing: "border-box",
+                animation: fresh.has(x.id) ? "bo2flash 1.6s ease-out" : undefined,
+              }}>
+                <span style={{ justifySelf: "start", background: bg, color: fg, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{LABEL[x.status] ?? x.status}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, color: C.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.title}</span>
+                  <span style={{ display: "block", fontSize: 13, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {x.company ?? "?"} · {x.lat == null ? "Remote" : x.address}
+                  </span>
+                </span>
+                <span style={{ ...display, fontSize: 18, color: C.heading, textAlign: "right" }}>{usd(Number(x.budget_usd))}</span>
+                <span style={{ fontSize: 13, color: C.faint, textAlign: "right", whiteSpace: "nowrap" }}>{ago(x.created_at)}</span>
+              </button>
+            );
+          })}
         </section>
 
-        <div className="stack">
-        <section className="card stack">
-          <div className="row between"><h2>Agent activity</h2><span className="small muted">5 Naïve agents</span></div>
-          <ul className="feed" style={{ maxHeight: 420 }}>
-            {(data?.feed ?? []).length === 0 && <li className="muted small">No agent activity yet. It appears here within a minute of a job being funded.</li>}
-            {(data?.feed ?? []).map((f, i) => (
-              <li key={`${f.created_at}-${i}`}>
-                <div className="row between"><span className={`pill ${AGENT_TONE[f.agent] ?? ""}`}>{f.agent}</span><span className="small muted">{ago(f.created_at)}</span></div>
-                <div className="small" style={{ wordBreak: "break-word" }}>{f.summary.replace(new RegExp(`^${f.agent}\\s*`), "")}</div>
-              </li>
+        <aside style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <section style={{ background: C.ink, border: `1px solid ${C.inkLine}`, borderRadius: 16, padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <h2 style={{ ...display, fontSize: 20, margin: 0, color: "#F3EEE4" }}>Agent activity</h2>
+              <span style={{ ...mono, color: C.sage }}>Live</span>
+            </div>
+            <FeedList items={data?.feed ?? []} />
+          </section>
+          <section style={{ ...card, padding: 18 }}>
+            <h2 style={{ ...display, fontSize: 20, margin: "0 0 6px", color: C.heading }}>Companies</h2>
+            {(data?.companies ?? []).length === 0 && <p style={{ color: C.muted, margin: 0 }}>No companies yet.</p>}
+            {(data?.companies ?? []).slice(0, 12).map((c) => (
+              <button key={c.id} onClick={() => { setCompany(c.name); setView("all"); }} style={{ all: "unset", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.border}`, width: "100%", boxSizing: "border-box" }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, color: C.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                  <span style={{ fontSize: 13, color: C.muted }}>{c.requests} request{c.requests === 1 ? "" : "s"} · {c.paid} paid · {usd(c.spend)}</span>
+                </span>
+                <span style={{ fontSize: 13, color: C.faint, whiteSpace: "nowrap" }}>{c.last_request_at ? ago(c.last_request_at) : "new"}</span>
+              </button>
             ))}
-          </ul>
-        </section>
-        <section className="card stack">
-          <h2>Companies</h2>
-          <ul className="feed">
-            {(data?.companies ?? []).length === 0 && <li className="muted small">No companies have signed up yet.</li>}
-            {(data?.companies ?? []).map((c) => (
-              <li key={c.id}>
-                <div className="row between"><strong>{c.name}</strong><span className="small muted">{c.last_request_at ? ago(c.last_request_at) : "no requests"}</span></div>
-                <div className="small muted">{c.requests} request{c.requests === 1 ? "" : "s"} · {c.paid} paid · {usd(c.spend)} spent</div>
-              </li>
-            ))}
-          </ul>
-        </section>
-        </div>
+          </section>
+        </aside>
       </div>
-      <style>{`@media (min-width: 1000px) { .bo-grid { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) !important; } }`}</style>
+
+      {open && <Drawer x={open} onClose={() => setOpenId(null)} />}
+      <style>{`
+        @media (min-width: 1080px) { .bo2-grid { grid-template-columns: minmax(0, 1fr) 380px !important; } }
+        @media (max-width: 640px) { .bo2-row { grid-template-columns: minmax(0, 1fr) 70px !important; } .bo2-row > :first-child, .bo2-row > :last-child { display: none !important; } }
+        .bo2-row:hover { background: ${C.card2}; }
+        @keyframes bo2flash { from { background: ${C.accentSoft}; } to { background: transparent; } }
+      `}</style>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main style={{ background: C.paper, minHeight: "100dvh", color: C.text }}>
+      <div style={{ maxWidth: 1320, margin: "0 auto", padding: "18px clamp(14px, 3vw, 32px) 64px" }}>{children}</div>
     </main>
   );
 }
-
-function Detail({ q }: { q: Req }) {
-  const at = HAPPY.indexOf(q.status);
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} style={{ fontFamily: "inherit", fontSize: 15, padding: "13px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.card, color: C.text, ...props.style }} />;
+}
+function Notice({ warn, children }: { warn?: boolean; children: React.ReactNode }) {
+  return <div style={{ borderRadius: 10, padding: "10px 12px", fontSize: 14, background: warn ? C.warnSoft : C.badSoft, color: warn ? C.warn : C.bad }}>{children}</div>;
+}
+function Kpi({ k, v, sub, warn }: { k: string; v: string | number; sub?: string; warn?: boolean }) {
   return (
-    <div className="stack" style={{ padding: "6px 2px" }}>
-      <div className="pipeline">
-        {HAPPY.map((st, i) => <span key={st} className={i < at ? "done" : i === at ? "now" : ""}>{LABEL[st]}</span>)}
-        {at === -1 && <span className="alt">{LABEL[q.status] ?? q.status}</span>}
-      </div>
-      <p className="small pre">{q.instructions}</p>
-      <div className="small muted">
-        Deadline {new Date(q.deadline).toLocaleString()} · {q.invited} people invited{q.worker_name ? ` · worker: ${q.worker_name}` : ""} · contact {q.contact_email ?? "?"}
-      </div>
-      {!!q.wakes?.length && (
-        <div className="small"><span className="eyebrow">Agents woken</span>{" "}
-          {q.wakes.map((w) => <span key={w.event} className="pill" style={{ marginRight: 6 }}>{w.event.replace("_", " ")} · {ago(w.at)}</span>)}
-        </div>
-      )}
-      {!!q.activity?.length && (
-        <div className="stack" style={{ gap: 4 }}>
-          <span className="eyebrow">What the agents did</span>
-          {q.activity.map((a, i) => (
-            <div key={i} className="small" style={{ display: "grid", gridTemplateColumns: "90px 1fr 70px", gap: 8 }}>
-              <span className={`pill ${AGENT_TONE[a.agent] ?? ""}`} style={{ justifySelf: "start" }}>{a.agent}</span>
-              <span style={{ wordBreak: "break-word" }}>{a.summary.replace(new RegExp(`^${a.agent}\\s*`), "")}</span>
-              <span className="muted">{ago(a.at)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {q.proof && (
-        <div className="stack" style={{ gap: 8 }}>
-          <div className="small"><span className="eyebrow">Proof</span> {q.proof.status} · verifier score {q.proof.score ?? "–"}{q.proof.notes ? ` · ${q.proof.notes}` : ""}</div>
-          <div className="row wrap">
-            {(q.proof.media ?? []).map((m) => m.kind?.startsWith("image/")
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <a key={m.url} href={m.url} target="_blank" rel="noreferrer"><img src={m.url} alt="" style={{ height: 96, borderRadius: 8, objectFit: "cover" }} /></a>
-              : <a key={m.url} href={m.url} target="_blank" rel="noreferrer" className="small">{m.kind}</a>)}
-          </div>
-        </div>
-      )}
-      <div className="small muted mono">job {q.id}</div>
+    <div style={{ ...card, padding: "14px 16px", background: warn ? C.warnSoft : C.card, borderColor: warn ? "#EBD5A8" : C.border }}>
+      <div style={{ ...mono, color: warn ? C.warn : C.muted }}>{k}</div>
+      <div style={{ ...display, fontSize: 34, color: warn ? C.warn : C.heading, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
+      {sub && <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>}
     </div>
   );
 }
-
-function Tile({ k, v }: { k: string; v: string | number }) {
-  return <div className="card tile"><div className="k">{k}</div><div className="v">{v}</div></div>;
+function FeedList({ items }: { items: Feed[] }) {
+  const rows = items.map(humanize).filter((r): r is Line => !!r);
+  if (!rows.length) return <p style={{ margin: "12px 0 0", color: C.faint, fontSize: 14 }}>No agent activity yet. It shows up within seconds of a job being funded.</p>;
+  return (
+    <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, maxHeight: 480, overflowY: "auto" }}>
+      {rows.slice(0, 40).map((r, i) => (
+        <li key={i} style={{ display: "grid", gridTemplateColumns: "76px minmax(0, 1fr) 54px", gap: 10, alignItems: "start", padding: "9px 0", borderTop: i ? `1px solid ${C.inkLine}` : "none" }}>
+          <span style={{ justifySelf: "start", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, background: C.inkCard, color: AGENT_COLOR[r.who] ?? C.sage }}>{r.who}</span>
+          <span style={{ fontSize: 14, color: r.kind === "wait" ? "#E8C88A" : r.kind === "auto" ? "#8E958C" : "#E9E5DC", lineHeight: 1.45, overflowWrap: "anywhere" }}>
+            {r.kind === "say" ? <>&ldquo;{r.text.length > 150 ? r.text.slice(0, 150) + "…" : r.text}&rdquo;</> : r.text}
+          </span>
+          <span style={{ fontSize: 12, color: "#8E958C", textAlign: "right", whiteSpace: "nowrap" }}>{ago(r.at)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+function Drawer({ x, onClose }: { x: Req; onClose: () => void }) {
+  const at = FLOW.indexOf(x.status as (typeof FLOW)[number]);
+  const [bg, fg] = tone(x.status);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(23,33,26,0.35)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+      <aside onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", height: "100%", overflowY: "auto", background: C.paper, borderLeft: `1px solid ${C.border}`, padding: 24, display: "flex", flexDirection: "column", gap: 14, boxSizing: "border-box" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ ...mono, color: C.muted }}>{x.company ?? "?"}</span>
+            <h2 style={{ ...display, fontSize: 28, margin: "6px 0 0", color: C.heading, lineHeight: 1.1 }}>{x.title}</h2>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ ...btn, background: C.card, border: `1px solid ${C.border}`, padding: "6px 12px" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ background: bg, color: fg, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>{LABEL[x.status] ?? x.status}</span>
+          <span style={{ ...display, fontSize: 22, color: C.heading }}>{usd(Number(x.budget_usd))}</span>
+          <span style={{ color: C.muted, fontSize: 13 }}>worker {usd(Number(x.worker_pay_usd))} · fee {usd(Number(x.fee_usd))}</span>
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {FLOW.map((k, i) => (
+            <span key={k} style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 9px", borderRadius: 7, background: i < at ? C.accentSoft : i === at ? C.accent : C.card2, color: i < at ? C.accentInk : i === at ? "#F7F4EE" : C.faint }}>{LABEL[k]}</span>
+          ))}
+          {at === -1 && <span style={{ fontSize: 11.5, fontWeight: 600, padding: "5px 9px", borderRadius: 7, background: C.warnSoft, color: C.warn }}>{LABEL[x.status] ?? x.status}</span>}
+        </div>
+        <section style={{ ...card, padding: 16, display: "grid", gap: 8, fontSize: 14 }}>
+          <Row k="Where" v={x.lat == null ? "Remote" : x.address} />
+          <Row k="Deadline" v={new Date(x.deadline).toLocaleString()} />
+          <Row k="Worker" v={x.worker_name ?? (x.invited ? `${x.invited} invited, waiting for a yes` : "not yet")} />
+          <Row k="Contact" v={x.contact_email ?? "?"} />
+          <Row k="Requested" v={`${ago(x.created_at)} · updated ${ago(x.updated_at)}`} />
+        </section>
+        <section style={{ ...card, padding: 16 }}>
+          <div style={{ ...mono, color: C.muted, marginBottom: 6 }}>Instructions</div>
+          <p style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.55 }}>{x.instructions}</p>
+        </section>
+        {x.proof && (
+          <section style={{ ...card, padding: 16 }}>
+            <div style={{ ...mono, color: C.muted, marginBottom: 6 }}>Proof · {x.proof.status} · score {x.proof.score ?? "–"}</div>
+            {x.proof.notes && <p style={{ margin: "0 0 10px", fontSize: 13, color: C.muted }}>{x.proof.notes}</p>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(x.proof.media ?? []).map((md) => md.kind?.startsWith("image/")
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <a key={md.url} href={md.url} target="_blank" rel="noreferrer"><img src={md.url} alt="" style={{ height: 120, borderRadius: 10, objectFit: "cover", border: `1px solid ${C.border}` }} /></a>
+                : <a key={md.url} href={md.url} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>{md.kind}</a>)}
+            </div>
+          </section>
+        )}
+        <section style={{ background: C.ink, borderRadius: 16, padding: 16 }}>
+          <div style={{ ...mono, color: C.sage }}>What the agents did</div>
+          <FeedList items={(x.activity ?? []).slice().reverse().map((a) => ({ ...a, created_at: a.at }))} />
+        </section>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: C.faint }}>job {x.id}</div>
+      </aside>
+    </div>
+  );
+}
+function Row({ k, v }: { k: string; v: string }) {
+  return <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10 }}><span style={{ color: C.muted }}>{k}</span><span style={{ color: C.text, overflowWrap: "anywhere" }}>{v}</span></div>;
 }

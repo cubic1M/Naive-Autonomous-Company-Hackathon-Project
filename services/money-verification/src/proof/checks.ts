@@ -30,9 +30,13 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
 
 /**
  * Geofence against EXIF GPS (hard to fake casually) with the device GPS as fallback. When both exist
- * and disagree we flag it: one of them is wrong or spoofed, and a human should look.
+ * and disagree we flag it: one of them is wrong or spoofed, and a human should look. A remote job (no location)
+ * has no fence: the check passes with a note, whatever GPS the proof carries.
  */
 export function geofenceChecks(job: Job, proof: Proof, exifs: MediaExif[]): ProofCheck[] {
+  if (job.lat === null || job.lng === null) {
+    return [check('geofence', 'pass', 'remote job: no job location, so no geofence applies', { remote: true })];
+  }
   const out: ProofCheck[] = [];
   const exifPoint = exifs.find((e) => e.exif && e.exif.lat !== null && e.exif.lng !== null)?.exif;
   const exifGps = exifPoint ? { lat: exifPoint.lat as number, lng: exifPoint.lng as number } : null;

@@ -16,7 +16,7 @@ const LAUNCH_STEPS = {
   ],
 };
 
-const base = { minHeight: "42px", border: "0", borderRadius: "7px", font: "inherit", fontSize: "14px", fontWeight: 500, cursor: "pointer" } as const;
+const base = { minHeight: "42px", border: "0", borderRadius: "7px", font: "inherit", fontSize: "16px", fontWeight: 500, cursor: "pointer" } as const;
 const on = { ...base, background: "#ECE8DF", color: "#1F2A22" };
 const off = { ...base, background: "transparent", color: "#C3CBC2" };
 
@@ -33,9 +33,9 @@ export default function HowItWorks() {
   }, []);
 
   return (
-    <section id="for-people" aria-labelledby="how-title" style={{ background: "#17211A", color: "#F3EEE4", scrollMarginTop: "12px" }}>
+    <section id="for-people" aria-labelledby="how-title" style={{ background: "transparent", color: "#F3EEE4", scrollMarginTop: "12px" }}>
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "100px 24px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: "36px" }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", letterSpacing: "0.14em", color: "#A3ADA4" }}>HOW IT WORKS</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", letterSpacing: "0.14em", color: "#A3ADA4" }}>HOW IT WORKS</span>
         <h2 id="how-title" style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: 500, fontSize: "clamp(30px, 3.6vw, 46px)", letterSpacing: "-0.04em", textAlign: "center", color: "#F3EEE4" }}>
           {agents ? "From prompt" : "From signup"} <span style={{ color: "#8E958C" }}>{agents ? "to person on site" : "to paid job"}</span>
         </h2>
@@ -46,9 +46,9 @@ export default function HowItWorks() {
         <ol style={{ listStyle: "none", margin: "0", padding: "0", width: "100%", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
           {LAUNCH_STEPS[side].map((st) => (
             <li key={st.n} style={{ padding: "24px", borderRadius: "14px", background: "#1E2A22", border: "1px solid #2A362E", display: "flex", flexDirection: "column", gap: "12px" }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "#A9C0A2" }}>{st.n}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", color: "#FF8800" }}>{st.n}</span>
               <span style={{ fontFamily: "var(--font-display)", fontSize: "22px", fontWeight: 500, letterSpacing: "-0.02em" }}>{st.title}</span>
-              <span style={{ fontSize: "14px", lineHeight: 1.55, color: "#B5BEB4" }}>{st.body}</span>
+              <span style={{ fontSize: "16px", lineHeight: 1.55, color: "#B5BEB4" }}>{st.body}</span>
             </li>
           ))}
         </ol>

@@ -12,6 +12,8 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 
 ## If you're an AI agent: set yourself up (no human setup needed)
 
+Short version for agents: read \`${api.replace('api.operis.live','operis.live')}/SKILL.md\`.
+
 You can onboard yourself in one HTTP call, then use the tools immediately over plain HTTP:
 
 1. **Get consent and an email from your human owner.** The key is tied to them, and they pay for jobs.
@@ -21,7 +23,7 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    Content-Type: application/json
    {"name": "<your company or agent name>", "contact_email": "<owner's email>", "description": "<what you do>"}
    \`\`\`
-   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
+   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`; a private shell profile like \`~/.zshrc\` is fine, a repo or shared file is not); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
 3. **Call the tools right away**, no MCP configuration needed:
    \`\`\`
    POST ${mcp}
@@ -31,7 +33,20 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{...}}}
    \`\`\`
    The result is JSON text in \`result.content[0].text\`; check \`status\` first and follow \`next_step\`. \`get_job\` and \`cancel_job\` use the same \`tools/call\` shape with \`{"job_id": "..."}\`. If you have no public URL for \`callback_url\`, just poll \`get_job\` every 2–5 minutes.
-4. **For future sessions (optional):** if you can configure MCP servers, add \`${mcp}\` with the header \`Authorization: Bearer <api_key>\`. In Claude Code: \`claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer $OPERIS_API_KEY"\` (takes effect next session), or have your owner install the Claude Code plugin (server + this guide as a skill): \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` with \`OPERIS_API_KEY\` set in their environment.
+4. **Make it permanent (so future sessions have the tools).** With your owner's OK:
+   - Save the key as the environment variable \`OPERIS_API_KEY\` (e.g. add \`export OPERIS_API_KEY=...\` to \`~/.zshrc\` or \`~/.bashrc\`), or in your platform's secret store.
+   - Add Operis as an MCP server, reading the key from that variable instead of writing it into config:
+
+   | Your client | How |
+   |---|---|
+   | Claude Code | \`claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'\` (single quotes, so your shell stores the variable name, not the key; Claude Code expands it when it starts). Or the plugin, which adds the server and this guide as a skill: \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` |
+   | Cursor | add to \`~/.cursor/mcp.json\`: \`{"mcpServers": {"operis": {"url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\`, then reload Cursor |
+   | VS Code | add to \`.vscode/mcp.json\`: \`{"servers": {"operis": {"type": "http", "url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\` |
+   | Codex, Gemini CLI, others | add a remote (Streamable HTTP) MCP server at \`${mcp}\` with header \`Authorization: Bearer <key>\`, using your client's MCP config (prefer its option to read the key from an environment variable) |
+   | Naïve agent | store the key in a vault as \`static_bearer\` bound to \`${mcp}\`, and add \`{"name": "operis", "url": "${mcp}"}\` to the agent's \`mcp_servers\` |
+   | Can't configure MCP | keep calling over HTTP as in step 3, reading the key from \`OPERIS_API_KEY\` |
+
+   New MCP servers usually load on the **next** session. Until then, keep using HTTP.
 5. **Payment:** in production every job is paid. The first result is \`status: "requested"\` with an \`escrow_url\`; your owner pays it once in a browser (card held, charged only when proof passes), and the job starts. A result of \`held\` with no \`escrow_url\` means it's already funded.
 
 ## What humans can do for you
@@ -58,14 +73,22 @@ The response contains \`api_key\` (shown once) and the MCP URL.
 
 ## 2. Connect your agent
 
+**Easiest: just add the URL and sign in (OAuth).** In any client that supports MCP sign-in, add \`${mcp}\` with no key. It opens a browser where you sign up or paste an existing key, and the client gets its own key automatically.
+- **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector → \`${mcp}\`
+- **ChatGPT:** Settings → Connectors (developer mode) → add \`${mcp}\`
+- **Claude Code:** \`claude mcp add --transport http --scope user operis ${mcp}\`, restart Claude Code (servers load at session start: exit, then \`claude --continue\`), then \`/mcp\` → operis → Authenticate
+- **Cursor / VS Code:** add the server with just the URL; they prompt you to sign in
+
+**With an API key instead** (keep the key in the \`OPERIS_API_KEY\` environment variable, not in config):
+
 **Claude Code**
 \`\`\`bash
-claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer opk_YOUR_KEY"
+claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'
 \`\`\`
 
-**Cursor / Claude Desktop / any MCP client** (\`mcp.json\`)
+**Cursor** (\`~/.cursor/mcp.json\`) / **VS Code** (\`.vscode/mcp.json\`, use \`"servers"\` and \`"type": "http"\`)
 \`\`\`json
-{ "mcpServers": { "operis": { "type": "http", "url": "${mcp}", "headers": { "Authorization": "Bearer opk_YOUR_KEY" } } } }
+{ "mcpServers": { "operis": { "url": "${mcp}", "headers": { "Authorization": "Bearer \${env:OPERIS_API_KEY}" } } } }
 \`\`\`
 
 **Naïve agents**: add the server and store the key in a vault, bound to our host:
@@ -98,7 +121,7 @@ curl -X POST ${mcp} \\
 | \`deadline\` | ISO 8601, UTC | e.g. \`2026-11-08T18:00:00Z\`, at least 15 minutes from now |
 | \`budget_usd\` | number | ≥ 20. Total you pay, all-in |
 | \`certification_required\` | string \\| null | e.g. "notary" |
-| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
+| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
 
 Example:

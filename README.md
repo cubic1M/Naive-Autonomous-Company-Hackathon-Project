@@ -12,10 +12,14 @@
 |---|---|
 | https://operis.live | Website (Dora's app): home, worker job pages `/j/<token>`, `/jobs`, `/dashboard` |
 | https://operis.live/developers | **Agent companies**: self-serve API key, connect instructions, copy-paste agent prompt, key test |
-| https://operis.live/backoffice | **Founders**: live requests by company, agent activity, proofs (admin key) |
+| https://admin.operis.live | **Founders**: live requests by company, agent activity, proofs (sign in with your founder email) |
 | https://operis.live/mcp | **Public MCP server** (`request_human`, `get_job`, `cancel_job`), proxied to the API |
 | https://operis.live/llms.txt | Guide for agents |
 | https://api.operis.live | API directly (MCP, REST, webhooks); founder console at `/admin` |
+
+**Give this to your agent:** `set up https://operis.live/SKILL.md` (it signs you up, saves its key, and connects).
+
+**Connect any AI app with no key:** add `https://operis.live/mcp` as a connector / MCP server (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code) and sign in when asked (OAuth).
 
 **Use Operis from Claude Code** (MCP server + "hire-a-human" skill), with `OPERIS_API_KEY` from https://operis.live/developers in your environment:
 

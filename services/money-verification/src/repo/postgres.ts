@@ -19,6 +19,7 @@ import type {
   Worker,
   WorkerVerification,
 } from '../types.js';
+import { requiredCertification } from '../proof/profile.js';
 
 /**
  * Minimal SQL client shape. `pg.Pool`, `pg.Client` and `@neondatabase/serverless` `Pool` all satisfy it.
@@ -66,13 +67,13 @@ function feeSplit(priceCents: number): { fee: number; worker: number } {
 /** Our checks key off task_type; the contract marks notary work with certification_required. */
 function taskTypeOf(r: Row): string {
   if (r.task_type != null) return String(r.task_type);
-  const cert = r.certification_required == null ? '' : String(r.certification_required).toLowerCase();
+  const cert = (requiredCertification(r.certification_required == null ? null : String(r.certification_required)) ?? '').toLowerCase();
   if (cert.includes('notar')) return 'notarization';
   return r.title == null ? 'job' : String(r.title);
 }
 
 function proofSchemaOf(r: Row): ProofSchema {
-  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; geofence_m?: unknown; fields?: unknown }>(
+  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; video?: unknown; files?: unknown; geofence_m?: unknown; fields?: unknown }>(
     r.proof_schema ?? r.proof_requirement,
     {},
   );
@@ -80,6 +81,8 @@ function proofSchemaOf(r: Row): ProofSchema {
     photos: {
       min: p.photos?.min == null ? 0 : num(p.photos.min),
       must_show: Array.isArray(p.photos?.must_show) ? p.photos.must_show.map(String) : [],
+      // video or files with no photos block: a non-photo proof (an empty requirement still means photos)
+      requested: p.photos != null || (p.video == null && p.files == null),
     },
   };
   if (p.geofence_m != null) schema.geofence_m = num(p.geofence_m);
@@ -102,8 +105,8 @@ function mapJob(r: Row): Job {
     budget_cents,
     worker_pay_cents,
     fee_cents,
-    lat: num(r.lat),
-    lng: num(r.lng),
+    lat: r.lat == null ? null : num(r.lat), // NULL is a remote job, not (0, 0)
+    lng: r.lng == null ? null : num(r.lng),
     accepted_at: date(r.accepted_at), // not in contracts/schema.sql yet: null -> the time check asks for review
     deadline: date(r.deadline) as Date,
     proof_schema: proofSchemaOf(r),
@@ -115,16 +118,39 @@ function mapJob(r: Row): Job {
   };
 }
 
-/** media rows may carry {url, kind, exif} (contract) or {url, sha256, mime} (this package). */
+const MIME_BY_EXTENSION = new Map([
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['heic', 'image/heic'],
+  ['heif', 'image/heif'],
+  ['webp', 'image/webp'],
+  ['mp4', 'video/mp4'],
+  ['mov', 'video/quicktime'],
+  ['webm', 'video/webm'],
+  ['pdf', 'application/pdf'],
+]);
+
+const extensionMime = (path: unknown): string | null => {
+  if (typeof path !== 'string') return null;
+  const ext = /\.([a-z0-9]+)$/.exec(path.toLowerCase().split('?')[0] ?? '')?.[1];
+  return (ext && MIME_BY_EXTENSION.get(ext)) || null;
+};
+
+/**
+ * media rows may carry {url, kind, name} (apps/api's proof route: kind is the upload's MIME type, and without a Blob
+ * store the url is <api>/v1/files/<uuid>, which has no extension), {url, kind, exif} (contract: kind photo | video)
+ * or {url, sha256, mime} (this package). Readers key off the prefix: image/ (EXIF, completeness, vision), video/ (frames).
+ */
 function mimeOf(m: Record<string, unknown>): string {
   if (typeof m.mime === 'string' && m.mime) return m.mime;
-  const kind = typeof m.kind === 'string' ? m.kind.toLowerCase() : '';
-  const url = typeof m.url === 'string' ? (m.url.toLowerCase().split('?')[0] ?? '') : '';
-  if (kind === 'video' || /\.(mp4|mov|webm)$/.test(url)) return 'video/mp4';
-  if (kind === 'photo' || kind === 'image' || /\.(jpe?g|png|heic|webp)$/.test(url)) {
-    return url.endsWith('.png') ? 'image/png' : 'image/jpeg';
-  }
-  return 'application/octet-stream';
+  const kind = typeof m.kind === 'string' ? (m.kind.split(';')[0] ?? '').trim().toLowerCase() : '';
+  // A MIME type is the answer, except the route's stand-in for "the browser sent no type": then the file name decides.
+  if (kind.includes('/') && kind !== 'application/octet-stream') return kind;
+  const byExtension = extensionMime(m.name) ?? extensionMime(m.url);
+  if (kind === 'video') return 'video/mp4';
+  if (kind === 'photo' || kind === 'image') return byExtension?.startsWith('image/') ? byExtension : 'image/jpeg';
+  return byExtension ?? 'application/octet-stream';
 }
 
 function mapMedia(v: unknown): ProofMedia[] {

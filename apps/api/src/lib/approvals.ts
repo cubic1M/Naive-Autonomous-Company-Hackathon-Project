@@ -4,6 +4,7 @@
 // events since the session last started running (operator_preview only covers ask_operator, not tool approvals).
 import { sql } from "./db";
 import { optional, list } from "./env";
+import agentsConfig from "@agents/agents.json";
 
 const NAIVE = "https://api.vetta.sh/v1";
 const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"] as const;
@@ -58,15 +59,63 @@ export async function decide(sessionId: string, toolCallId: string, decision: "a
   return { ok: r.ok, status: r.status };
 }
 
-/** Founder policy: AUTO_APPROVE_TOOLS=operis.find_people,board_write approves only those tools, session-wide. Off when unset. */
+// ---------- founder auto-approve policy ----------
+// A waiting call is auto-approved when the tool is in AUTO_APPROVE_TOOLS, or when
+// AUTO_APPROVE_FROM_AGENTS_JSON=true and agents/agents.json marks that tool "allow" for that agent's role.
+// ask_operator and email.send always stay with a human.
+
+const HUMAN_ONLY = new Set(["ask_operator", "email.send"]);
+
+function agentsJsonAllows(role: string, tool: string): boolean {
+  const cfg: any = agentsConfig;
+  const spec = role === "ceo" ? cfg.ceo : cfg.members?.[role];
+  return spec?.tools?.[tool] === "allow";
+}
+
+/** Why a call may be auto-approved, or null if it must wait for a human. */
+export function autoApproveReason(role: string, tool: string): string | null {
+  if (!tool || HUMAN_ONLY.has(tool)) return null;
+  if (list("AUTO_APPROVE_TOOLS").includes(tool)) return `auto-approved by founder policy (AUTO_APPROVE_TOOLS) for ${role}`;
+  if (["1", "true", "yes", "on"].includes((process.env.AUTO_APPROVE_FROM_AGENTS_JSON ?? "").toLowerCase()) && agentsJsonAllows(role, tool))
+    return `auto-approved by founder policy (agents.json allows ${tool} for ${role})`;
+  return null;
+}
+
+export function autoApproveEnabled(): boolean {
+  return list("AUTO_APPROVE_TOOLS").length > 0 || ["1", "true", "yes", "on"].includes((process.env.AUTO_APPROVE_FROM_AGENTS_JSON ?? "").toLowerCase());
+}
+
+/** Approve every waiting call the policy allows (session-scoped). No-op when no policy is on. */
 export async function autoApprove() {
-  const allowed = list("AUTO_APPROVE_TOOLS");
-  if (!allowed.length) return { enabled: false, approved: 0 };
+  if (!autoApproveEnabled()) return { enabled: false, approved: 0 };
   let approved = 0;
   for (const p of await listPending()) {
-    if (!allowed.includes(p.tool)) continue;
-    const r = await decide(p.session_id, p.tool_call_id, "allow", "session", `auto-approved by founder policy (AUTO_APPROVE_TOOLS) for ${p.agent}`);
+    const reason = autoApproveReason(p.agent, p.tool);
+    if (!reason) continue;
+    const r = await decide(p.session_id, p.tool_call_id, "allow", "session", reason);
     if (r.ok) approved++;
   }
   return { enabled: true, approved };
+}
+
+/** Run autoApprove repeatedly for ~budgetMs (cron invocations last up to 60 s), every intervalMs. */
+export async function autoApproveLoop(budgetMs = 50_000, intervalMs = 8_000) {
+  const start = Date.now();
+  let approved = 0, passes = 0, enabled = false;
+  do {
+    const r = await autoApprove();
+    enabled = r.enabled; approved += r.approved; passes++;
+    if (!r.enabled) break;
+    const left = budgetMs - (Date.now() - start);
+    if (left < intervalMs) break;
+    await new Promise((res) => setTimeout(res, intervalMs));
+  } while (Date.now() - start < budgetMs);
+  return { enabled, approved, passes };
+}
+
+/** Role for a Naïve agent id (NAIVE_AGENT_*), for webhook events that only carry agent_id. */
+export function roleForAgent(agentId: string | null | undefined): string | null {
+  if (!agentId) return null;
+  for (const r of ROLES) if (optional(`NAIVE_AGENT_${r}`) === agentId) return r.toLowerCase();
+  return null;
 }

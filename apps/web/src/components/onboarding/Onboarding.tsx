@@ -74,7 +74,7 @@ export default function Onboarding({ startStep, next }: { startStep: number; nex
     return () => clearInterval(t);
   }, [idStatus, refresh]);
 
-  if (!user || !d) return <div style={{ minHeight: "calc(100vh - 24px)", background: "#ECE8DF" }} aria-busy="true" />;
+  if (!user || !d) return <div style={{ minHeight: "100vh", background: "#ECE8DF" }} aria-busy="true" />;
 
   const done = step === 5;
   const ret = (s: number) => `/onboarding?step=${s}${next !== "/jobs" ? `&next=${encodeURIComponent(next)}` : ""}`;
@@ -158,8 +158,8 @@ export default function Onboarding({ startStep, next }: { startStep: number; nex
   const tileLabel = (base: string) => (status === "verified" ? `${base} verified` : status === "processing" ? `${base} submitted` : status === "requires_input" ? `Retake ${base.toLowerCase()}` : `Upload ${base.toLowerCase()}`);
 
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <header style={{ position: "relative", zIndex: 5, background: "#ECE8DF" }}>
           <div style={{ maxWidth: "1320px", margin: "0 auto", padding: "16px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px 24px" }}>
             <LogoPill />

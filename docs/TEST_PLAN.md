@@ -4,7 +4,7 @@ Run top to bottom before the demo. Each test says **how**, **expected**, and **w
 Production: website `https://operis.live`, API `https://api.operis.live`. Secrets live in `apps/api/.env.local` (never in chat).
 
 **Setup for checking:** `export ADMIN_KEY=…` (from `.env.local`). Keep open: the backoffice
-(`https://operis.live/backoffice`), the founder console (`https://api.operis.live/admin?key=$ADMIN_KEY`), and Stripe test mode.
+(`https://admin.operis.live`, founder email + password), the founder console (`https://api.operis.live/admin?key=$ADMIN_KEY`), and Stripe test mode.
 To run the smoke test against production you need the production `DATABASE_URL`:
 `npx vercel env pull /tmp/prod.env --environment production --yes`.
 
@@ -80,5 +80,5 @@ To run the smoke test against production you need the production `DATABASE_URL`:
 - [ ] Monid wallet has credit (https://app.monid.ai/wallet).
 - [ ] No pending approvals left over: `npm run approvals` → "No pending approvals".
 - [ ] Backoffice and founder console open and signed in on the demo laptop; Andrew's phone charged and on the allowlist.
-- [ ] Decide `AUTO_APPROVE_TOOLS` for the demo (fewer approval clicks) and set it on operis-api if wanted.
+- [x] `AUTO_APPROVE_TOOLS` is set on operis-api (founders' decision, Nov 8). Check: `curl -H "Authorization: Bearer $ADMIN_KEY" 'https://api.operis.live/api/cron/approvals?once=1'` → `"enabled": true`.
 - [ ] Kill switches known: `PAUSE_OUTREACH=true`, `MOCK_TOOLS=<tool>`.

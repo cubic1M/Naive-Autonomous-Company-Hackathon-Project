@@ -76,8 +76,8 @@ export default function AuthPage({ mode: initialMode, next, error: initialError 
   const off = { ...base, background: "transparent", color: "#4F5751" };
 
   return (
-    <div style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <SimpleHeader action={<Link href="/jobs" style={headerLink}>Back to requests</Link>} />
 
         <main style={{ flex: "1", width: "100%", maxWidth: "1180px", margin: "0 auto", boxSizing: "border-box", padding: "40px 24px 56px", display: "flex", flexWrap: "wrap", gap: "28px", alignItems: "stretch" }}>

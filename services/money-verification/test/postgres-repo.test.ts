@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { completenessCheck, loadExif } from '../src/proof/checks.js';
 import { PostgresRepo, type SqlClient } from '../src/repo/postgres.js';
+import { makeJob } from './helpers.js';
 
 /** Scripted SQL client: answers each query by matching a substring of its text; records every call. */
 function fakeSql(answers: Array<{ match: string; rows: Record<string, unknown>[] }>): SqlClient & { calls: { text: string; params: unknown[] }[] } {
@@ -66,6 +68,23 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(job).toMatchObject({ task_type: 'notarization', certification_required: 'CA notary public', budget_cents: 10000, fee_cents: 2500, worker_pay_cents: 7500, proof_schema: { photos: { min: 0, must_show: [] } } });
   });
 
+  it('keeps whether the proof requirement asked for photos: video or files only is not a photo proof', async () => {
+    const requested = async (proof_requirement: unknown) => {
+      const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 't', lat: 1, lng: 2, deadline: new Date(), budget_usd: '30', proof_requirement, status: 'held' }] }]);
+      return (await new PostgresRepo(sql).getJob(JOB))?.proof_schema.photos.requested;
+    };
+    expect(await requested({ video: { min_seconds: 10 } })).toBe(false);
+    expect(await requested({ files: { kinds: ['pdf'] } })).toBe(false);
+    expect(await requested({ photos: { min: 0, must_show: [] }, video: { min_seconds: 5 } })).toBe(true);
+    expect(await requested({ photos: { min: 1, must_show: ['door'] } })).toBe(true);
+    expect(await requested({})).toBe(true);
+  });
+
+  it('keeps a remote job NULL location as null, not (0, 0)', async () => {
+    const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 'Remote', lat: null, lng: null, deadline: new Date(), budget_usd: '30', proof_requirement: {}, status: 'accepted' }] }]);
+    expect(await new PostgresRepo(sql).getJob(JOB)).toMatchObject({ lat: null, lng: null });
+  });
+
   it('maps contract media rows {url, kind, exif} to ProofMedia and skips hashless reuse lookups', async () => {
     const sql = fakeSql([
       {
@@ -82,6 +101,39 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(proof?.fields).toEqual({});
     expect(await repo.findProofsByMediaSha256('')).toEqual([]);
     expect(sql.calls.filter((c) => c.text.includes('jsonb_array_elements'))).toHaveLength(0);
+  });
+
+  it("maps the API proof route's media rows {url, kind: <MIME type>, name}, Blob URL or extension-less /v1/files/<uuid>", async () => {
+    // apps/api/src/app/v1/worker/jobs/[token]/proof/route.ts stores kind = File.type ('application/octet-stream' when the
+    // browser sent none); without BLOB_READ_WRITE_TOKEN the url is <api>/v1/files/<uuid>, with no extension.
+    const blob = 'https://abc123.public.blob.vercel-storage.com/proofs/job-1/1762560000000-IMG_0042-Xy12AbCd.jpg';
+    const files = 'https://api.operis.live/v1/files/9b2f6c1e-3d4a-4f5b-8c6d-7e8f9a0b1c2d';
+    const media = [
+      { url: blob, kind: 'image/jpeg', name: 'IMG_0042.jpg' },
+      { url: files, kind: 'image/jpeg', name: 'IMG_0043.jpg' },
+      { url: files, kind: 'image/heic', name: 'IMG_0044.HEIC' },
+      { url: files, kind: 'video/quicktime', name: 'clip.MOV' },
+      { url: files, kind: 'application/pdf', name: 'receipt.pdf' },
+      { url: files, kind: 'application/octet-stream', name: 'IMG_0045.JPG' },
+      { url: files, kind: 'application/octet-stream', name: 'notes' },
+    ];
+    const sql = fakeSql([
+      { match: 'from proofs where id', rows: [{ id: 'p2', job_id: JOB, worker_id: 'w1', media, fields: {}, gps_lat: null, gps_lng: null, captured_at: null }] },
+    ]);
+    const proof = await new PostgresRepo(sql).getProof('p2');
+    if (!proof) throw new Error('proof not mapped');
+    expect(proof.media.map((m) => m.mime)).toEqual([
+      'image/jpeg',
+      'image/jpeg',
+      'image/heic',
+      'video/quicktime',
+      'application/pdf',
+      'image/jpeg',
+      'application/octet-stream',
+    ]);
+    // The readers that key off the MIME prefix now see the four images: completeness counts them, EXIF is read for each.
+    expect(completenessCheck(makeJob({ proof_schema: { photos: { min: 4, must_show: [] } } }), proof)).toMatchObject({ status: 'pass', detail: '4 image(s), required fields present' });
+    expect((await loadExif({ repo: new PostgresRepo(sql) }, proof)).map((e) => e.media.url)).toEqual([blob, files, files, files]);
   });
 
   it('writes amount_usd alongside amount_cents and reads rows other packages wrote in USD', async () => {

@@ -86,8 +86,8 @@ export default function Browse() {
   const resultLabel = `${items.length} ${items.length === 1 ? "open request" : "open requests"}`;
 
   return (
-    <div className="launch" style={{ borderRadius: "22px", overflow: "hidden", background: "#ECE8DF" }}>
-      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "calc(100vh - 24px)" }}>
+    <div className="launch" style={{ overflow: "hidden", background: "#ECE8DF" }}>
+      <div style={{ color: "#232824", background: "#ECE8DF", minHeight: "100vh" }}>
         <SiteHeader
           center={
             <nav aria-label="Main" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 26px", flex: "1 1 auto", fontSize: "14px", fontWeight: 500 }}>

@@ -1,3 +1,4 @@
+import type { Env } from '../env.js';
 import { fire, type Hooks } from '../hooks.js';
 import { InvalidStateError, NotFoundError } from '../errors.js';
 import type { Repo } from '../repo.js';
@@ -20,7 +21,11 @@ export interface DecideDeps extends ChecksDeps {
   now?: () => Date;
   /** Replaces the tier's confidence threshold for every job (tests, an emergency). Normally unset. */
   confidenceThreshold?: number;
+  /** IDENTITY_GATE; without env the tier-2 identity rule is enforced. */
+  env?: Pick<Env, 'IDENTITY_GATE'>;
 }
+
+const profileFor = (deps: DecideDeps, job: Job): VerificationProfile => verificationProfile(job, { identityGate: deps.env?.IDENTITY_GATE });
 
 function note(name: string, status: ProofCheck['status'], detail: string, data?: Record<string, unknown>): ProofCheck {
   return { name, status, pass: status === 'pass', detail, ...(data ? { data } : {}) };
@@ -35,17 +40,19 @@ const profileCheck = (profile: VerificationProfile): ProofCheck => note('profile
 
 /**
  * Tier 2: the worker must hold a verified Stripe Identity. Only the status goes into the review; the
- * verified name stays in worker_verifications.
+ * verified name stays in worker_verifications. Under IDENTITY_GATE=log the check is recorded (enforced
+ * false, verified true or false) and passes, so it never blocks a review or an approval.
  */
-async function identityCheck(repo: Pick<Repo, 'getWorkerVerification'>, workerId: string, tier: number): Promise<ProofCheck> {
+async function identityCheck(repo: Pick<Repo, 'getWorkerVerification'>, workerId: string, profile: VerificationProfile): Promise<ProofCheck> {
   const v = await repo.getWorkerVerification(workerId, 'identity');
-  if (v?.status === 'verified') {
-    return note('identity', 'pass', 'verified identity on file', { status: 'verified', verified_at: v.verified_at?.toISOString() ?? null });
-  }
+  const verified = v?.status === 'verified';
+  const data = { status: v?.status ?? null, enforced: profile.identityEnforced, verified, ...(verified ? { verified_at: v.verified_at?.toISOString() ?? null } : {}) };
+  if (verified) return note('identity', 'pass', 'verified identity on file', data);
   const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-  return note('identity', 'needs_review', `tier ${tier} requires a verified identity; ${has} (the worker starts one with verify_identity)`, {
-    status: v?.status ?? null,
-  });
+  if (!profile.identityEnforced) {
+    return note('identity', 'pass', `${has}; not enforced (IDENTITY_GATE=log), so it does not block approval`, data);
+  }
+  return note('identity', 'needs_review', `tier ${profile.tier} requires a verified identity; ${has} (the worker starts one with verify_identity)`, data);
 }
 
 async function loadProofAndJob(repo: Repo, proofId: string): Promise<{ proof: Proof; job: Job }> {
@@ -111,14 +118,18 @@ async function runVision(
   }
 }
 
-/**
- * Automated review under the job's verification profile: deterministic checks first, then (unless a fraud
- * signal already rejected it) the tier-2 identity gate and the vision scorer. Approved only when every check
- * passes, so a tier-2 proof from a worker without a verified identity always escalates.
- */
-export async function reviewProof(deps: DecideDeps, proofId: string): Promise<ProofReview> {
+interface Assessment {
+  proof: Proof;
+  job: Job;
+  checks: ProofCheck[];
+  decision: ProofDecision;
+  confidence: number | null;
+}
+
+/** The automated review's checks and verdict, computed but not recorded (reviewProof records them). */
+async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessment> {
   const { proof, job } = await loadProofAndJob(deps.repo, proofId);
-  const profile = verificationProfile(job);
+  const profile = profileFor(deps, job);
   const { checks: deterministic } = await runChecks(deps, job, proof, profile);
   const checks: ProofCheck[] = [profileCheck(profile), ...deterministic];
 
@@ -127,13 +138,22 @@ export async function reviewProof(deps: DecideDeps, proofId: string): Promise<Pr
   if (checks.some(isHardFail)) {
     decision = 'rejected';
   } else {
-    if (profile.identityRequired) checks.push(await identityCheck(deps.repo, proof.worker_id, profile.tier));
+    if (profile.identityRequired) checks.push(await identityCheck(deps.repo, proof.worker_id, profile));
     const imageUrls = await gatherImageUrls(deps, proof, checks);
     confidence = await runVision(deps, job, imageUrls, checks, thresholdFor(deps, profile));
     decision = checks.every((c) => c.status === 'pass') ? 'approved' : 'escalated';
     // Any non-hard 'fail' (e.g. completeness) is still not auto-approvable; it goes to a human.
   }
+  return { proof, job, checks, decision, confidence };
+}
 
+/**
+ * Automated review under the job's verification profile: deterministic checks first, then (unless a fraud
+ * signal already rejected it) the tier-2 identity gate and the vision scorer. Approved only when every check
+ * passes, so a tier-2 proof from a worker without a verified identity always escalates.
+ */
+export async function reviewProof(deps: DecideDeps, proofId: string): Promise<ProofReview> {
+  const { proof, job, checks, decision, confidence } = await assessProof(deps, proofId);
   const review = await deps.repo.upsertProofReview({
     proof_id: proof.id,
     job_id: job.id,
@@ -146,20 +166,26 @@ export async function reviewProof(deps: DecideDeps, proofId: string): Promise<Pr
   return review;
 }
 
+/**
+ * Record a human or agent decision on top of `base`. Each `current` check takes the place of the stored check with
+ * the same name (or is added), so a re-checked fact (the live identity) does not leave a stale entry in the flags.
+ */
 async function recordManual(
   deps: DecideDeps,
-  base: ProofReview,
+  base: Pick<ProofReview, 'proof_id' | 'job_id' | 'confidence' | 'checks'>,
   decision: ProofDecision,
   reviewer: string,
   detail: string,
-  extra: ProofCheck[] = [],
+  current: ProofCheck[] = [],
 ): Promise<ProofReview> {
+  const kept = base.checks.map((c) => current.find((n) => n.name === c.name) ?? c);
+  const added = current.filter((n) => !base.checks.some((c) => c.name === n.name));
   const review = await deps.repo.upsertProofReview({
     proof_id: base.proof_id,
     job_id: base.job_id,
     confidence: base.confidence,
     decision,
-    checks: [...base.checks, ...extra, note('reviewer_note', 'pass', detail)],
+    checks: [...kept, ...added, note('reviewer_note', 'pass', detail)],
     reviewer,
   });
   await fire(deps.hooks, 'onProofDecision', review.job_id, review.proof_id, decision);
@@ -173,25 +199,44 @@ async function reviewOnRecord(deps: DecideDeps, proofId: string): Promise<ProofR
 
 /**
  * Human or agent approval. Out-of-fence and reused media can never be overridden (fraud signals, not
- * judgment calls), nor can a missing identity on a tier-2 job; low confidence can, but only on an
- * explicit override. The identity is checked live rather than read from the stored review, so a worker
- * who verified after the automated review is not blocked by a stale check.
+ * judgment calls), nor can a missing identity on a tier-2 job under IDENTITY_GATE=enforce. A stored
+ * completeness or time failure (too few photos or missing fields; a capture time outside the window) and a
+ * confidence under the tier's threshold can, but only on an explicit override. needs_review flags are left
+ * to the reviewer's judgement. The identity is checked live rather than read from the stored review, and the
+ * live check replaces the stored one, so a worker who verified after the automated review is not blocked or
+ * reported by a stale check.
  */
 export async function approveProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; notes?: string; override?: boolean },
 ): Promise<ProofReview> {
+  return approve(deps, input, { founder: false });
+}
+
+/** approveProof, and for a founder also past an unverified identity (recorded as waived). */
+async function approve(
+  deps: DecideDeps,
+  input: { proofId: string; reviewer: string; notes?: string; override?: boolean },
+  by: { founder: boolean },
+): Promise<ProofReview> {
   const { proof, job } = await loadProofAndJob(deps.repo, input.proofId);
   const review = await reviewOnRecord(deps, input.proofId);
-  const profile = verificationProfile(job);
-  const failed = (name: string) => review.checks.some((c) => c.name === name && c.status === 'fail');
-  if (failed('geofence')) throw new InvalidStateError('outside_geofence: proof was captured outside the job geofence');
-  if (failed('reuse')) throw new InvalidStateError('reused_media: proof media was already used on another job');
-  const extra: ProofCheck[] = [];
+  const profile = profileFor(deps, job);
+  const failure = (name: string) => review.checks.find((c) => c.name === name && c.status === 'fail');
+  if (failure('geofence')) throw new InvalidStateError('outside_geofence: proof was captured outside the job geofence');
+  if (failure('reuse')) throw new InvalidStateError('reused_media: proof media was already used on another job');
+  const incomplete = failure('completeness');
+  if (incomplete && !input.override) throw new InvalidStateError(`incomplete: ${incomplete.detail}; pass override to approve anyway`);
+  const late = failure('time');
+  if (late && !input.override) throw new InvalidStateError(`outside_time_window: ${late.detail}; pass override to approve anyway`);
+  const current: ProofCheck[] = [];
   if (profile.identityRequired) {
-    const identity = await identityCheck(deps.repo, proof.worker_id, profile.tier);
-    if (identity.status !== 'pass') throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
-    if (!review.checks.some((c) => c.name === 'identity' && c.status === 'pass')) extra.push(identity);
+    let identity = await identityCheck(deps.repo, proof.worker_id, profile);
+    if (identity.status !== 'pass') {
+      if (!by.founder) throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
+      identity = note('identity', 'pass', `${identity.detail}; waived: a founder approved the escalation`, { ...identity.data, waived_by: 'founder' });
+    }
+    current.push(identity);
   }
   const threshold = thresholdFor(deps, profile);
   if (!input.override && (review.confidence === null || review.confidence < threshold)) {
@@ -199,19 +244,75 @@ export async function approveProof(
       `below_threshold: confidence ${review.confidence ?? 'n/a'} is under ${threshold}; pass override to approve anyway`,
     );
   }
-  return recordManual(deps, review, 'approved', input.reviewer, input.notes ?? '', extra);
+  return recordManual(deps, review, 'approved', input.reviewer, input.notes ?? '', current);
+}
+
+/**
+ * An approval already moved the job to approved and woke Finance (capture, then payout); contracts/states.ts has no
+ * way back. Overwriting it would leave the review contradicting the job, and payWorker refusing a worker whose
+ * customer was already charged. So an approved review is final here: a bad proof found later is a refund or dispute.
+ */
+function refuseIfApproved(review: ProofReview, outcome: 'escalated' | 'rejected'): void {
+  if (review.decision !== 'approved') return;
+  throw new InvalidStateError(
+    `already_approved: proof ${review.proof_id} is already approved and job ${review.job_id} is being paid ` +
+      `(capture and payout follow approval), so it cannot be ${outcome}. A genuinely bad proof now goes to the ` +
+      'refund/dispute path (refund or refund_large, or a Stripe dispute), not to escalate; put the reason in your final answer.',
+  );
+}
+
+/**
+ * Escalate or reject on top of the review on record (refused once that is an approval), or, with none yet, on the
+ * automated checks computed now but not recorded: recording them would fire their own decision first, and an
+ * explicit escalate must never start by approving the proof and waking Finance.
+ */
+async function recordEscalationOrRejection(
+  deps: DecideDeps,
+  input: { proofId: string; reviewer: string; reason: string },
+  decision: 'escalated' | 'rejected',
+): Promise<ProofReview> {
+  const stored = await deps.repo.getProofReview(input.proofId);
+  if (stored) {
+    refuseIfApproved(stored, decision);
+    return recordManual(deps, stored, decision, input.reviewer, input.reason);
+  }
+  const { proof, job, checks, confidence } = await assessProof(deps, input.proofId);
+  return recordManual(deps, { proof_id: proof.id, job_id: job.id, confidence, checks }, decision, input.reviewer, input.reason);
 }
 
 export async function escalateProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; reason: string },
 ): Promise<ProofReview> {
-  return recordManual(deps, await reviewOnRecord(deps, input.proofId), 'escalated', input.reviewer, input.reason);
+  return recordEscalationOrRejection(deps, input, 'escalated');
 }
 
 export async function rejectProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; reason: string },
 ): Promise<ProofReview> {
-  return recordManual(deps, await reviewOnRecord(deps, input.proofId), 'rejected', input.reviewer, input.reason);
+  return recordEscalationOrRejection(deps, input, 'rejected');
+}
+
+/**
+ * A founder's decision on a job's latest proof, for the founder console (apps/api POST /v1/admin/escalations/[jobId]).
+ * proof_reviews stays the one record payWorker and settleApprovedJob read, so a console approval must be written here,
+ * not only into proofs and jobs.status. 'approved' is recorded with reviewer 'founder' and override (the confidence
+ * threshold and stored completeness/time failures are the founder's call), and it passes the identity gate even under
+ * IDENTITY_GATE=enforce: the founder is the human escalation, and the identity check records the waiver. A geofence or
+ * reuse failure is still refused (fraud signals). 'rejected' is refused once the proof is approved (rejectProof).
+ */
+export async function recordFounderDecision(
+  deps: DecideDeps,
+  input: { jobId: string; decision: 'approved' | 'rejected'; note?: string },
+): Promise<ProofReview> {
+  const proofs = await deps.repo.getProofsForJob(input.jobId);
+  const proof = proofs[proofs.length - 1];
+  if (!proof) throw new NotFoundError('proof for job', input.jobId);
+  const written = input.note?.trim() ?? '';
+  const detail = written ? `founder: ${written}` : 'founder decision';
+  if (input.decision === 'approved') {
+    return approve(deps, { proofId: proof.id, reviewer: 'founder', notes: detail, override: true }, { founder: true });
+  }
+  return rejectProof(deps, { proofId: proof.id, reviewer: 'founder', reason: detail });
 }

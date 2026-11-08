@@ -21,6 +21,13 @@ const payments: ServiceModule = {
   payout: (input, ctx) => tools(ctx).payout(input),
   refund: (input, ctx) => tools(ctx).refund(input),
   ledger: (input, ctx) => tools(ctx).ledger(input),
+  // The CEO agent's over-cap tools (PR #11). Without these the registry fell back to mocks that marked jobs paid or
+  // refunded without moving money.
+  refund_large: (input, ctx) => tools(ctx).refund_large(input),
+  // contracts/tools.ts types the result as paid only; a worker without a payout account gets
+  // { error: "needs_bank_setup", onboarding_url }, as with payout. The cast only narrows the declared type.
+  release_payout_large: (input, ctx) =>
+    tools(ctx).release_payout_large(input) as Promise<{ job_id: string; status: "paid"; worker_pay_usd: number; fee_usd: number }>,
 };
 export default payments;
 
