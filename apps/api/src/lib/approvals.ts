@@ -98,8 +98,8 @@ export async function autoApprove() {
   return { enabled: true, approved };
 }
 
-/** Run autoApprove repeatedly for ~budgetMs (cron invocations last up to 60 s), every intervalMs. */
-export async function autoApproveLoop(budgetMs = 50_000, intervalMs = 8_000) {
+/** Run autoApprove repeatedly for ~budgetMs (cron invocations last up to 60 s), every intervalMs (25 s: Naïve rate-limits faster polling). */
+export async function autoApproveLoop(budgetMs = 50_000, intervalMs = 25_000) {
   const start = Date.now();
   let approved = 0, passes = 0, enabled = false;
   do {
