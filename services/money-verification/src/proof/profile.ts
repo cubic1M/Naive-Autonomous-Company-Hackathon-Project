@@ -35,7 +35,7 @@ export interface VerificationProfile extends TierRules {
   tier: VerificationTier;
   /**
    * Every job requires a verified Stripe Identity (worker_verifications kind 'identity'); this says whether a missing
-   * one blocks (IDENTITY_GATE=enforce, the default) or is only recorded (log).
+   * one blocks (IDENTITY_GATE=enforce, and any caller that passes no gate) or is only recorded (log).
    */
   identityEnforced: boolean;
   /** The customer requires a certification (a notary commission, or anything in jobs.certification_required). */
