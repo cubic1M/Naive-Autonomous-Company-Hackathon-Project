@@ -59,6 +59,18 @@ export function budgetTier(budgetCents: number): VerificationTier {
 
 const clampTier = (n: number): VerificationTier => (n >= 2 ? 2 : n >= 1 ? 1 : 0);
 
+/** What a customer agent writes when it means "no certification", compared trimmed, lowercased, spaces collapsed. */
+const NO_CERTIFICATION = new Set(['', 'none', 'no', 'n/a', 'na', 'nil', 'null', 'false', 'not required', 'not applicable', '-']);
+
+/**
+ * The certification a job really requires: null for null, blank, or a placeholder meaning none ("none", "N/A",
+ * "not required", ...). Read wherever certification drives the tier (here) or the task type (repo/postgres.ts).
+ */
+export function requiredCertification(written: string | null | undefined): string | null {
+  const value = (written ?? '').trim();
+  return NO_CERTIFICATION.has(value.toLowerCase().replace(/\s+/g, ' ')) ? null : value;
+}
+
 export function verificationProfile(job: Job): VerificationProfile {
   const notes: string[] = [];
   let tier = budgetTier(job.budget_cents);
@@ -76,7 +88,10 @@ export function verificationProfile(job: Job): VerificationProfile {
     }
   }
 
-  const certification = job.certification_required?.trim() || (job.task_type === 'notarization' ? 'notary commission' : '');
+  const named = requiredCertification(job.certification_required);
+  const written = job.certification_required?.trim() ?? '';
+  if (named === null && written !== '') notes.push(`certification_required "${written}" means none; ignored`);
+  const certification = named ?? (job.task_type === 'notarization' ? 'notary commission' : '');
   const certificationRequired = certification !== '';
   if (certificationRequired) {
     if (tier < 2) tier = 2;

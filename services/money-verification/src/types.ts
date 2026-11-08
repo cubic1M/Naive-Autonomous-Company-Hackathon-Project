@@ -42,7 +42,7 @@ export interface Job {
   worker_id: string | null;
   /** low | standard | high; overrides the budget-derived verification tier (src/proof/profile.ts). */
   risk_class: string | null;
-  /** The contract column as the customer wrote it; task_type is 'notarization' when it names a notary. Any value makes the job tier 2. */
+  /** The contract column as the customer wrote it; task_type is 'notarization' when it names a notary. Any value makes the job tier 2, except blank or a placeholder meaning none (requiredCertification in proof/profile.ts). */
   certification_required: string | null;
 }
 

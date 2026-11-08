@@ -18,6 +18,7 @@ import type {
   Worker,
   WorkerVerification,
 } from '../types.js';
+import { requiredCertification } from '../proof/profile.js';
 
 /**
  * Minimal SQL client shape. `pg.Pool`, `pg.Client` and `@neondatabase/serverless` `Pool` all satisfy it.
@@ -65,7 +66,7 @@ function feeSplit(priceCents: number): { fee: number; worker: number } {
 /** Our checks key off task_type; the contract marks notary work with certification_required. */
 function taskTypeOf(r: Row): string {
   if (r.task_type != null) return String(r.task_type);
-  const cert = r.certification_required == null ? '' : String(r.certification_required).toLowerCase();
+  const cert = (requiredCertification(r.certification_required == null ? null : String(r.certification_required)) ?? '').toLowerCase();
   if (cert.includes('notar')) return 'notarization';
   return r.title == null ? 'job' : String(r.title);
 }

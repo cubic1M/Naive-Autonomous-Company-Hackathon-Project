@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetTier, describeProfile, TIER_RULES, verificationProfile } from '../src/proof/profile.js';
+import { budgetTier, describeProfile, requiredCertification, TIER_RULES, verificationProfile } from '../src/proof/profile.js';
 import type { Job } from '../src/types.js';
 import { makeJob } from './helpers.js';
 
@@ -56,6 +56,21 @@ describe('verificationProfile: certification, risk class, floors, customer requi
     const p = verificationProfile(job({ budget_cents: 6000, certification_required: 'licensed electrician' }));
     expect(p).toMatchObject({ tier: 2, certificationRequired: true });
     expect(p.notes.join(' ')).toContain('licensed electrician');
+  });
+
+  it('a certification_required that means "none" is ignored and noted: the budget decides the tier', () => {
+    const negatives = ['none', 'None', 'NO', 'no', 'n/a', 'N/A', 'na', 'nil', 'null', 'false', 'not required', 'Not  Applicable', '-', ' - '];
+    for (const value of negatives) {
+      const p = verificationProfile(job({ budget_cents: 3000, certification_required: value }));
+      expect(p).toMatchObject({ tier: 0, certificationRequired: false, identityRequired: false, minPhotos: 1 });
+      expect(p.notes.join(' ')).toContain(`certification_required "${value.trim()}" means none; ignored`);
+    }
+    const blank = verificationProfile(job({ budget_cents: 3000, certification_required: '   ' }));
+    expect(blank).toMatchObject({ tier: 0, certificationRequired: false });
+    expect(blank.notes.join(' ')).not.toContain('certification');
+    expect(verificationProfile(job({ budget_cents: 3000, certification_required: 'notary' }))).toMatchObject({ tier: 2, certificationRequired: true });
+    expect(requiredCertification(' N/A ')).toBeNull();
+    expect(requiredCertification(' CA notary public ')).toBe('CA notary public');
   });
 
   it('risk_class overrides the budget tier in both directions', () => {

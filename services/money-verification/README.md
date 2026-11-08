@@ -106,7 +106,7 @@ How the tier composes:
 
 1. The budget picks the tier (table above).
 2. `jobs.risk_class` (`low` / `standard` / `high`) overrides the budget tier; an unknown value is ignored and noted.
-3. A certification (a notary commission or anything else in `certification_required`) forces tier 2, whatever the budget or risk class.
+3. A certification (a notary commission or anything else in `certification_required`) forces tier 2, whatever the budget or risk class. A placeholder that means none (`none`, `no`, `n/a`, `na`, `nil`, `null`, `false`, `not required`, `not applicable`, `-`, any case) or a blank value is no certification: it is ignored and noted, and it does not make the job a notarization either.
 4. `jobs.required_tier` is a floor (clamped to 2).
 5. The customer's own proof requirement always applies on top: `photos.min` composes with the tier minimum by max; `must_show`, `geofence_m` and `fields` are checked as before.
 
