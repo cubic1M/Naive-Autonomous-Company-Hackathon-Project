@@ -117,6 +117,23 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(job).toMatchObject({ task_type: 'notarization', certification_required: 'CA notary public', budget_cents: 10000, fee_cents: 2500, worker_pay_cents: 7500, proof_schema: { photos: { min: 0, must_show: [] } } });
   });
 
+  it('keeps whether the proof requirement asked for photos: video or files only is not a photo proof', async () => {
+    const requested = async (proof_requirement: unknown) => {
+      const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 't', lat: 1, lng: 2, deadline: new Date(), budget_usd: '30', proof_requirement, status: 'held' }] }]);
+      return (await new PostgresRepo(sql).getJob(JOB))?.proof_schema.photos.requested;
+    };
+    expect(await requested({ video: { min_seconds: 10 } })).toBe(false);
+    expect(await requested({ files: { kinds: ['pdf'] } })).toBe(false);
+    expect(await requested({ photos: { min: 0, must_show: [] }, video: { min_seconds: 5 } })).toBe(true);
+    expect(await requested({ photos: { min: 1, must_show: ['door'] } })).toBe(true);
+    expect(await requested({})).toBe(true);
+  });
+
+  it('keeps a remote job NULL location as null, not (0, 0)', async () => {
+    const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 'Remote', lat: null, lng: null, deadline: new Date(), budget_usd: '30', proof_requirement: {}, status: 'accepted' }] }]);
+    expect(await new PostgresRepo(sql).getJob(JOB)).toMatchObject({ lat: null, lng: null });
+  });
+
   it('maps contract media rows {url, kind, exif} to ProofMedia and skips hashless reuse lookups', async () => {
     const sql = fakeSql([
       {
@@ -193,5 +210,44 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     await repo.upsertNotary({ commission_number: '123', full_name: 'JANE SMITH', name_normalized: 'jane smith', county: null, city: null, business_name: null, commission_expires: new Date('2028-03-15T00:00:00Z'), raw: {} });
     const upsert = sql.calls.find((c) => c.text.includes('insert into notary_registry'));
     expect(upsert?.params[6]).toBe('2028-03-15');
+  });
+});
+
+const CUSTOMER = '00000000-0000-4000-8000-0000000000c1';
+
+describe('PostgresRepo: customers (card on file, migration 0002)', () => {
+  it('finds the card on file of the customer who requested the job through jobs.customer_id', async () => {
+    const sql = fakeSql([{ match: 'join customers', rows: [{ id: CUSTOMER, name: 'Acme Agent', contact_email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' }] }]);
+    const c = await new PostgresRepo(sql).getCustomerPaymentForJob(JOB);
+    expect(c).toEqual({ customer_id: CUSTOMER, name: 'Acme Agent', email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' });
+    expect(sql.calls[0]?.text).toMatch(/select c\.\* from jobs j join customers c on c\.id = j\.customer_id where j\.id = \$1/);
+    expect(sql.calls[0]?.params).toEqual([JOB]);
+    expect(await new PostgresRepo(fakeSql([])).getCustomerPaymentForJob(JOB)).toBeNull();
+  });
+
+  it('reads customers with select *, so a row from before the migration means no card on file', async () => {
+    const sql = fakeSql([{ match: 'from customers', rows: [{ id: CUSTOMER, name: 'Acme Agent', contact_email: 'ops@acme.test', api_key_hash: 'h' }] }]);
+    const c = await new PostgresRepo(sql).getCustomerPayment(CUSTOMER);
+    expect(c).toEqual({ customer_id: CUSTOMER, name: 'Acme Agent', email: 'ops@acme.test', stripe_customer_id: null, default_payment_method_id: null });
+    expect(sql.calls[0]?.text).toMatch(/select \* from customers where id = \$1/);
+    expect(sql.calls[0]?.params).toEqual([CUSTOMER]);
+    expect(await new PostgresRepo(fakeSql([])).getCustomerPayment(CUSTOMER)).toBeNull();
+  });
+
+  it('maps the stored Stripe customer and default payment method', async () => {
+    const sql = fakeSql([{ match: 'from customers', rows: [{ id: CUSTOMER, name: null, contact_email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' }] }]);
+    expect(await new PostgresRepo(sql).getCustomerPayment(CUSTOMER)).toEqual({
+      customer_id: CUSTOMER, name: null, email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1',
+    });
+  });
+
+  it('setCustomerPayment updates only the given columns (coalesce keeps the others)', async () => {
+    const sql = fakeSql([]);
+    await new PostgresRepo(sql).setCustomerPayment(CUSTOMER, { default_payment_method_id: 'pm_1' });
+    const call = sql.calls[0];
+    expect(call?.text).toMatch(/update customers set/);
+    expect(call?.text).toContain('coalesce($2, stripe_customer_id)');
+    expect(call?.text).toContain('coalesce($3, default_payment_method_id)');
+    expect(call?.params).toEqual([CUSTOMER, null, 'pm_1']);
   });
 });

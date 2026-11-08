@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createContractTools } from '../src/contract-tools.js';
 import { RequiresApprovalError } from '../src/errors.js';
-import { escalateProof, rejectProof } from '../src/proof/decide.js';
+import { escalateProof, recordFounderDecision, rejectProof } from '../src/proof/decide.js';
 import type { VisionScorer } from '../src/proof/vision.js';
 import { createTools } from '../src/tools.js';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
@@ -82,6 +82,34 @@ describe('contracts/tools.ts adapters', () => {
 
     expect(await contract.capture_payment({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, captured_usd: 30 });
     expect(await contract.payout({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, status: 'paid', worker_pay_usd: 22.5, fee_usd: 7.5 });
+  });
+
+  it('a founder approval of an escalated proof reaches proof_reviews, so capture and payout go through', async () => {
+    const { world, contract } = await fundedWorld({ vision: scorer(0.95) });
+    expect((await contract.check_proof({ job_id: JOB_ID })).decision).toBe('escalated'); // no EXIF time on a $60 job
+    expect(await contract.payout({ job_id: JOB_ID }).catch((e: Error) => e.message)).toMatch(/proof is escalated; payout requires approved/);
+    const review = await recordFounderDecision({ repo: world.repo, hooks: world.hooks }, { jobId: JOB_ID, decision: 'approved', note: 'photos look right' });
+    expect(review).toMatchObject({ decision: 'approved', reviewer: 'founder' });
+    expect(review.checks.at(-1)).toMatchObject({ name: 'reviewer_note', detail: 'founder: photos look right' });
+    expect(await contract.capture_payment({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, captured_usd: 60 });
+    expect(await contract.payout({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, status: 'paid', worker_pay_usd: 45, fee_usd: 15 });
+  });
+
+  it('a founder approval waives an unenforceable identity on tier 2 (noted) but never a geofence failure', async () => {
+    const world = makeWorld();
+    world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    world.repo.seedWorker(makeWorker());
+    world.repo.seedProof(makeProof());
+    const deps = { repo: world.repo, hooks: world.hooks, vision: scorer(0.95), env: { IDENTITY_GATE: 'enforce' as const } };
+    const review = await recordFounderDecision(deps, { jobId: JOB_ID, decision: 'approved' });
+    expect(review).toMatchObject({ decision: 'approved', reviewer: 'founder' });
+    expect(review.checks.filter((c) => c.name === 'identity')).toMatchObject([{ status: 'pass', data: { enforced: true, verified: false, waived_by: 'founder' } }]);
+    expect(review.checks.find((c) => c.name === 'identity')?.detail).toMatch(/waived: a founder approved the escalation$/);
+    await expect(recordFounderDecision(deps, { jobId: JOB_ID, decision: 'rejected', note: 'changed my mind' })).rejects.toThrow(/^already_approved/);
+
+    world.repo.seedProof(makeProof({ id: '00000000-0000-4000-8000-0000000000f2', gps_lat: YC.lat + 300 / 111_320 }));
+    await expect(recordFounderDecision(deps, { jobId: JOB_ID, decision: 'approved' })).rejects.toThrow(/^outside_geofence/);
+    expect(await recordFounderDecision(deps, { jobId: JOB_ID, decision: 'rejected', note: 'wrong place' })).toMatchObject({ decision: 'rejected', reviewer: 'founder', proof_id: '00000000-0000-4000-8000-0000000000f2' });
   });
 
   it('escalate on a proof with no review yet records the escalation without recording the automated approval first', async () => {

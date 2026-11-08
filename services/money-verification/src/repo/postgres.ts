@@ -2,6 +2,7 @@ import { NotFoundError } from '../errors.js';
 import { FEE_BPS } from '../pricing.js';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
+  CustomerPayment,
   Dispute,
   Escrow,
   EscrowStatus,
@@ -21,6 +22,7 @@ import type {
   Worker,
   WorkerVerification,
 } from '../types.js';
+import { requiredCertification } from '../proof/profile.js';
 
 /**
  * Minimal SQL client shape. `pg.Pool`, `pg.Client` and `@neondatabase/serverless` `Pool` all satisfy it.
@@ -68,13 +70,13 @@ function feeSplit(priceCents: number): { fee: number; worker: number } {
 /** Our checks key off task_type; the contract marks notary work with certification_required. */
 function taskTypeOf(r: Row): string {
   if (r.task_type != null) return String(r.task_type);
-  const cert = r.certification_required == null ? '' : String(r.certification_required).toLowerCase();
+  const cert = (requiredCertification(r.certification_required == null ? null : String(r.certification_required)) ?? '').toLowerCase();
   if (cert.includes('notar')) return 'notarization';
   return r.title == null ? 'job' : String(r.title);
 }
 
 function proofSchemaOf(r: Row): ProofSchema {
-  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; geofence_m?: unknown; fields?: unknown }>(
+  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; video?: unknown; files?: unknown; geofence_m?: unknown; fields?: unknown }>(
     r.proof_schema ?? r.proof_requirement,
     {},
   );
@@ -82,6 +84,8 @@ function proofSchemaOf(r: Row): ProofSchema {
     photos: {
       min: p.photos?.min == null ? 0 : num(p.photos.min),
       must_show: Array.isArray(p.photos?.must_show) ? p.photos.must_show.map(String) : [],
+      // video or files with no photos block: a non-photo proof (an empty requirement still means photos)
+      requested: p.photos != null || (p.video == null && p.files == null),
     },
   };
   if (p.geofence_m != null) schema.geofence_m = num(p.geofence_m);
@@ -104,8 +108,8 @@ function mapJob(r: Row): Job {
     budget_cents,
     worker_pay_cents,
     fee_cents,
-    lat: num(r.lat),
-    lng: num(r.lng),
+    lat: r.lat == null ? null : num(r.lat), // NULL is a remote job, not (0, 0)
+    lng: r.lng == null ? null : num(r.lng),
     accepted_at: date(r.accepted_at), // not in contracts/schema.sql yet: null -> the time check asks for review
     deadline: date(r.deadline) as Date,
     proof_schema: proofSchemaOf(r),
@@ -170,6 +174,16 @@ function mapWorker(r: Row): Worker {
     stripe_connect_account: r.stripe_connect_account == null ? null : String(r.stripe_connect_account),
     tier: num(r.tier ?? 0),
     suspended: Boolean(r.suspended),
+  };
+}
+/** `select *` on purpose: before migration 0002 the two payment columns are absent and map to "no card on file". */
+function mapCustomerPayment(r: Row): CustomerPayment {
+  return {
+    customer_id: String(r.id),
+    name: r.name == null ? null : String(r.name),
+    email: r.contact_email == null ? null : String(r.contact_email),
+    stripe_customer_id: r.stripe_customer_id == null ? null : String(r.stripe_customer_id),
+    default_payment_method_id: r.default_payment_method_id == null ? null : String(r.default_payment_method_id),
   };
 }
 function mapProof(r: Row): Proof {
@@ -331,6 +345,25 @@ export class PostgresRepo implements Repo {
   }
   async setWorkerConnectAccount(workerId: string, accountId: string) {
     await this.sql.query('update workers set stripe_connect_account = $2 where id = $1', [workerId, accountId]);
+  }
+  getCustomerPayment(customerId: string) {
+    return this.one('select * from customers where id = $1', [customerId], mapCustomerPayment);
+  }
+  getCustomerPaymentForJob(jobId: string) {
+    return this.one(
+      'select c.* from jobs j join customers c on c.id = j.customer_id where j.id = $1',
+      [jobId],
+      mapCustomerPayment,
+    );
+  }
+  async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
+    await this.sql.query(
+      `update customers set
+         stripe_customer_id = coalesce($2, stripe_customer_id),
+         default_payment_method_id = coalesce($3, default_payment_method_id)
+       where id = $1`,
+      [customerId, patch.stripe_customer_id ?? null, patch.default_payment_method_id ?? null],
+    );
   }
 
   getEscrow(jobId: string) {

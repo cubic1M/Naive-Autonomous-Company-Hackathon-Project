@@ -100,6 +100,7 @@ export function createTools(deps: ToolDeps): Tools {
     readMedia: deps.readMedia,
     frameExtractor: deps.frameExtractor,
     now: deps.now,
+    env: deps.env,
   };
   const parse = <N extends ToolName>(name: N, input: unknown) => toolSchemas[name].input.parse(input) as ToolInput<N>;
 
@@ -107,8 +108,8 @@ export function createTools(deps: ToolDeps): Tools {
     async create_escrow(raw) {
       const { job_id } = parse('create_escrow', raw);
       const job = await requireJob(deps.repo, job_id);
-      const { url, escrow } = await createEscrow(escrowDeps, job);
-      return { job_id, checkout_url: url, amount_cents: escrow.amount_cents, status: escrow.status };
+      const { url, escrow, funded } = await createEscrow(escrowDeps, job);
+      return { job_id, checkout_url: url, amount_cents: escrow.amount_cents, status: escrow.status, funded };
     },
     async capture_escrow(raw) {
       const { job_id } = parse('capture_escrow', raw);
@@ -180,7 +181,7 @@ export function createTools(deps: ToolDeps): Tools {
     async verify_notary(raw) {
       const { worker_id, commission_number, name, job_date } = parse('verify_notary', raw);
       const r = await verifyNotary(
-        { repo: deps.repo, now: deps.now },
+        { repo: deps.repo, now: deps.now, stripe: deps.stripe },
         { workerId: worker_id, commissionNumber: commission_number, name, jobDate: new Date(job_date) },
       );
       return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires), name_source: r.nameSource };
@@ -196,7 +197,7 @@ export function createTools(deps: ToolDeps): Tools {
     },
     async check_eligibility(raw) {
       const { worker_id, job_id } = parse('check_eligibility', raw);
-      return checkEligibility({ repo: deps.repo }, { workerId: worker_id, jobId: job_id });
+      return checkEligibility({ repo: deps.repo, env: deps.env }, { workerId: worker_id, jobId: job_id });
     },
     async get_liability_context(raw) {
       const { job_id } = parse('get_liability_context', raw);

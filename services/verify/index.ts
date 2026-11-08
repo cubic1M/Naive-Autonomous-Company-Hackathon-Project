@@ -7,6 +7,7 @@ import {
   createContractTools,
   depsFromApiContext,
   depsFromProcessEnv,
+  recordFounderDecision as recordFounderDecisionOnProof,
   startIdentityVerification,
   type ApiContext,
   type VerificationStatus,
@@ -22,10 +23,9 @@ const verify: ServiceModule = {
     const out = await tools(ctx).approve_proof(input);
     if (!("error" in out)) return out;
     // contracts/tools.ts knows two error codes. Reused media is a fraud signal like an out-of-fence photo; a
-    // tier-2 worker without a verified identity means the evidence is not sufficient yet (check_proof's
-    // `identity` flag says so), so the agent escalates.
-    const error: "below_threshold" | "outside_geofence" =
-      out.error === "reused_media" ? "outside_geofence" : out.error === "identity_unverified" ? "below_threshold" : out.error;
+    // tier-2 worker without a verified identity (IDENTITY_GATE=enforce), too few photos or missing fields
+    // (incomplete) and a capture time outside the window mean the evidence is not sufficient, so the agent escalates.
+    const error: "below_threshold" | "outside_geofence" = out.error === "reused_media" || out.error === "outside_geofence" ? "outside_geofence" : "below_threshold";
     return { error };
   },
   // contracts/tools.ts types escalate's result as { job_id, status: "escalated" } only. A proof that is already approved
@@ -46,4 +46,20 @@ export default verify;
 export async function createIdentityLink(workerId: string): Promise<{ url: string | null; status: VerificationStatus }> {
   const { url, status } = await startIdentityVerification(depsFromProcessEnv(), workerId);
   return { url, status };
+}
+
+/**
+ * Named export for the founder console (POST /v1/admin/escalations/[jobId]): records the founder's decision on the job's
+ * latest proof in proof_reviews (reviewer 'founder'), the record payout and settle read, so a founder-approved job can
+ * be paid. Fires no hooks: call it first, then the route's own `update proofs` and transition(). Approving lifts the
+ * confidence threshold and the identity gate (recorded as waived); it throws InvalidStateError (code 'invalid_state')
+ * on a geofence or reused-media failure, and so does rejecting a proof that is already approved. Needs DATABASE_URL.
+ */
+export async function recordFounderDecision(
+  jobId: string,
+  decision: "approved" | "rejected",
+  note = "",
+): Promise<{ proof_id: string; decision: string }> {
+  const review = await recordFounderDecisionOnProof(depsFromProcessEnv(), { jobId, decision, note });
+  return { proof_id: review.proof_id, decision: review.decision };
 }

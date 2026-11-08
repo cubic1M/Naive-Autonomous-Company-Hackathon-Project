@@ -1,3 +1,4 @@
+import type { Env } from './env.js';
 import { NotFoundError } from './errors.js';
 import { verificationProfile, type VerificationTier } from './proof/profile.js';
 import type { Repo } from './repo.js';
@@ -13,15 +14,17 @@ export interface EligibilityResult {
  * Can this worker take this job? Cheap gate the job page calls before "Yes": not suspended, worker tier high
  * enough, for a notarization job a notary commission verified (verify_notary) that does not expire before
  * the deadline, and for a tier-2 job (over $150 or any certification) a verified Stripe Identity (verify_identity).
+ * Under IDENTITY_GATE=log the identity reason is still listed (the job page reads it to offer the identity step)
+ * but marked not enforced, and it does not make the worker ineligible.
  */
 export async function checkEligibility(
-  deps: { repo: Pick<Repo, 'getJob' | 'getWorker' | 'getWorkerVerification' | 'getJobLiability'> },
+  deps: { repo: Pick<Repo, 'getJob' | 'getWorker' | 'getWorkerVerification' | 'getJobLiability'>; env?: Pick<Env, 'IDENTITY_GATE'> },
   input: { workerId: string; jobId: string },
 ): Promise<EligibilityResult> {
   const [job, worker] = await Promise.all([deps.repo.getJob(input.jobId), deps.repo.getWorker(input.workerId)]);
   if (!job) throw new NotFoundError('job', input.jobId);
   if (!worker) throw new NotFoundError('worker', input.workerId);
-  const profile = verificationProfile(job);
+  const profile = verificationProfile(job, { identityGate: deps.env?.IDENTITY_GATE });
 
   const reasons: string[] = [];
   if (worker.suspended) reasons.push('worker_suspended');
@@ -38,12 +41,15 @@ export async function checkEligibility(
   };
   if (job.task_type === 'notarization' || rules.includes('L1')) await licence('notary_commission', 'notary', 'no verification on file');
   if (rules.includes('L2')) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
+  let advisory: string | null = null;
   if (profile.identityRequired) {
     const v = await deps.repo.getWorkerVerification(worker.id, 'identity');
     if (!v || v.status !== 'verified') {
       const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-      reasons.push(`identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`);
+      const reason = `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
+      if (profile.identityEnforced) reasons.push(reason);
+      else advisory = `${reason}; not enforced (IDENTITY_GATE=log)`;
     }
   }
-  return { eligible: reasons.length === 0, reasons, tier: profile.tier };
+  return { eligible: reasons.length === 0, reasons: advisory ? [...reasons, advisory] : reasons, tier: profile.tier };
 }

@@ -16,6 +16,7 @@ export const TEST_ENV: Env = {
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
   DAILY_ESCROW_CAP_CENTS: 200_000,
   PAYOUT_CAP_CENTS: 15_000,
+  IDENTITY_GATE: 'enforce',
   VERIFIER_BASE_URL: 'https://verifier.test/v1',
   VERIFIER_API_KEY: 'verifier-test-key',
   VERIFIER_MODEL: 'test-vision',
@@ -32,6 +33,7 @@ export const YC = { lat: 37.7749, lng: -122.4194 };
 export const JOB_ID = '00000000-0000-4000-8000-000000000001';
 export const WORKER_ID = '00000000-0000-4000-8000-000000000002';
 export const PROOF_ID = '00000000-0000-4000-8000-000000000003';
+export const CUSTOMER_ID = '00000000-0000-4000-8000-0000000000c1';
 
 export function makeJob(overrides: Partial<Job> = {}): Job {
   const q = quote(overrides.budget_cents ?? 6_000);

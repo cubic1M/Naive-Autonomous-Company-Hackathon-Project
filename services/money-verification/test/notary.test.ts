@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { matchNames, normalizeName, nameTokens } from '../src/certs/names.js';
 import { importNotaryListing, parseListingDate, parseNotaryListing, verifyNotary } from '../src/certs/notary.js';
 import type { NotaryRecord } from '../src/types.js';
-import { makeWorld, seedVerifiedIdentity, T0, WORKER_ID } from './helpers.js';
+import { startIdentityVerification } from '../src/identity.js';
+import { handleStripeEvent } from '../src/webhooks/stripe.js';
+import { makeWorker, makeWorld, seedVerifiedIdentity, T0, WORKER_ID } from './helpers.js';
 
 const csv = fs.readFileSync(new URL('./fixtures/notary-sample.csv', import.meta.url), 'utf8');
 const tsv = fs.readFileSync(new URL('./fixtures/notary-sample.tsv', import.meta.url), 'utf8');
@@ -278,5 +280,54 @@ describe('verifyNotary with a verified Stripe Identity', () => {
     expect((await none.stored())?.details).toMatchObject({ name_used: 'typed', name_on_id: null, typed_name_match: null });
     const pending = await setupWithId('pending');
     expect(await pending.verify('2301234', 'Jane A Smith')).toMatchObject({ status: 'verified', nameSource: 'typed' });
+  });
+});
+
+describe('verifyNotary when the verified webhook could not fetch the name', () => {
+  /** A worker verified while Stripe's expanded retrieve failed: row verified, names null, verified_outputs_error set. */
+  async function verifiedWithoutName() {
+    const world = makeWorld();
+    await importNotaryListing(world.repo, csv);
+    world.repo.seedWorker(makeWorker());
+    const { sessionId } = await startIdentityVerification(world.deps, WORKER_ID);
+    const sessions = world.stripe.identity.verificationSessions;
+    const retrieve = sessions.retrieve;
+    sessions.retrieve = async () => {
+      throw new Error('stripe unreachable');
+    };
+    await handleStripeEvent(world.deps, world.stripe.identityVerifiedEvent(sessionId as string, { first_name: 'Jane', last_name: 'Smith' }));
+    const verify = () =>
+      verifyNotary({ repo: world.repo, now: world.clock.now, stripe: world.stripe }, { workerId: WORKER_ID, commissionNumber: '2301234', name: 'Jane Smith', jobDate: T0 });
+    const identity = () => world.repo.getWorkerVerification(WORKER_ID, 'identity');
+    return { world, verify, identity, restore: () => (sessions.retrieve = retrieve) };
+  }
+
+  it('refetches the name once, patches the identity row, and compares the ID name', async () => {
+    const { world, verify, identity, restore } = await verifiedWithoutName();
+    expect((await identity())?.details).toMatchObject({ first_name: null, last_name: null, verified_outputs_error: 'stripe unreachable' });
+    restore();
+    const r = await verify();
+    expect(r).toMatchObject({ status: 'verified', nameSource: 'verified_identity', nameOnId: 'Jane Smith', reasons: [] });
+    expect(world.stripe.callsTo('identity.verificationSessions.retrieve')).toHaveLength(1);
+    const row = await identity();
+    expect(row).toMatchObject({ status: 'verified', details: { first_name: 'Jane', last_name: 'Smith' } });
+    expect(row?.details).not.toHaveProperty('verified_outputs_error');
+  });
+
+  it('still unavailable: the typed name is compared and the reason says id_name_unavailable', async () => {
+    const { verify, identity } = await verifiedWithoutName();
+    const r = await verify();
+    expect(r).toMatchObject({ status: 'verified', nameSource: 'typed', nameOnId: null });
+    expect(r.reasons).toEqual([expect.stringMatching(/^id_name_unavailable: /)]);
+    expect((await identity())?.details).toMatchObject({ first_name: null, verified_outputs_error: 'stripe unreachable' });
+  });
+
+  it('a nameless verified row with no fetch error is not refetched, and is reported the same way', async () => {
+    const world = makeWorld();
+    await importNotaryListing(world.repo, csv);
+    await world.repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status: 'verified', provider_ref: 'vs_x', details: { first_name: null, last_name: null }, verified_at: T0, expires_at: null });
+    const r = await verifyNotary({ repo: world.repo, now: world.clock.now, stripe: world.stripe }, { workerId: WORKER_ID, commissionNumber: '2301234', name: 'Jane A Smith', jobDate: T0 });
+    expect(r).toMatchObject({ nameSource: 'typed', reasons: [expect.stringMatching(/^id_name_unavailable: /)] });
+    expect(world.stripe.callsTo('identity.verificationSessions.retrieve')).toHaveLength(0);
   });
 });

@@ -20,7 +20,11 @@ export type JobStatus =
 export type TaskType = 'notarization' | 'inspection' | (string & {});
 
 export interface ProofSchema {
-  photos: { min: number; must_show: string[] };
+  /**
+   * `requested` is false when the proof requirement asked for video or files and no photos (contracts/tools.ts makes
+   * `photos` optional); absent means photos were asked for. The tier's photo minimum applies only to photo proofs.
+   */
+  photos: { min: number; must_show: string[]; requested?: boolean };
   geofence_m?: number;
   fields?: { name: string; type: 'string' | 'number' | 'boolean' }[];
 }
@@ -32,8 +36,9 @@ export interface Job {
   budget_cents: number;
   worker_pay_cents: number;
   fee_cents: number;
-  lat: number;
-  lng: number;
+  /** The job's location; null for a remote job (request_human stores NULL coordinates), which has no geofence. */
+  lat: number | null;
+  lng: number | null;
   accepted_at: Date | null;
   deadline: Date;
   proof_schema: ProofSchema;
@@ -42,7 +47,7 @@ export interface Job {
   worker_id: string | null;
   /** low | standard | high; overrides the budget-derived verification tier (src/proof/profile.ts). */
   risk_class: string | null;
-  /** The contract column as the customer wrote it; task_type is 'notarization' when it names a notary. Any value makes the job tier 2. */
+  /** The contract column as the customer wrote it; task_type is 'notarization' when it names a notary. Any value makes the job tier 2, except blank or a placeholder meaning none (requiredCertification in proof/profile.ts). */
   certification_required: string | null;
 }
 
@@ -54,6 +59,18 @@ export interface Worker {
   stripe_connect_account: string | null;
   tier: number;
   suspended: boolean;
+}
+
+/**
+ * Read-only view of teammates' `customers` table plus the two columns migration 0002 adds for this package:
+ * the Stripe Customer and the default PaymentMethod saved through the payment-setup Checkout session.
+ */
+export interface CustomerPayment {
+  customer_id: string;
+  name: string | null;
+  email: string | null;
+  stripe_customer_id: string | null;
+  default_payment_method_id: string | null;
 }
 
 export interface ProofMedia {

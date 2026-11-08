@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { AUTHORIZATION_TTL_MS, createEscrow, refund } from '../src/escrow.js';
+import { createPaymentSetupLink } from '../src/customer-payment.js';
 import { handleStripeWebhook, createStripeWebhookHandler } from '../src/webhooks/stripe.js';
 import {
+  CUSTOMER_ID,
   JOB_ID,
   T0,
   WORKER_ID,
@@ -252,5 +254,139 @@ describe('other events', () => {
     const row = [...world.repo.disputes.values()][0];
     expect(row).toMatchObject({ job_id: JOB_ID, stripe_charge_id: chargeId, status: 'needs_response' });
     expect(firedNamed(world, 'onDisputeOpened')[0]?.args).toEqual([row?.id, JOB_ID]);
+  });
+});
+
+describe('checkout.session.completed in setup mode (card on file)', () => {
+  const noCard = { customer_id: CUSTOMER_ID, name: 'Acme Agent', email: 'ops@acme.test', stripe_customer_id: null, default_payment_method_id: null };
+
+  /** A customer saves a card: setup link -> Checkout completed -> webhook delivered. */
+  async function saveCard(world: World) {
+    world.repo.seedCustomer(noCard);
+    const link = await createPaymentSetupLink(world.deps, CUSTOMER_ID);
+    const event = world.stripe.completeCheckout(link.sessionId, { paymentMethod: 'pm_saved_1' });
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, event));
+    return { link, event, res };
+  }
+
+  it('stores the saved card as the customer default from the retrieved SetupIntent, funding nothing', async () => {
+    const world = makeWorld();
+    const { link, res } = await saveCard(world);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ handled: true, duplicate: false });
+    const retrieves = world.stripe.callsTo('setupIntents.retrieve');
+    expect(retrieves).toHaveLength(1);
+    expect(retrieves[0]?.params).toMatchObject({ id: world.stripe.csStore.get(link.sessionId)?.setup_intent });
+    expect(await world.repo.getCustomerPayment(CUSTOMER_ID)).toMatchObject({
+      stripe_customer_id: link.stripeCustomerId,
+      default_payment_method_id: 'pm_saved_1',
+    });
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(0);
+    expect(world.repo.escrows.size).toBe(0);
+  });
+
+  it("then createEscrow funds that customer's next job directly", async () => {
+    const world = makeWorld();
+    const { link } = await saveCard(world);
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
+    const r = await createEscrow(world.deps, job);
+    expect(r).toMatchObject({ url: null, funded: true });
+    expect(world.stripe.callsTo('paymentIntents.create')[0]?.params).toMatchObject({ customer: link.stripeCustomerId, payment_method: 'pm_saved_1' });
+  });
+
+  it('redelivery is a duplicate no-op and a replay under a new event id stores the same values', async () => {
+    const world = makeWorld();
+    const { link, event } = await saveCard(world);
+    const dup = await handleStripeWebhook(world.deps, webhookRequest(world, event));
+    expect(await dup.json()).toMatchObject({ duplicate: true, handled: false });
+    const replay = world.stripe.event('checkout.session.completed', event.data.object);
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, replay));
+    expect(await res.json()).toMatchObject({ handled: true });
+    expect(await world.repo.getCustomerPayment(CUSTOMER_ID)).toMatchObject({ stripe_customer_id: link.stripeCustomerId, default_payment_method_id: 'pm_saved_1' });
+    expect(world.stripe.callsTo('setupIntents.retrieve')).toHaveLength(2);
+  });
+
+  it('a setup session without our customer_id metadata is unhandled and triggers no retrieve', async () => {
+    const world = makeWorld();
+    const event = world.stripe.event('checkout.session.completed', { id: 'cs_x', mode: 'setup', setup_intent: 'seti_x', metadata: {} });
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, event));
+    expect(await res.json()).toMatchObject({ handled: false });
+    expect(world.stripe.callsTo('setupIntents.retrieve')).toHaveLength(0);
+  });
+});
+
+describe('payment_intent.amount_capturable_updated', () => {
+  const capturable = (world: World, piId: string) => webhookRequest(world, world.stripe.amountCapturableUpdatedEvent(piId));
+
+  it('funds a pending Checkout escrow when it arrives first; the later session event adds no second hook', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const { escrow } = await createEscrow(world.deps, job);
+    const sessionId = escrow.stripe_checkout_session_id ?? '';
+    const sessionEvent = world.stripe.completeCheckout(sessionId);
+    const piId = world.stripe.csStore.get(sessionId)?.payment_intent ?? '';
+
+    const res = await handleStripeWebhook(world.deps, capturable(world, piId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ handled: true });
+    const row = await world.repo.getEscrow(JOB_ID);
+    expect(row?.status).toBe('authorized');
+    expect(row?.stripe_payment_intent_id).toBe(piId);
+    expect(row?.authorization_expires_at).toEqual(new Date(T0.getTime() + AUTHORIZATION_TTL_MS));
+    expect(firedNamed(world, 'onJobFunded').map((f) => f.args)).toEqual([[JOB_ID]]);
+
+    world.repo.jobs.get(JOB_ID)!.status = 'held'; // production: the hook's transition moved the job to held
+    const later = await handleStripeWebhook(world.deps, webhookRequest(world, sessionEvent));
+    expect(await later.json()).toMatchObject({ handled: true });
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(1);
+  });
+
+  it('after a direct hold whose job already moved to held, it is handled with no second hook', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(1);
+    world.repo.jobs.get(JOB_ID)!.status = 'held';
+    const res = await handleStripeWebhook(world.deps, capturable(world, r.escrow.stripe_payment_intent_id ?? ''));
+    expect(await res.json()).toMatchObject({ handled: true });
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(1);
+    expect(await world.repo.getEscrow(JOB_ID)).toEqual(r.escrow);
+  });
+
+  it('belt and braces: a job still requested after a direct hold gets onJobFunded again', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    const res = await handleStripeWebhook(world.deps, capturable(world, r.escrow.stripe_payment_intent_id ?? ''));
+    expect(await res.json()).toMatchObject({ handled: true });
+    expect(firedNamed(world, 'onJobFunded').map((f) => f.args)).toEqual([[JOB_ID], [JOB_ID]]);
+  });
+
+  it('a PaymentIntent of ours with no escrow row yet answers 500 so Stripe retries', async () => {
+    const world = makeWorld();
+    const pi = await world.stripe.paymentIntents.create({ amount: 6000, currency: 'usd', confirm: true, payment_method: 'pm_card_visa', capture_method: 'manual', metadata: { job_id: JOB_ID } });
+    const res = await handleStripeWebhook(world.deps, capturable(world, pi.id));
+    expect(res.status).toBe(500);
+    expect(world.repo.stripeEvents.size).toBe(0);
+  });
+
+  it('a PaymentIntent that belongs to no job is unhandled', async () => {
+    const world = makeWorld();
+    const pi = await world.stripe.paymentIntents.create({ amount: 6000, currency: 'usd', confirm: true, payment_method: 'pm_card_visa', capture_method: 'manual' });
+    const res = await handleStripeWebhook(world.deps, capturable(world, pi.id));
+    expect(await res.json()).toMatchObject({ handled: false });
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(0);
+  });
+
+  it("a PaymentIntent that is not the escrow's leaves it untouched", async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    const other = await world.stripe.paymentIntents.create({ amount: 6000, currency: 'usd', confirm: true, payment_method: 'pm_card_visa', capture_method: 'manual', metadata: { job_id: JOB_ID } });
+    const res = await handleStripeWebhook(world.deps, capturable(world, other.id));
+    expect(await res.json()).toMatchObject({ handled: false });
+    expect(await world.repo.getEscrow(JOB_ID)).toEqual(r.escrow);
+    expect(firedNamed(world, 'onJobFunded')).toHaveLength(1);
   });
 });
