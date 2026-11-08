@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { GrowthRepo } from '../repo.js';
-import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from '../types.js';
+import { REDDIT_REF, redditLogEntry, type GrowthRepo } from '../repo.js';
+import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from '../types.js';
+import type { NewSocialPost, SocialPlatform, SocialPost, SocialPostOutcome } from '../types.js';
 
 type StoredJob = JobRow & { customer_id: string | null; budget_usd: number };
 
@@ -12,6 +13,7 @@ export class MemoryGrowthRepo implements GrowthRepo {
   readonly jobs: StoredJob[] = [];
   readonly customers: { id: string; name: string | null; contact_email: string | null }[] = [];
   readonly verifications: VerificationRow[] = [];
+  readonly socialPosts: SocialPost[] = [];
 
   constructor(
     private readonly clock: () => Date = () => new Date(),
@@ -130,7 +132,19 @@ export class MemoryGrowthRepo implements GrowthRepo {
   }
 
   async searchSpendSince(since: Date): Promise<number> {
-    return this.logs.filter((l) => l.kind === 'search' && l.created_at >= since).reduce((sum, l) => sum + (l.cost_usd ?? 0), 0);
+    return this.spend((l) => l.ref !== REDDIT_REF, since);
+  }
+
+  async logRedditCall(c: RedditCall): Promise<void> {
+    await this.log(redditLogEntry(c));
+  }
+
+  async redditSpendSince(since: Date): Promise<number> {
+    return this.spend((l) => l.ref === REDDIT_REF, since);
+  }
+
+  private spend(which: (l: LogEntry) => boolean, since: Date): number {
+    return this.logs.filter((l) => l.kind === 'search' && which(l) && l.created_at >= since).reduce((sum, l) => sum + (l.cost_usd ?? 0), 0);
   }
 
   async getGrantByKey(key: string): Promise<Grant | null> {
@@ -185,6 +199,35 @@ export class MemoryGrowthRepo implements GrowthRepo {
   async listVerifications(workerIds: string[]): Promise<VerificationRow[]> {
     const ids = new Set(workerIds);
     return this.verifications.filter((v) => ids.has(v.worker_id)).map((v) => ({ ...v }));
+  }
+
+  async logSocialPost(p: NewSocialPost): Promise<string> {
+    const row: SocialPost = {
+      id: this.newId(),
+      platform: p.platform,
+      status: p.status,
+      reason: p.reason ?? null,
+      body: p.body,
+      body_hash: p.body_hash,
+      provider: null,
+      provider_post_id: null,
+      url: null,
+      created_at: this.clock(),
+    };
+    this.socialPosts.push(row);
+    return row.id;
+  }
+
+  async settleSocialPost(id: string, o: SocialPostOutcome): Promise<void> {
+    const row = this.socialPosts.find((p) => p.id === id && p.status === 'pending');
+    if (row) Object.assign(row, { status: o.status, reason: o.reason ?? null, provider: o.provider ?? null, provider_post_id: o.provider_post_id ?? null, url: o.url ?? null });
+  }
+
+  async socialPostsSince(platform: SocialPlatform, since: Date): Promise<SocialPost[]> {
+    return this.socialPosts
+      .filter((p) => p.platform === platform && p.created_at >= since)
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+      .map((p) => ({ ...p }));
   }
 
   private withCustomer(j: StoredJob): JobWithCustomer {

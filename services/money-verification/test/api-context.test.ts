@@ -4,7 +4,7 @@ import { createContractTools } from '../src/contract-tools.js';
 import type { VisionScorer } from '../src/proof/vision.js';
 import { createTools } from '../src/tools.js';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
-import { JOB_ID, PROOF_ID, WORKER_ID, makeJob, makeProof, makeWorker, makeWorld, webhookRequest } from './helpers.js';
+import { JOB_ID, PROOF_ID, WORKER_ID, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
 
 const scorer: VisionScorer = {
   async score(input) {
@@ -49,6 +49,7 @@ describe('api-context: hooks become job-state transitions', () => {
     const acct = await world.stripe.accounts.create({ type: 'express', metadata: { worker_id: WORKER_ID } });
     world.stripe.enablePayouts(acct.id);
     world.repo.seedWorker(makeWorker({ stripe_connect_account: acct.id }));
+    await seedVerifiedIdentity(world);
     world.repo.seedProof(makeProof());
 
     await tools.create_escrow({ job_id: JOB_ID });

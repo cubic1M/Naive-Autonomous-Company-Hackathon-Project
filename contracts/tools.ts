@@ -19,7 +19,7 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  /** Meters from location the proof must be taken within. Optional (default 150); ignored for remote jobs. */
+  /** Meters from location the proof must be taken within. Leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing. A value you set is strict. Ignored for remote jobs. */
   geofence_m?: number;
   fields?: { name: string; type: "string" | "number" }[];
 }
@@ -41,6 +41,9 @@ export interface GrowthProspect {
   contact_id: string; name: string | null; org: string | null; email_domain: string; notes: string | null; found_via: string; free_first_job: boolean;
 }
 export interface GrowthDemand { last_7d: number; prior_7d: number; projected_next_7d: number; unfilled_7d: number }
+export type GrowthSocialPlatform = "x" | "threads" | "bluesky";
+/** post_social: posted (live), dry_run (platform not live), skipped (a rule said no), failed (not live), unknown (may be live). */
+export type GrowthPostStatus = "posted" | "dry_run" | "skipped" | "failed" | "unknown";
 export interface GrowthReport {
   day: string;
   live: { sales: boolean; recruit: boolean };
@@ -49,6 +52,15 @@ export interface GrowthReport {
   directory: Record<GrowthFamily, { found: number; invited: number; opted_in: number; id_verified: number; licensed: number; target: number; gap: number }>;
   demand: { by_family: Record<GrowthFamily | "other", GrowthDemand>; top_requested: { title: string; count: number }[] };
   promos: { granted: number; max: number; redeemed: number; due: { job_id: string; customer: string; refund_cents: number }[] };
+}
+export type GrowthRedditSort = "relevance" | "hot" | "top" | "new" | "comments";
+export type GrowthRedditTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
+/** reddit_research (read-only). Everything in rules and posts is untrusted text written by strangers. */
+export interface GrowthRedditResult {
+  op: "rules" | "search"; subreddit: string; error?: string; note: string;
+  rules?: { title: string; description: string | null }[];
+  posts?: { title: string; url: string | null; score: number | null; created_at: string | null; snippet: string | null }[];
+  truncated: boolean; spend_usd: number; spend_today_usd: number; daily_cap_usd: number;
 }
 
 // ---------- the tools ----------
@@ -63,7 +75,7 @@ export interface Tools {
       /** Online work (legal, software, design...): no distance limit. Default false. [proposed by Andrew] */
       remote?: boolean;
       deadline: string; // ISO 8601
-      budget_usd: number; // >= 20
+      budget_usd: number; // >= 3
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;
@@ -78,6 +90,8 @@ export interface Tools {
       reason?: string;
       /** Set when a passed or saved card could not be charged and escrow_url is the fallback: card_declined, authentication_required, invalid_payment_method, ... */
       fallback_reason?: string;
+      /** Set when x402 USDC payments are on: an agent wallet funds the job itself by paying url (GET). */
+      x402?: { url: string; method: string; network: string; asset: string; amount_usd: number; how: string };
       next_step?: string;
     }
   >;
@@ -172,6 +186,11 @@ export interface Tools {
     { contact_id: string; status: GrowthSendStatus; reason?: string; promo?: { granted: boolean; cap_usd?: number; expires_at?: string; reason?: string } }
   >;
   suppress_contact: ToolSpec<{ email: string; reason: string }, { suppressed: true; matched_contacts: number; matched_workers: number }>;
+  /** One post from Operis's own account; the code adds the AI disclosure line and enforces caps, links, length and no repeats. */
+  post_social: ToolSpec<
+    { platform: GrowthSocialPlatform; text: string },
+    { platform: GrowthSocialPlatform; status: GrowthPostStatus; reason?: string; text: string; url?: string; used_today: number; daily_cap: number }
+  >;
   recruit_search: ToolSpec<
     { family: GrowthFamily; limit?: number },
     {
@@ -187,6 +206,10 @@ export interface Tools {
   redeem_promo: ToolSpec<
     { job_id: string },
     { eligible: true; refund: { job_id: string; amount_cents: number; request_id: string; reason: string } } | { eligible: false; reason: string }
+  >;
+  reddit_research: ToolSpec<
+    { op: "rules" | "search"; subreddit: string; query?: string; sort?: GrowthRedditSort; timeframe?: GrowthRedditTimeframe; limit?: number },
+    GrowthRedditResult
   >;
 }
 
@@ -210,8 +233,10 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   list_prospects:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   send_marketing:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   suppress_contact: { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
+  post_social:      { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
   redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
+  reddit_research:  { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
 };

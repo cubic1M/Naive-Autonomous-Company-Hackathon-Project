@@ -87,13 +87,13 @@ Example request:
 
 ```json
 {
-  "title": "Hold a sign near the YC office",
-  "instructions": "Hold our sign at the corner for 2 hours, 12-2pm.",
-  "location": { "address": "YC, San Francisco, CA", "lat": 37.7749, "lng": -122.4194 },
+  "title": "Photograph the Ferry Building entrance and posted hours",
+  "instructions": "Stand in front of the main entrance on The Embarcadero. Take one photo of the entrance and one close-up of the posted hours.",
+  "location": { "address": "1 Ferry Building, San Francisco, CA 94111", "lat": 37.7955, "lng": -122.3935 },
   "deadline": "2026-11-08T14:00:00-08:00",
   "budget_usd": 60,
   "certification_required": null,
-  "proof": { "photos": { "min": 2, "must_show": ["person holding sign", "street corner"] }, "geofence_m": 150 }
+  "proof": { "photos": { "min": 2, "must_show": ["main entrance", "posted hours"] } }
 }
 ```
 

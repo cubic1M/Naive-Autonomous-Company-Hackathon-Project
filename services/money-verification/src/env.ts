@@ -13,8 +13,11 @@ export interface Env {
   /** Per-job payout cap, in cents, above which release_payout_large (human approval) is required. Default 15000. */
   PAYOUT_CAP_CENTS: number;
   /**
-   * Tier-2 identity gate. 'enforce': a tier-2 proof needs a verified Stripe Identity to be approved. 'log' (default
-   * until the job page has its identity step): the identity check is recorded in the review but never blocks.
+   * Identity gate for every job. 'enforce': a worker without a verified Stripe Identity cannot accept a job
+   * (check_eligibility) and an agent can never approve their proof (a founder can, recording a waiver). 'log', the
+   * default until the job page can get every worker verified (README, open items): the check is recorded but blocks
+   * only notary and legal jobs. The "verified human" promise in llms.txt and SKILL.md holds only under 'enforce',
+   * with Stripe Identity in live mode.
    */
   IDENTITY_GATE: IdentityGate;
   /** OpenAI-compatible chat completions endpoint for the vision scorer. */

@@ -141,14 +141,18 @@ export function createContractTools(deps: ToolDeps): ContractTools {
   return {
     /**
      * Run the automated review on the job's latest proof and return the evidence. A review a human
-     * already made (reviewer !== 'auto') is returned as is, never re-run or overwritten.
+     * already made (reviewer !== 'auto') is returned as is, never re-run or overwritten, and so is any
+     * approval: it already moved the job to approved and woke Finance, and contracts/states.ts has no way
+     * back (refuseIfApproved in decide.ts). Re-running it could only overwrite it, for example with an
+     * identity escalation for a worker approved before every job needed a verified identity.
      */
     async check_proof({ job_id }) {
       const proofs = await deps.repo.getProofsForJob(job_id);
       const proof = proofs[proofs.length - 1];
       if (!proof) throw new NotFoundError('proof for job', job_id);
       const existing = await deps.repo.getProofReview(proof.id);
-      const review = existing && existing.reviewer !== 'auto' ? existing : await reviewProof(decideDeps, proof.id);
+      const final = existing && (existing.reviewer !== 'auto' || existing.decision === 'approved');
+      const review = final ? existing : await reviewProof(decideDeps, proof.id);
       return evidenceOf(review);
     },
 

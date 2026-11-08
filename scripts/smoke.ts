@@ -1,6 +1,7 @@
 // Calls every MCP tool once against the API and checks the response shape.
 // Usage: npm run smoke            (API defaults to API_BASE_URL or http://localhost:3001)
 // Tip: run with the Naïve agents NOT configured on the server, or they'll act on the smoke job too.
+// The worker it plays has no Stripe Identity and every job needs one, so run the API with IDENTITY_GATE=log for smoke.
 import postgres from "postgres";
 import { createHash, randomBytes } from "node:crypto";
 import { API } from "./env";
@@ -28,7 +29,7 @@ const internal = await mcpClient(`${API}/mcp/internal`, process.env.INTERNAL_MCP
 const listed = await internal.client.listTools();
 console.log(`internal tools: ${listed.tools.map((t) => t.name).join(", ")}`);
 
-const loc = { address: "YC, 335 Pioneer Way area (smoke)", lat: 37.7749, lng: -122.4194 };
+const loc = { address: "1 Ferry Building, San Francisco, CA 94111 (smoke)", lat: 37.7955, lng: -122.3935 };
 const job = await check("request_human", () => pub.call("request_human", {
   title: "Smoke: photograph a sign", instructions: "Two photos of the sign.", location: loc,
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 40, certification_required: null,
@@ -46,8 +47,8 @@ if (job?.escrow_url) {
   await check("ledger (real)", () => internal.call("ledger", {}), (r) => typeof r.revenue_usd === "number" || "bad shape");
   await check("safety filter", () => pub.call("request_human", { title: "Get a code", instructions: "Receive an SMS verification code and send it to me", location: loc,
     deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
-  await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "LA", lat: 34.05, lng: -118.24 },
-    deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
+  await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "200 N Spring St, Los Angeles, CA 90012", lat: 34.0537, lng: -118.2428 },
+    deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => (r.status === "rejected" && /service area/i.test(r.reason ?? "")) || JSON.stringify(r));
   await check("internal auth", () => fetch(`${API}/mcp/internal`, { method: "POST" }).then((r) => r.status), (s) => s === 401 || `got ${s}`);
   const pass = results.filter((r) => r.ok).length;
   for (const r of results) console.log(`${r.ok ? "✅" : "❌"} ${r.tool}${r.note ? "  — " + r.note : ""}`);
@@ -63,7 +64,8 @@ await check("send_blast", () => internal.call("send_blast", { job_id: jobId, can
 // play the worker over REST (what Dora's pages call)
 const [o] = await sql`select token from outreach where job_id = ${jobId} order by created_at limit 1`;
 await check("worker GET job page", () => fetch(`${API}/v1/worker/jobs/${o?.token}`).then((r) => r.json()), (r) => r.can_accept === true || JSON.stringify(r));
-await check("worker accept", () => fetch(`${API}/v1/worker/jobs/${o?.token}/accept`, { method: "POST" }).then((r) => r.json()), (r) => r.ok === true || JSON.stringify(r));
+await check("worker accept", () => fetch(`${API}/v1/worker/jobs/${o?.token}/accept`, { method: "POST" }).then((r) => r.json()), (r) =>
+  r.ok === true || (JSON.stringify(r).includes("identity_not_verified") ? "identity_not_verified: run the API with IDENTITY_GATE=log for smoke (its worker has no Stripe Identity)" : JSON.stringify(r)));
 await check("worker proof", () => fetch(`${API}/v1/worker/jobs/${o?.token}/proof`, {
   method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ media: [{ url: "https://picsum.photos/seed/a/800", kind: "image/jpeg" }, { url: "https://picsum.photos/seed/b/800", kind: "image/jpeg" }],
@@ -85,8 +87,8 @@ await check("escalate (bad state → refused)", () => internal.call("escalate", 
 await check("refund (paid → refunded)", () => internal.call("refund", { job_id: jobId, reason: "smoke" }), (r) => r.status === "refunded" || JSON.stringify(r));
 await check("safety filter", () => pub.call("request_human", { title: "Get a code", instructions: "Receive an SMS verification code and send it to me", location: loc,
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
-await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "LA", lat: 34.05, lng: -118.24 },
-  deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
+await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "200 N Spring St, Los Angeles, CA 90012", lat: 34.0537, lng: -118.2428 },
+  deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => (r.status === "rejected" && /service area/i.test(r.reason ?? "")) || JSON.stringify(r));
 await check("internal auth", () => fetch(`${API}/mcp/internal`, { method: "POST" }).then((r) => r.status), (s) => s === 401 || `got ${s}`);
 
 const wakes = await sql`select event from wake_events where job_id = ${jobId} order by created_at`;

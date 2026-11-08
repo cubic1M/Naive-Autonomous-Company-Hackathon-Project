@@ -167,7 +167,7 @@ export const toolSchemas = {
   },
   verify_identity: {
     description:
-      "Start the worker's Stripe Identity verification (government ID plus a matching selfie): returns the hosted url to send the worker to, or status 'verified' with url null when the identity is already on file. Tier-2 jobs (over $150, or any certification) need it before a proof can be approved.",
+      "Start the worker's Stripe Identity verification (government ID plus a matching selfie): returns the hosted url to send the worker to, or status 'verified' with url null when the identity is already on file. Under IDENTITY_GATE=enforce every job needs it: without it the worker cannot accept and an agent cannot approve their proof.",
     input: z.object({ worker_id: uuid }).strict(),
     output: z.object({
       worker_id: uuid,
@@ -177,7 +177,7 @@ export const toolSchemas = {
     }),
   },
   check_eligibility: {
-    description: "Can this worker take this job (not suspended, tier, required certification verified, verified identity on a tier-2 job)? Also returns the job's verification tier.",
+    description: "Can this worker take this job (not suspended, tier, required certification verified, and a verified identity, which every job needs under IDENTITY_GATE=enforce)? Also returns the job's verification tier.",
     input: z.object({ worker_id: uuid, job_id: uuid }).strict(),
     output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()), tier: z.number().int().min(0).max(2) }),
   },

@@ -4,7 +4,7 @@ import { envFromProcess } from '../src/env.js';
 const base = { PUBLIC_BASE_URL: 'https://operis.test/', STRIPE_WEBHOOK_SECRET: 'whsec_x' };
 
 describe('envFromProcess: IDENTITY_GATE', () => {
-  it('defaults to log, the way PAYOUT_CAP_CENTS defaults to 15000', () => {
+  it('defaults to log until the job page can get every worker verified, the way PAYOUT_CAP_CENTS defaults to 15000', () => {
     expect(envFromProcess(base)).toMatchObject({ IDENTITY_GATE: 'log', PAYOUT_CAP_CENTS: 15_000 });
     expect(envFromProcess({ ...base, IDENTITY_GATE: '' }).IDENTITY_GATE).toBe('log');
   });

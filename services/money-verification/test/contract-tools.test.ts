@@ -5,7 +5,7 @@ import { escalateProof, recordFounderDecision, rejectProof } from '../src/proof/
 import type { VisionScorer } from '../src/proof/vision.js';
 import { createTools } from '../src/tools.js';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
-import { JOB_ID, PROOF_ID, WORKER_ID, YC, approvedReview, makeJob, makeProof, makeWorker, makeWorld, webhookRequest } from './helpers.js';
+import { JOB_ID, PROOF_ID, WORKER_ID, YC, approvedReview, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
 
 const scorer = (confidence: number): VisionScorer => ({
   async score(input) {
@@ -13,7 +13,7 @@ const scorer = (confidence: number): VisionScorer => ({
   },
 });
 
-async function fundedWorld(opts: { vision?: VisionScorer; budget?: number; account?: 'ready' | 'none' } = {}) {
+async function fundedWorld(opts: { vision?: VisionScorer; budget?: number; account?: 'ready' | 'none'; identity?: 'verified' | 'none' } = {}) {
   const world = makeWorld();
   const deps = { ...world.deps, vision: opts.vision ?? null };
   const job = world.repo.seedJob(makeJob({ budget_cents: opts.budget ?? 6000, proof_schema: { photos: { min: 1, must_show: ['YC sign'] }, geofence_m: 150 } }));
@@ -23,6 +23,7 @@ async function fundedWorld(opts: { vision?: VisionScorer; budget?: number; accou
     world.stripe.enablePayouts(acct.id);
     world.repo.seedWorker(makeWorker({ stripe_connect_account: acct.id }));
   }
+  if (opts.identity !== 'none') await seedVerifiedIdentity(world); // every job needs a worker with a verified identity
   world.repo.seedProof(makeProof());
   const tools = createTools(deps);
   await tools.create_escrow({ job_id: job.id });
@@ -95,6 +96,32 @@ describe('contracts/tools.ts adapters', () => {
     expect(await contract.payout({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, status: 'paid', worker_pay_usd: 45, fee_usd: 15 });
   });
 
+  it('check_proof keeps an automated approval as is: a job approved before every job needed an identity stays approved and is paid', async () => {
+    const { world, contract } = await fundedWorld({ vision: scorer(0.95), budget: 3000, identity: 'none' });
+    await world.repo.upsertProofReview(approvedReview({ reviewer: 'auto' }));
+    const decisions = () => world.fired.filter((f) => f.name === 'onProofDecision').length;
+    const before = decisions();
+    expect((await contract.check_proof({ job_id: JOB_ID })).decision).toBe('approved');
+    expect(await world.repo.getProofReview(PROOF_ID)).toMatchObject({ decision: 'approved', reviewer: 'auto' });
+    expect(decisions()).toBe(before);
+    expect(await contract.capture_payment({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, captured_usd: 30 });
+    expect(await contract.payout({ job_id: JOB_ID })).toMatchObject({ job_id: JOB_ID, status: 'paid' });
+  });
+
+  it('a job accepted before every job needed an identity: agents cannot pay the unverified worker, a founder can, and the waiver is recorded', async () => {
+    const world = makeWorld();
+    world.repo.seedJob(makeJob({ budget_cents: 3000 }));
+    world.repo.seedWorker(makeWorker());
+    world.repo.seedProof(makeProof());
+    const contract = createContractTools({ ...world.deps, vision: scorer(0.95) });
+    expect((await contract.check_proof({ job_id: JOB_ID })).decision).toBe('escalated');
+    expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'identity_unverified' });
+    const deps = { repo: world.repo, hooks: world.hooks, vision: scorer(0.95), env: { IDENTITY_GATE: 'enforce' as const } };
+    const review = await recordFounderDecision(deps, { jobId: JOB_ID, decision: 'approved' });
+    expect(review).toMatchObject({ decision: 'approved', reviewer: 'founder' });
+    expect(review.checks.filter((c) => c.name === 'identity')).toMatchObject([{ status: 'pass', data: { enforced: true, verified: false, waived_by: 'founder' } }]);
+  });
+
   it('a founder approval waives an unenforceable identity on tier 2 (noted) but never a geofence failure', async () => {
     const world = makeWorld();
     world.repo.seedJob(makeJob({ budget_cents: 24000 }));
@@ -118,7 +145,7 @@ describe('contracts/tools.ts adapters', () => {
     expect(world.fired.filter((f) => f.name === 'onProofDecision').map((f) => f.args[2])).toEqual(['escalated']);
     const review = await world.repo.getProofReview(PROOF_ID);
     expect(review).toMatchObject({ decision: 'escalated', reviewer: 'verifier-agent', confidence: 0.82 });
-    expect(review?.checks.map((c) => c.name)).toEqual(['profile', 'reuse', 'completeness', 'geofence', 'time', 'vision', 'reviewer_note']);
+    expect(review?.checks.map((c) => c.name)).toEqual(['profile', 'reuse', 'completeness', 'geofence', 'time', 'identity', 'vision', 'reviewer_note']);
   });
 
   it('capture_payment, payout and ledger speak USD', async () => {

@@ -42,7 +42,7 @@ To run the smoke test against production you need the production `DATABASE_URL`:
 - [ ] **Pay:** open `escrow_url`, card `4242 4242 4242 4242`, any future date, any CVC → Stripe shows an **uncaptured** PaymentIntent; the backoffice shows the request move to **Funded**.
 - [ ] **CEO:** within a minute the backoffice "Agent activity" shows the CEO reading the job and creating a board card. Approve when asked (console → Agent approvals → **Approve for this session**, or `npm run approvals -- allow-all --session`).
 - [ ] **Ops:** `find_people` → approve; `send_blast` → approve. The request moves to **Finding people**. In demo mode only `OUTREACH_TEST_ALLOWLIST` (azli@stanford.edu) gets a real email from `ops@mail.operis.live`; the others are recorded as dry runs.
-- [ ] **Worker:** the email link opens `https://operis.live/j/<token>` (Dora's page) → **Accept** → request moves to **Worker on it**.
+- [ ] **Worker:** the email link opens `https://operis.live/j/<token>` (Dora's page) → **Accept** → request moves to **Worker on it**. Under `IDENTITY_GATE=enforce` the worker must have a verified ID first: sign in, **Verify your ID**, finish Stripe's test flow.
 - [ ] **Proof:** at the location, on a phone: allow location, take the photos, submit → the photos upload to Blob (full size); request moves to **Proof in**.
 - [ ] **Verifier:** checks the proof (tier 0 for under $50: ≥1 photo, confidence ≥ 0.80, inside 150 m) → approve when asked → **Approved**. If it escalates, the console's **Needs your review** shows it: Approve → pay.
 - [ ] **Finance:** `capture_payment`, then `payout` → approve when asked → **Paid**. Stripe shows the PaymentIntent **captured**. The worker gets a payout-setup link (Stripe Connect) if they haven't done it yet.

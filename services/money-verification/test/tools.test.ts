@@ -28,6 +28,7 @@ describe('tool layer', () => {
     const acct = await world.stripe.accounts.create({ type: 'express', metadata: { worker_id: WORKER_ID } });
     world.stripe.enablePayouts(acct.id);
     world.repo.seedWorker(makeWorker({ stripe_connect_account: acct.id }));
+    await seedVerifiedIdentity(world);
     world.repo.seedProof(makeProof());
 
     const held = await tools.create_escrow({ job_id: JOB_ID });
@@ -220,6 +221,7 @@ describe('tool layer', () => {
     const { world, tools } = worldWithTools({ vision: passingScorer });
     world.repo.seedJob(makeJob({ budget_cents: 3000 }));
     world.repo.seedWorker(makeWorker());
+    await seedVerifiedIdentity(world);
     world.repo.seedProof(makeProof());
     // tier 0, no readMedia: device GPS and captured_at carry the deterministic checks, the scorer passes 0.95 >= 0.8
     expect(await tools.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: 'tier 0 on device data' })).toMatchObject({ decision: 'approved' });

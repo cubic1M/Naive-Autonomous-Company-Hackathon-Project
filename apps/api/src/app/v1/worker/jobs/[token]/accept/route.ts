@@ -1,5 +1,6 @@
 // POST: accept the job behind this link. Needs a signed-in worker account (401 login_required otherwise).
-// The account is linked to the worker the link was sent to; a different person's account is refused.
+// The account is linked to the worker the link was sent to. Only an account that already did jobs as a worker with
+// another email is refused (bindAccount); any other account takes the link's worker over.
 import { outreachByToken, acceptJob } from "@/lib/worker";
 import { bindAccount, currentAccount, loginRequired } from "@/lib/accounts";
 export const dynamic = "force-dynamic";

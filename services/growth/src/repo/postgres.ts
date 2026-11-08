@@ -1,5 +1,6 @@
-import { GrowthTablesMissing, type GrowthRepo } from '../repo.js';
-import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from '../types.js';
+import { GrowthTablesMissing, REDDIT_REF, redditLogEntry, type GrowthRepo } from '../repo.js';
+import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from '../types.js';
+import type { NewSocialPost, SocialPlatform, SocialPost, SocialPostOutcome } from '../types.js';
 
 /** Anything with query(text, params) → { rows }: PGlite, @neondatabase/serverless, or postgres.js through dbFromPostgresJs. */
 export interface Db {
@@ -49,6 +50,21 @@ function grant(r: any): Grant {
   };
 }
 
+function socialPost(r: any): SocialPost {
+  return {
+    id: String(r.id),
+    platform: r.platform,
+    status: r.status,
+    reason: r.reason ?? null,
+    body: r.body,
+    body_hash: r.body_hash,
+    provider: r.provider ?? null,
+    provider_post_id: r.provider_post_id ?? null,
+    url: r.url ?? null,
+    created_at: date(r.created_at)!,
+  };
+}
+
 function withCustomer(r: any): JobWithCustomer {
   return {
     job_id: String(r.job_id),
@@ -72,7 +88,8 @@ export class PostgresGrowthRepo implements GrowthRepo {
     try {
       return (await this.db.query(text, params)).rows;
     } catch (e) {
-      if (missingTable(e) && /growth_/.test(String((e as Error).message))) throw new GrowthTablesMissing();
+      const message = String((e as Error).message);
+      if (missingTable(e) && /growth_/.test(message)) throw new GrowthTablesMissing(/growth_social_posts/.test(message) ? '0002_social.sql' : undefined);
       throw e;
     }
   }
@@ -173,7 +190,22 @@ export class PostgresGrowthRepo implements GrowthRepo {
   }
 
   async searchSpendSince(since: Date): Promise<number> {
-    const rows = await this.q(`select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and created_at >= $1`, [since]);
+    const rows = await this.q(
+      `select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and ref is distinct from $2 and created_at >= $1`,
+      [since, REDDIT_REF],
+    );
+    return Number(rows[0]?.usd ?? 0);
+  }
+
+  async logRedditCall(c: RedditCall): Promise<void> {
+    await this.log(redditLogEntry(c));
+  }
+
+  async redditSpendSince(since: Date): Promise<number> {
+    const rows = await this.q(`select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and ref = $2 and created_at >= $1`, [
+      since,
+      REDDIT_REF,
+    ]);
     return Number(rows[0]?.usd ?? 0);
   }
 
@@ -267,5 +299,29 @@ export class PostgresGrowthRepo implements GrowthRepo {
       if (missingTable(e)) return []; // Cameron's migration has not run yet
       throw e;
     }
+  }
+
+  async logSocialPost(p: NewSocialPost): Promise<string> {
+    const rows = await this.q('insert into growth_social_posts (platform, status, reason, body, body_hash) values ($1, $2, $3, $4, $5) returning id', [
+      p.platform,
+      p.status,
+      p.reason ?? null,
+      p.body,
+      p.body_hash,
+    ]);
+    return String(rows[0].id);
+  }
+
+  async settleSocialPost(id: string, o: SocialPostOutcome): Promise<void> {
+    if (!UUID.test(id)) return;
+    await this.q(
+      `update growth_social_posts set status = $2, reason = $3, provider = $4, provider_post_id = $5, url = $6 where id = $1 and status = 'pending'`,
+      [id, o.status, o.reason ?? null, o.provider ?? null, o.provider_post_id ?? null, o.url ?? null],
+    );
+  }
+
+  async socialPostsSince(platform: SocialPlatform, since: Date): Promise<SocialPost[]> {
+    const rows = await this.q('select * from growth_social_posts where platform = $1 and created_at >= $2 order by created_at desc, id', [platform, since]);
+    return rows.map(socialPost);
   }
 }

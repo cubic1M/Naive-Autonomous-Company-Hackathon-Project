@@ -45,7 +45,7 @@ export async function declineJob(outreachId: string) {
 /** Most recent open offer for a phone number (for SMS "YES"), optionally matched by code. */
 export async function openOutreachForPhone(phone: string, code?: string) {
   const rows = await sql`
-    select o.id, o.short_code from outreach o join workers w on w.id = o.worker_id join jobs j on j.id = o.job_id
+    select o.id, o.short_code, o.token from outreach o join workers w on w.id = o.worker_id join jobs j on j.id = o.job_id
     where w.phone = ${phone} and o.status in ${sql(OPEN)} and j.status = 'outreach' order by o.created_at desc`;
   if (code) return rows.find((r: any) => r.short_code === code) ?? null;
   return rows.length === 1 ? rows[0] : null; // ambiguous if several open offers: ask for the code

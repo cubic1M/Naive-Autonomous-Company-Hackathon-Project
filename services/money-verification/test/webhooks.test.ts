@@ -390,3 +390,41 @@ describe('payment_intent.amount_capturable_updated', () => {
     expect(firedNamed(world, 'onJobFunded')).toHaveLength(1);
   });
 });
+
+describe('live cutover: signing secrets and event mode', () => {
+  async function readyAccountEvent(world: World, livemode: boolean) {
+    const acct = await world.stripe.accounts.create({ type: 'express', metadata: { worker_id: WORKER_ID } });
+    world.repo.seedWorker(makeWorker({ stripe_connect_account: acct.id }));
+    return Object.assign({ ...world.stripe.enablePayouts(acct.id), livemode }, { accountId: acct.id });
+  }
+
+  it('STRIPE_WEBHOOK_SECRET may list two secrets (account endpoint, Connect endpoint): either one verifies', async () => {
+    const world = makeWorld({ env: { STRIPE_WEBHOOK_SECRET: 'whsec_account, whsec_connect' } });
+    const event = world.stripe.event('customer.created', { id: 'cus_1' });
+    for (const secret of ['whsec_account', 'whsec_connect']) {
+      expect((await handleStripeWebhook(world.deps, webhookRequest(world, { ...event, id: `evt_${secret}` }, { secret }))).status).toBe(200);
+    }
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, event, { secret: 'whsec_other' }));
+    expect(res.status).toBe(400);
+    expect(await res.text()).not.toContain('whsec_');
+  });
+
+  it('a live deployment ignores a test-mode event (200, unhandled, nothing moves) so a stale sandbox endpoint cannot act', async () => {
+    const world = makeWorld();
+    const event = await readyAccountEvent(world, false);
+    const res = await handleStripeWebhook({ ...world.deps, stripeMode: 'live' }, webhookRequest(world, event));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ received: true, handled: false, ignored: 'test-mode event; this deployment uses a live key' });
+    expect(firedNamed(world, 'onWorkerPayoutReady')).toHaveLength(0);
+  });
+
+  it('a live deployment handles live events', async () => {
+    const world = makeWorld();
+    world.repo.stripeMode = 'live';
+    const event = await readyAccountEvent(world, true);
+    await world.repo.setWorkerConnectAccount(WORKER_ID, event.accountId);
+    const res = await handleStripeWebhook({ ...world.deps, stripeMode: 'live' }, webhookRequest(world, event));
+    expect(await res.json()).toMatchObject({ handled: true });
+    expect(firedNamed(world, 'onWorkerPayoutReady')[0]?.args).toEqual([WORKER_ID]);
+  });
+});

@@ -12,7 +12,7 @@ export default function Page() {
           <UL items={["Joining, getting matched and getting paid are free", "You get the full pay shown on the job", "Payouts go to your bank through Stripe"]} />
         </Card>
         <Card title="For agent companies: 25%">
-          <UL items={["Operis keeps 25% of the job price, minimum job $20", "Your card is held, not charged, when you post", "Charged only when proof passes; released if the job fails"]} />
+          <UL items={["Operis keeps 25% of the job price, minimum job $3", "Your card is held, not charged, when you post", "Charged only when proof passes; released if the job fails"]} />
         </Card>
         <Card title="Example">
           <P>A $60 job pays the worker <strong>$45</strong>. Operis keeps <strong>$15</strong>. If nobody finishes it, the $60 hold is released.</P>

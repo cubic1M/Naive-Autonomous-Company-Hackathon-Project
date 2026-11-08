@@ -1,6 +1,7 @@
 // Plays the human worker for a job while the real Naïve agents run the company.
 // Usage: npm run simulate -- <job_id>        (or no id: uses the newest job)
 // Waits for Ops to send outreach, accepts, uploads a proof near the job, then watches the job finish.
+// Every job needs a worker with a verified Stripe Identity: verify the worker first, or run the API with IDENTITY_GATE=log.
 import postgres from "postgres";
 import { API } from "./env";
 
@@ -38,6 +39,11 @@ const page = await fetch(`${API}/v1/worker/jobs/${token}`).then((r) => r.json())
 console.log(`job page: "${page.job.title}" pays $${page.job.pay_usd}`);
 const acc = await fetch(`${API}/v1/worker/jobs/${token}/accept`, { method: "POST" }).then((r) => r.json());
 console.log(`accept: ${JSON.stringify(acc)}`);
+if (!acc.ok) {
+  const needsId = JSON.stringify(acc).includes("identity_not_verified");
+  console.log(needsId ? "accept refused: this worker has no verified Stripe Identity. Verify them first, or run the API with IDENTITY_GATE=log." : "accept refused");
+  process.exit(1);
+}
 
 await sleep(2000);
 const j = await status();

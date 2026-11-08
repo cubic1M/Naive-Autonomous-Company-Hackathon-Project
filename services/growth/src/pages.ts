@@ -23,7 +23,7 @@ export function page(title: string, body: string): string {
 const button = (token: string, action: 'opt_in' | 'identity', label: string) =>
   `<form method="post" action="/v1/growth/join"><input type="hidden" name="t" value="${esc(token)}"><input type="hidden" name="action" value="${action}"><button type="submit">${esc(label)}</button></form>`;
 const identityStep = (token: string) =>
-  para('One more step, if you like: verify your ID once with Stripe (about 2 minutes). Larger jobs and jobs that need a license require a verified ID.') +
+  para('One more step: verify your ID once with Stripe (about 2 minutes). You need a verified ID before you can take any job.') +
   button(token, 'identity', 'Verify my ID');
 const html = (status: number, title: string, body: string): PageResult => ({ status, html: page(title, body) });
 const unsubscribed = () => html(200, 'You unsubscribed', para("You asked us not to contact you, so we won't send you jobs. Changed your mind? Email ops@operis.live."));

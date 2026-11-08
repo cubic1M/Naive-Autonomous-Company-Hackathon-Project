@@ -80,7 +80,12 @@ export default function ProofPage({ token }: { token: string }) {
 
   const job = typeof load === "object" ? load.job : null;
   const req = job?.proof_requirement ?? null;
-  const geofence = req?.geofence_m ?? 150;
+  // Same rule as the API (services/money-verification/src/proof/checks.ts): with no geofence_m the radius is 300 m and
+  // proof up to 1 km away goes to review instead of failing; a radius the customer set is strict. Remote jobs
+  // (no location) have no fence at all.
+  const geofence = req?.geofence_m ?? 300;
+  const reviewRadius = req?.geofence_m == null ? 1000 : geofence;
+  const onSite = job?.location.lat != null && job?.location.lng != null;
   const minPhotos = req?.photos?.min ?? (req?.video || req?.files ? 0 : 1);
   const mustShow = req?.photos?.must_show ?? [];
 
@@ -89,8 +94,9 @@ export default function ProofPage({ token }: { token: string }) {
   const files = items.filter((i) => i.role === "file");
   const certs = items.filter((i) => i.role === "certification");
 
-  const dist = fix && job ? distanceM(fix.lat, fix.lng, job.location.lat, job.location.lng) : null;
+  const dist = fix && job && onSite ? distanceM(fix.lat, fix.lng, job.location.lat, job.location.lng) : null;
   const outside = dist !== null && dist > geofence;
+  const tooFar = dist !== null && dist > reviewRadius;
   const stale = items.some((i) => Date.now() - i.file.lastModified > STALE_MS);
   const shortVideo = req?.video && videos.length > 0 && videos.every((v) => (v.durationS ?? Infinity) < req.video!.min_seconds);
 
@@ -174,6 +180,7 @@ export default function ProofPage({ token }: { token: string }) {
 
   async function onSubmit() {
     setError(null);
+    if (tooFar && !window.confirm(`You're about ${meters(dist!)} from the job. Proof sent from here will likely be rejected, and that ends the job. Send it anyway?`)) return;
     if (!blobEnabled) {
       const total = items.reduce((n, i) => n + i.file.size, 0);
       if (total > INLINE_LIMIT) {
@@ -294,8 +301,8 @@ export default function ProofPage({ token }: { token: string }) {
       <section className="card stack">
         <div className="row between">
           <h2 className="row"><Icon name="pin" /> Your location</h2>
-          {fix && !outside && <span className="pill good">On site</span>}
-          {outside && <span className="pill warn">Too far</span>}
+          {onSite && fix && !outside && <span className="pill good">On site</span>}
+          {outside && <span className="pill warn">{tooFar ? "Too far" : "Needs review"}</span>}
         </div>
         {geoErr ? (
           <>
@@ -311,12 +318,16 @@ export default function ProofPage({ token }: { token: string }) {
         ) : outside ? (
           <>
             <div className="notice warn">
-              You&apos;re about <strong>{meters(dist!)}</strong> from the job. Proof has to be uploaded within {geofence} m of{" "}
-              <a href={mapsUrl(job!.location.lat, job!.location.lng)} target="_blank" rel="noreferrer noopener">{job!.location.address}</a>,
-              or it goes to manual review and payment is delayed.
+              You&apos;re about <strong>{meters(dist!)}</strong> from the job. Proof should be uploaded within {geofence} m of{" "}
+              <a href={mapsUrl(job!.location.lat, job!.location.lng)} target="_blank" rel="noreferrer noopener">{job!.location.address}</a>.{" "}
+              {tooFar
+                ? "From here it would be rejected, so go to the job and check again."
+                : "From here it goes to review before you're paid, so payment can take longer."}
             </div>
             <button className="btn outline" onClick={locate}>I&apos;ve moved, check again</button>
           </>
+        ) : !onSite ? (
+          <p className="muted small">Remote job: there is no job location to check against.</p>
         ) : (
           <p className="muted small">
             {meters(dist!)} from the job (±{meters(fix.accuracy)}). We&apos;ll check again when you submit.
