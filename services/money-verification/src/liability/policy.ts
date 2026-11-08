@@ -123,7 +123,7 @@ export const RULES: readonly LiabilityRule[] = [
   },
   {
     id: 'U', title: 'Unsure or no decision in time', model: 'connector', licence: null,
-    description: 'Use when you cannot tell whether a rule applies. The worker is the provider. The system also records U when no decision arrives within fifteen minutes.',
+    description: 'Use when you cannot tell whether a rule applies. The worker is the provider. When no decision arrives within fifteen minutes the system records the rule intake tagged, or U when there is none.',
     work: none, certification: none, mentions: none, ignore: none,
   },
   {

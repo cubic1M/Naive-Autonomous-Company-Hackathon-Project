@@ -14,6 +14,11 @@ const NUDGES = [
 
 export async function sweep() {
   const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, redriven: 0, errors: [] as string[] };
+  // job_liability arrives with migration 0003 (42P01 until then): the liability steps find nothing. Other errors are reported.
+  const noLiabilityRows = (step: string) => (e: any) => {
+    if (e?.code !== "42P01") report.errors.push(`${step}: ${String(e).slice(0, 120)}`);
+    return [] as any[];
+  };
 
   // 1. Past the deadline and nobody delivered: stop the job and give the customer their money back.
   const overdue = await sql`
@@ -37,13 +42,13 @@ export async function sweep() {
     }
   }
 
-  // 2. Funded jobs with no liability decision fifteen minutes after Compliance was woken: decide by the intake tags.
+  // 2. Funded jobs with no liability decision fifteen minutes after they entered held (jobs.updated_at, which the
+  //    transition sets): decide by the intake tags. Not keyed on the held wake event, which wake() deletes when Naive fails.
   const undecided = await sql`
     select j.id from jobs j
-    join wake_events w on w.job_id = j.id and w.event = 'held'
     left join job_liability l on l.job_id = j.id
     where j.status = 'held' and (l.job_id is null or l.model is null)
-      and w.created_at < now() - interval '15 minutes'`.catch(() => [] as any[]); // before migration 0003
+      and j.updated_at < now() - interval '15 minutes'`.catch(noLiabilityRows("liability fallback"));
   for (const j of undecided) {
     try {
       const out = await compliance.fallbackDecision(j.id);
@@ -66,7 +71,7 @@ export async function sweep() {
              or not exists (select 1 from wake_events w where w.job_id = j.id and w.event = 'liability_decided')))
         or (j.status = 'cancelled' and l.model = 'refuse'
              and exists (select 1 from escrows e where e.job_id = j.id and e.status in ('pending', 'authorized'))))`
-    .catch(() => [] as any[]); // before migration 0003
+    .catch(noLiabilityRows("liability re-drive"));
   for (const j of pending) {
     try {
       await afterDecision(j.id, { model: j.model, next: j.model === "refuse" ? "cancel" : "wake_ceo", reason: j.reason ?? "" });
