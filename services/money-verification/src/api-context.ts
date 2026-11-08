@@ -121,6 +121,10 @@ export function hooksFromApiContext(ctx: ApiContext, repo: Repo): Hooks {
     async onWorkerPayoutReady(workerId) {
       ctx.log(`[money-verification] worker ${workerId} can now receive payouts`);
     },
+    async onWorkerVerified(workerId, status) {
+      // Informational for now: the job page re-reads worker_verifications (check_eligibility) on its next load.
+      ctx.log(`[money-verification] worker ${workerId} identity verification is ${status}`);
+    },
     async onDisputeOpened(disputeId, jobId) {
       ctx.log(`[money-verification] dispute ${disputeId} opened on job ${jobId ?? 'unknown'}: wake the Disputes agent`);
     },

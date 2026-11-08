@@ -13,6 +13,7 @@ export * from './payouts.js';
 export * from './settle.js';
 export * from './disputes.js';
 export * from './eligibility.js';
+export * from './identity.js';
 export * from './webhooks/stripe.js';
 export * from './proof/exif.js';
 export * from './proof/profile.js';
