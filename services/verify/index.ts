@@ -14,7 +14,7 @@ import {
 
 const tools = (ctx: ToolContext) => createContractTools(depsFromApiContext(ctx as ApiContext));
 
-const verify: ServiceModule & { createIdentityLink: typeof createIdentityLink } = {
+const verify: ServiceModule = {
   // Runs the automated review (profile/tier, geofence, time window, completeness, media reuse, identity on tier 2,
   // vision) and returns the evidence, including `decision`, `tier` and `profile`.
   check_proof: (input, ctx) => tools(ctx).check_proof(input),
@@ -29,12 +29,11 @@ const verify: ServiceModule & { createIdentityLink: typeof createIdentityLink } 
     return { error };
   },
   escalate: (input, ctx) => tools(ctx).escalate(input),
-  // Also reachable as a property of the default export, the way the payout-setup route looks up createPayoutLink.
-  createIdentityLink,
 };
 export default verify;
 
 /**
+ * Named export, read with `import * as verify from "@services/verify/index"` like createPayoutLink after PR #15.
  * Called by POST /v1/worker/identity (Dora's job page, before proof upload on a tier-2 job): a hosted Stripe
  * Identity link for the worker (government ID plus a matching selfie), or { url: null, status: 'verified' }
  * when the identity is already on file. Needs DATABASE_URL, STRIPE_SECRET_KEY and PUBLIC_BASE_URL (the
