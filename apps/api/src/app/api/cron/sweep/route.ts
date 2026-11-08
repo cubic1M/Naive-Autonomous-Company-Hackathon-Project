@@ -8,6 +8,6 @@ export async function GET(req: Request) {
   const cron = process.env.CRON_SECRET && req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
   if (!cron && !authAdmin(req)) return new Response("unauthorized", { status: 401 });
   const report = await sweep();
-  if (report.cancelled || report.expired || report.nudged || report.errors.length) console.log("[sweep]", JSON.stringify(report));
+  if (report.cancelled || report.expired || report.nudged || report.liability || report.errors.length) console.log("[sweep]", JSON.stringify(report));
   return Response.json(report);
 }

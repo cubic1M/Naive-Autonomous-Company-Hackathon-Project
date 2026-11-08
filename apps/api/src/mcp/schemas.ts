@@ -70,6 +70,19 @@ export const SCHEMAS = {
     shape: { job_id: z.string().uuid().optional(), proof_id: z.string().uuid().optional() },
   },
   get_dispute: { description: "Evidence bundle for a Stripe chargeback: dispute, job, proof review, ledger lines.", shape: { dispute_id: z.string().min(1) } },
+  get_liability_context: {
+    description: "Compliance only: the job's intake tags, pricing, the models you may choose (allowed_models), any recorded decision, and the full liability policy text.",
+    shape: jobId,
+  },
+  set_liability: {
+    description: "Compliance only: record the job's liability model (operis, connector or refuse) with the policy rule id and a one-line reason the customer can read. Final once recorded.",
+    shape: {
+      ...jobId,
+      model: z.enum(["operis", "connector", "refuse"]),
+      rule_id: z.string().min(1).max(4).describe("Policy rule id from get_liability_context, e.g. D, L1, L2, U, R"),
+      reason: z.string().min(1).max(500),
+    },
+  },
   submit_dispute_evidence: {
     description: "Draft (default) or submit chargeback evidence to Stripe. submit: true sends it and can't be undone.",
     shape: { dispute_id: z.string().min(1), evidence: z.record(z.any()), submit: z.boolean().optional() },
