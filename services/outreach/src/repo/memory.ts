@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { distanceKm, normEmail, toE164 } from '../geo.js';
-import type { Repo } from '../repo.js';
+import { cityOf, poolTerms, type PoolQuery, type Repo } from '../repo.js';
 import { mergeProfiles } from '../profiles.js';
 import type { Channel, JobForOutreach, Lead, ManualPlatform, ManualTask, ManualTaskStatus, OutreachRow, OutreachStatus, Person } from '../types.js';
 
@@ -207,6 +207,45 @@ export class InMemoryRepo implements Repo {
 
   async countManualTasksSince(platform: ManualPlatform, since: Date): Promise<number> {
     return this.manual.filter((m) => m.platform === platform && new Date(m.created_at).getTime() >= since.getTime()).length;
+  }
+
+  async searchPool(q: PoolQuery): Promise<Person[]> {
+    const terms = poolTerms(q);
+    if (terms.length === 0) return [];
+    const radius = q.radiusKm ?? 25;
+    const city = cityOf(q.locationText);
+    const hasQ = q.lat != null && q.lng != null;
+    const when = (p: Person) => (p.last_active_at ? new Date(p.last_active_at).getTime() : 0);
+    return [...this.people.values()]
+      .filter((p) => !p.opted_out && (p.email || (p.regular && p.sms_consent && p.phone)))
+      .map((p) => {
+        const text = [p.name, p.headline, p.snippet, ...p.categories, ...p.credentials].join(' ').toLowerCase();
+        return { p, hits: terms.filter((t) => text.includes(t)).length };
+      })
+      .filter(({ p, hits }) => {
+        if (hits === 0) return false;
+        if (q.remote) return true;
+        if (hasQ && p.lat !== null && p.lng !== null) return distanceKm(q.lat!, q.lng!, p.lat, p.lng) <= radius;
+        if (p.lat !== null && p.lng !== null) return false; // has coordinates, none to compare, so city only below
+        return city ? `${p.location_text ?? ''} ${p.address ?? ''}`.toLowerCase().includes(city) : false;
+      })
+      .sort((a, b) => b.hits - a.hits || Number(b.p.open_to_work) - Number(a.p.open_to_work) || when(b.p) - when(a.p))
+      .slice(0, q.limit)
+      .map(({ p }) => p);
+  }
+
+  /** People only (no jobs, outreach or costs), for persisting a talent pool to a file. */
+  toSnapshot(): { version: 1; people: Person[] } {
+    return { version: 1, people: [...this.people.values()].map((p) => ({ ...p, last_contacted_at: null })) };
+  }
+
+  static fromSnapshot(json: unknown): InMemoryRepo {
+    const repo = new InMemoryRepo();
+    const people = (json as { people?: Partial<Person>[] } | null)?.people;
+    for (const p of Array.isArray(people) ? people : []) {
+      if (p && typeof p.dedupe_key === 'string') repo.addPerson(p as Partial<Person> & { dedupe_key: string });
+    }
+    return repo;
   }
 
   async recordCost(jobId: string, kind: 'scrape_cost' | 'sms_cost', amountUsd: number, ref: string): Promise<void> {

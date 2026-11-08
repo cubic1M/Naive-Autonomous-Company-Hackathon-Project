@@ -1,12 +1,12 @@
 import { pickChannel } from './channel.js';
 import { dedupeKey, identityKeys, mergeLeads } from './dedupe.js';
 import { personEnrichers } from './enrich/index.js';
-import type { Env } from './env.js';
+import { DEFAULTS, type Env } from './env.js';
 import { distanceKm } from './geo.js';
-import type { Monid } from './monid.js';
+import type { Monid, MonidInput } from './monid.js';
 import { mergeProfiles } from './profiles.js';
 import { planSearch, type SearchPlan } from './queries.js';
-import type { Repo } from './repo.js';
+import type { PoolQuery, Repo } from './repo.js';
 import { distanceToJob, fitScore, locationMatches, scorePerson, type ScoreContext, type Scorable } from './score.js';
 import { crawl } from './sources/crawl.js';
 import { googleMaps } from './sources/googleMaps.js';
@@ -30,12 +30,17 @@ export interface FindDetailed {
   runs: SourceRun[];
   spend_usd: number;
   plan: SearchPlan;
+  /** Wall-clock time of the whole call. */
+  elapsed_ms: number;
+  /** How many returned candidates came from the talent pool (no live work needed). */
+  from_pool: number;
 }
 
-const DEFAULT_LIMIT = 20;
+/** Below this, a candidate is a poor fit (e.g. an unrelated Reddit poster); never invited. */
+export const MIN_SCORE = 0.3;
+const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 50;
-const MAX_ENRICH = 15;
-const ENRICH_CONCURRENCY = 4;
+const MAX_ENRICH = 60;
 /** Naive truncates tool results at 8,000 chars; stay under. */
 const MAX_OUTPUT_CHARS = 7500;
 const MAX_REGULARS_SCAN = 300;
@@ -53,6 +58,30 @@ export function shortSource(id: string | null): string {
   if (s.includes('people')) return 'people_search';
   return s.replace(/^monid:/, '').slice(0, 24);
 }
+
+/** Race a promise against a timer; resolves TIMEOUT when the timer wins. The timer never keeps the process alive. */
+const TIMEOUT = Symbol('timeout');
+function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | typeof TIMEOUT> {
+  let t: NodeJS.Timeout;
+  const timer = new Promise<typeof TIMEOUT>((res) => {
+    t = setTimeout(() => res(TIMEOUT), Math.max(0, ms));
+    t.unref?.();
+  });
+  return Promise.race([p, timer]).finally(() => clearTimeout(t));
+}
+
+/** A Monid whose every call is abandoned after timeoutMs (the call then counts as an error). */
+function withCallTimeout(monid: Monid, timeoutMs: number): Monid {
+  return {
+    async run(provider: string, endpoint: string, input: MonidInput, opts?: { timeoutMs?: number }) {
+      const r = await raceTimeout(monid.run(provider, endpoint, input, { ...opts, timeoutMs: opts?.timeoutMs ?? timeoutMs }), timeoutMs);
+      if (r === TIMEOUT) throw new Error(`timed out after ${timeoutMs}ms`);
+      return r;
+    },
+  };
+}
+
+const isTimeout = (e: unknown): boolean => /timed out after/i.test(e instanceof Error ? e.message : String(e));
 
 function err(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -91,7 +120,13 @@ function keepWithoutCoords(l: Lead, plan: SearchPlan): boolean {
 }
 
 export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps): Promise<FindDetailed> {
-  const { repo, monid, env } = deps;
+  const started = Date.now();
+  const { repo, env } = deps;
+  const budgetMs = env.OUTREACH_TIME_BUDGET_MS ?? DEFAULTS.OUTREACH_TIME_BUDGET_MS;
+  const callTimeoutMs = env.OUTREACH_CALL_TIMEOUT_MS ?? DEFAULTS.OUTREACH_CALL_TIMEOUT_MS;
+  const concurrency = Math.max(1, env.OUTREACH_ENRICH_CONCURRENCY ?? DEFAULTS.OUTREACH_ENRICH_CONCURRENCY);
+  const deadline = started + budgetMs;
+  const monid = withCallTimeout(deps.monid, callTimeoutMs);
   const sources = deps.sources ?? peopleSources;
   const enrichers = [...(deps.enrichers ?? personEnrichers)].sort((a, b) => a.costEstimateUsd - b.costEstimateUsd);
   const job: JobForOutreach | null = await repo.getJob(input.job_id);
@@ -158,7 +193,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
       return res.leads;
     } catch (e) {
       reserved -= r.held;
-      record(adapter.id, 0, e instanceof SourceError ? e.cost_usd : 0, err(e));
+      record(adapter.id, 0, Math.max(e instanceof SourceError ? e.cost_usd : 0, isTimeout(e) ? r.held : 0), err(e));
       return null;
     }
   };
@@ -167,6 +202,21 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     const r = reserve(adapter, queries);
     return r ? runReserved(adapter, r) : null;
   };
+
+  // 0. talent pool: people we already know match instantly, with no enrichment
+  const poolIds = new Set<string>();
+  const poolQuery: PoolQuery = {
+    terms: [...plan.roles, ...plan.skills, ...(remote ? [] : plan.mapsQueries)],
+    credential: plan.credential,
+    remote,
+    lat: onsiteCoords ? job.lat : null,
+    lng: onsiteCoords ? job.lng : null,
+    radiusKm,
+    locationText: plan.locationText,
+    limit: Math.min(500, limit * 5),
+  };
+  const poolPeople: Person[] = await repo.searchPool(poolQuery).catch(() => [] as Person[]);
+  for (const p of poolPeople) poolIds.add(p.id);
 
   // 1. regulars first (on-site: near the job; remote: any regular whose profile fits the roles)
   let regulars: Person[];
@@ -177,17 +227,55 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     regulars = all.filter((p) => fitScore(p, scoreCtx) >= 0.5).slice(0, limit);
   }
 
-  // 2. search: people sources for every job (in parallel, budget reserved up front); Maps businesses only as on-site backup
-  const planned = sources.map((s) => ({ s, r: reserve(s, peopleQueries) }));
-  const peopleRuns = planned.filter((x) => x.r).map((x) => runReserved(x.s, x.r!));
-  const mapsRun = (async () => {
-    if (remote) return [] as Lead[];
-    let l = (await search(googleMaps, plan.mapsQueries)) ?? [];
-    if (l.length === 0) l = (await search(mapsNearby, plan.mapsQueries)) ?? [];
-    return l;
-  })();
-  const [peopleLeads, mapsLeads] = await Promise.all([Promise.all(peopleRuns), mapsRun]);
-  let leads: Lead[] = [...peopleLeads.flatMap((l) => l ?? []), ...mapsLeads];
+  const rank = (list: Person[], leadOf: Map<string, Lead>) => {
+    const view = (p: Person): Person => {
+      const l = leadOf.get(p.id);
+      if (!l) return p;
+      return {
+        ...p,
+        profiles: mergeProfiles(p.profiles, l.profiles),
+        headline: p.headline ?? l.headline ?? null,
+        location_text: p.location_text ?? l.location_text ?? null,
+        credentials: p.credentials?.length ? p.credentials : (l.credentials ?? []),
+        open_to_work: p.open_to_work || (l.open_to_work ?? false),
+        last_active_at: p.last_active_at ?? l.last_active_at ?? null,
+      };
+    };
+    return list
+      .map(view)
+      .map((p) => ({ p, channel: pickChannel(p, { allowManual: env.OUTREACH_MANUAL_QUEUE }), score: scorePerson(p, job, scoreCtx), d: remote ? null : distanceToJob(p, job) }))
+      .filter((x): x is typeof x & { channel: NonNullable<typeof x.channel> } => x.channel !== null)
+      .filter((x) => x.d === null || x.d <= radiusKm) // on-site: never invite people outside the job's area
+      .filter((x) => x.p.regular || x.score >= MIN_SCORE) // don't invite clearly irrelevant people
+      .sort((a, b) => Number(b.p.regular) - Number(a.p.regular) || b.score - a.score || (a.d ?? 1e9) - (b.d ?? 1e9))
+      .slice(0, limit);
+  };
+
+  // The pool alone fills the list: no live search at all (instant, free).
+  const poolRanked = rank([...regulars, ...poolPeople], new Map());
+  const poolFull = poolRanked.length >= limit;
+
+  // 2. search: people sources for every job (in parallel, budget reserved up front); Maps businesses only as on-site backup.
+  // Leads are collected as each source finishes; enrichment starts when all are done or at 60% of the time budget.
+  const sourceLeads: Lead[] = [];
+  const sourceJobs: Promise<unknown>[] = [];
+  if (!poolFull) {
+    const planned = sources.map((s) => ({ s, r: reserve(s, peopleQueries) }));
+    for (const x of planned) {
+      if (x.r) sourceJobs.push(runReserved(x.s, x.r).then((l) => void sourceLeads.push(...(l ?? []))));
+    }
+    if (!remote) {
+      sourceJobs.push(
+        (async () => {
+          let l = (await search(googleMaps, plan.mapsQueries)) ?? [];
+          if (l.length === 0) l = (await search(mapsNearby, plan.mapsQueries)) ?? [];
+          sourceLeads.push(...l);
+        })(),
+      );
+    }
+    await raceTimeout(Promise.all(sourceJobs), Math.min(deadline - Date.now(), budgetMs * 0.6 - (Date.now() - started)));
+  }
+  let leads: Lead[] = [...sourceLeads];
 
   // 3. merge across sources + area filter
   leads = mergeLeads(leads);
@@ -207,7 +295,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     if (k?.email && !l.email) l.email = k.email;
   }
 
-  // 4. enrich the top candidates, cheapest step first, stopping at the first email
+  // 4. enrich the top candidates (up to MAX_ENRICH, skipping anyone who already has an email), cheapest step first, stopping at the first email
   const stepsFor = (l: Lead): Enricher[] => {
     if (l.kind === 'person') return enrichers.filter((e) => !e.applies || e.applies(l));
     return l.website ? [crawl, hunter] : [];
@@ -221,7 +309,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
 
   const enrichOne = async (lead: Lead) => {
     for (const step of stepsFor(lead)) {
-      if (lead.email) break;
+      if (lead.email || Date.now() >= deadline) break;
       if (spend + reserved + step.costEstimateUsd > max + 1e-9) {
         record(step.id, 0, 0, 'skipped: budget');
         continue;
@@ -239,20 +327,31 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
         if (extra.headline && !lead.headline) lead.headline = extra.headline;
         if (extra.location_text && !lead.location_text) lead.location_text = extra.location_text;
       } catch (e) {
-        record(step.id, 0, e instanceof SourceError ? e.cost_usd : 0, err(e));
+        record(step.id, 0, Math.max(e instanceof SourceError ? e.cost_usd : 0, isTimeout(e) ? step.costEstimateUsd : 0), err(e));
       } finally {
         reserved -= step.costEstimateUsd;
       }
     }
   };
-  for (let i = 0; i < targets.length; i += ENRICH_CONCURRENCY) {
-    await Promise.all(targets.slice(i, i + ENRICH_CONCURRENCY).map(enrichOne));
-  }
+  // worker pool: `concurrency` leads in flight, best-scored first; no new work after the deadline
+  let next = 0;
+  await raceTimeout(
+    Promise.all(
+      Array.from({ length: Math.min(concurrency, targets.length) }, async () => {
+        while (next < targets.length && Date.now() < deadline) await enrichOne(targets[next++]!);
+      }),
+    ),
+    deadline - Date.now(),
+  );
+  // Whatever is still in flight at the deadline is abandoned; count its worst-case cost.
+  const abandoned = reserved;
+  spend += abandoned;
 
   // 5. persist
   const people = new Map<string, Person>();
   const leadOf = new Map<string, Lead>();
   for (const p of regulars) people.set(p.id, p);
+  for (const p of poolPeople) if (!people.has(p.id)) people.set(p.id, p);
   for (const lead of leads) {
     const p = await repo.upsertLead(lead, keys.get(lead)!);
     leadOf.set(p.id, lead);
@@ -260,32 +359,13 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
   }
 
   // 6. rank: regulars first, then score. Fields fall back to the in-memory lead if the repo didn't store them.
-  const view = (p: Person): Person => {
-    const l = leadOf.get(p.id);
-    if (!l) return p;
-    return {
-      ...p,
-      profiles: mergeProfiles(p.profiles, l.profiles),
-      headline: p.headline ?? l.headline ?? null,
-      location_text: p.location_text ?? l.location_text ?? null,
-      credentials: p.credentials?.length ? p.credentials : (l.credentials ?? []),
-      open_to_work: p.open_to_work || (l.open_to_work ?? false),
-      last_active_at: p.last_active_at ?? l.last_active_at ?? null,
-    };
-  };
-  const ranked = [...people.values()]
-    .map(view)
-    .map((p) => ({ p, channel: pickChannel(p, { allowManual: env.OUTREACH_MANUAL_QUEUE }), score: scorePerson(p, job, scoreCtx), d: remote ? null : distanceToJob(p, job) }))
-    .filter((x): x is typeof x & { channel: NonNullable<typeof x.channel> } => x.channel !== null)
-    .filter((x) => x.d === null || x.d <= radiusKm) // on-site: never invite people outside the job's area
-    .sort((a, b) => Number(b.p.regular) - Number(a.p.regular) || b.score - a.score || (a.d ?? 1e9) - (b.d ?? 1e9))
-    .slice(0, limit);
+  const ranked = rank([...people.values()], leadOf);
 
   let candidates: Candidate[] = ranked.map((x) => ({
     candidate_id: x.p.id,
-    name: x.p.name ? x.p.name.slice(0, 40) : null,
+    name: x.p.name ? x.p.name.slice(0, 32) : null,
     channel: x.channel,
-    source: x.p.regular ? 'regular' : shortSource(x.p.source),
+    source: x.p.regular ? 'regular' : poolIds.has(x.p.id) ? 'pool' : shortSource(x.p.source),
     distance_km: x.d === null ? null : Math.round(x.d * 10) / 10,
     score: Math.round(x.score * 100) / 100,
   }));
@@ -296,7 +376,8 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
   const runs = [...runMap.values()].map((r) => ({ ...r, cost_usd: Math.round(r.cost_usd * 1e6) / 1e6 }));
   const spend_usd = Math.round(spend * 1e6) / 1e6;
   if (spend_usd > 0) await repo.recordCost(job.id, 'scrape_cost', spend_usd, 'find_people');
-  return { output: { candidates }, runs, spend_usd, plan };
+  const from_pool = candidates.filter((c) => c.source === 'pool').length;
+  return { output: { candidates }, runs, spend_usd, plan, elapsed_ms: Date.now() - started, from_pool };
 }
 
 export async function findPeople(input: FindPeopleInput, deps: FindDeps): Promise<FindPeopleOutput> {

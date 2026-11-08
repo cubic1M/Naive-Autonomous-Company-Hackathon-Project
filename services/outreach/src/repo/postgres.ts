@@ -1,6 +1,6 @@
 import type postgres from 'postgres';
 import { normEmail, toE164 } from '../geo.js';
-import type { Repo } from '../repo.js';
+import { cityOf, poolTerms, type PoolQuery, type Repo } from '../repo.js';
 import { mergeProfiles } from '../profiles.js';
 import type { Channel, JobForOutreach, Lead, ManualPlatform, ManualTask, ManualTaskStatus, OutreachRow, OutreachStatus, Person } from '../types.js';
 
@@ -110,6 +110,41 @@ export class PostgresRepo implements Repo {
       where dist_km <= ${radiusKm}
       order by dist_km asc
       limit ${limit}`;
+    return rows.map(toPerson);
+  }
+
+  async searchPool(q: PoolQuery): Promise<Person[]> {
+    const terms = poolTerms(q).map((t) => t.replace(/[%_\\]/g, ' ').trim()).filter(Boolean);
+    if (terms.length === 0) return [];
+    const radius = q.radiusKm ?? 25;
+    const city = cityOf(q.locationText);
+    const cityPat = city ? `%${city.replace(/[%_\\]/g, ' ')}%` : null;
+    const lat = q.lat ?? null;
+    const lng = q.lng ?? null;
+    const rows = await this.sql<Row[]>`
+      select * from (
+        select ${this.sql.unsafe(PERSON_COLS)},
+          (select count(*) from unnest(${terms}::text[]) as t(term) where hay.txt like '%' || t.term || '%')::int as hits,
+          case when ${lat}::float8 is not null and ${lng}::float8 is not null and p.lat is not null and p.lng is not null then
+            2 * 6371 * asin(least(1, sqrt(
+              power(sin(radians(p.lat - ${lat}::float8) / 2), 2) +
+              cos(radians(${lat}::float8)) * cos(radians(p.lat)) * power(sin(radians(p.lng - ${lng}::float8) / 2), 2)
+            ))) end as dist_km,
+          p.lat is not null and p.lng is not null as has_coords,
+          lower(coalesce(p.location_text, '') || ' ' || coalesce(p.address, '')) as loc,
+          coalesce(p.last_active_at, p.updated_at) as recent
+        from worker_profiles p
+        join workers w on w.id = p.worker_id
+        cross join lateral (select lower(concat_ws(' ', w.name, p.headline, p.snippet, p.categories::text, p.credentials::text)) as txt) hay
+        where not coalesce(w.opted_out, false)
+          and (w.email is not null or (p.regular and p.sms_consent and w.phone is not null))
+      ) t
+      where hits > 0
+        and (${q.remote}::boolean
+          or (dist_km is not null and dist_km <= ${radius}::float8)
+          or (dist_km is null and not has_coords and ${cityPat}::text is not null and loc like ${cityPat}::text))
+      order by hits desc, open_to_work desc, recent desc nulls last
+      limit ${q.limit}`;
     return rows.map(toPerson);
   }
 

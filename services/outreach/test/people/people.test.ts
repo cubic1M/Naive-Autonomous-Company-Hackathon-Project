@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FakeMonid, fixture, makeCtx, makeJob } from '../helpers/fakeMonid.js';
-import { buildGoogleQueries, cityFromAddress, googleProfiles, parseGoogleProfiles, roleFamily, splitTitle } from '../../src/sources/people/googleProfiles.js';
+import { MAX_QUERIES, RESULTS_PER_QUERY, buildGoogleQueries, cityFromAddress, googleProfiles, parseGoogleProfiles, roleFamily, splitTitle } from '../../src/sources/people/googleProfiles.js';
 import { linkedinPeople, buildLinkedinFilters, parseLinkedinPeople } from '../../src/sources/people/linkedinPeople.js';
-import { buildPeopleQuery, parsePeopleSearch, peopleSearch } from '../../src/sources/people/peopleSearch.js';
+import { buildPeopleQuery, buildPeopleQuery2, parsePeopleSearch, peopleSearch } from '../../src/sources/people/peopleSearch.js';
 import { parseXUsers, xUsers, buildXQueries } from '../../src/sources/people/xUsers.js';
 import { buildRedditQueries, parseRedditForHire, redditForHire } from '../../src/sources/people/redditForHire.js';
 import { detectCredentials, isOpenToWork } from '../../src/sources/people/common.js';
@@ -27,8 +27,12 @@ describe('google query builder', () => {
   });
   it('legal -> linkedin/avvo/justia, no city for remote', () => {
     const qs = buildGoogleQueries(legal);
-    expect(qs.length).toBeGreaterThanOrEqual(3);
-    expect(qs.length).toBeLessThanOrEqual(6);
+    expect(qs.length).toBeGreaterThanOrEqual(10);
+    expect(qs.length).toBeLessThanOrEqual(MAX_QUERIES);
+    expect(new Set(qs).size).toBe(qs.length);
+    expect(qs.some((q) => q.includes('site:upcounsel.com'))).toBe(true);
+    expect(qs.some((q) => q.includes('site:lawyers.com'))).toBe(true);
+    expect(qs.some((q) => q.includes('"law office"') && q.includes('contact'))).toBe(true);
     expect(qs[0]).toContain('site:linkedin.com/in');
     expect(qs[0]).toContain('("contract attorney" OR paralegal)');
     expect(qs.some((q) => q.includes('site:avvo.com/attorneys'))).toBe(true);
@@ -40,6 +44,24 @@ describe('google query builder', () => {
     expect(qs[0]).toContain('site:github.com');
     expect(qs[0]).toContain('"open to work"');
     expect(qs.some((q) => q.includes('site:linkedin.com/in'))).toBe(true);
+  });
+  it('every family yields contact-page queries within the cap', () => {
+    const job = makeJob({ remote: true, address: null });
+    const photo = { job, remote: true, hints: { roles: ['wedding photographer'], skills: [], credential: null } };
+    const books = { job, remote: true, hints: { roles: ['bookkeeper'], skills: [], credential: null } };
+    for (const c of [legal, react, logo, sign, notary, photo, books]) {
+      const qs = buildGoogleQueries(c);
+      expect(qs.length).toBeGreaterThanOrEqual(6);
+      expect(qs.length).toBeLessThanOrEqual(MAX_QUERIES);
+      expect(qs.some((q) => /contact|email|hire me|book/i.test(q))).toBe(true);
+    }
+    expect(buildGoogleQueries(react).some((q) => q.includes('site:contra.com'))).toBe(true);
+    expect(buildGoogleQueries(react).some((q) => q.includes('"freelance developer"') && q.includes('site:github.com'))).toBe(true);
+  });
+  it('requests many results per query', async () => {
+    const m = new FakeMonid().override('litescrape/google/search', { output: fixture('litescrape__google_search_legal') });
+    await googleProfiles.run(makeCtx({ monid: m, ...legal }));
+    expect(m.calls.every((c) => (c.input.queryParams as { num: number }).num === RESULTS_PER_QUERY)).toBe(true);
   });
   it('design -> behance/dribbble', () => {
     const qs = buildGoogleQueries(logo);
@@ -135,12 +157,12 @@ describe('google adapter', () => {
 });
 
 describe('linkedin people', () => {
-  it('filters: location only on-site, limit <= 10', async () => {
+  it('filters: location only on-site, limit <= 25', async () => {
     expect(buildLinkedinFilters(legal)).toEqual({ keywords: 'contract attorney paralegal', title: 'contract attorney' });
     expect(buildLinkedinFilters(sign)).toMatchObject({ location: 'San Francisco' });
     const m = new FakeMonid().override('ploid/linkedin/search', { output: fixture('ploid__linkedin_search_people'), cost: 0.03 });
     const r = await linkedinPeople.run(makeCtx({ monid: m, ...legal }));
-    expect((m.calls[0]!.input.body as { limit: number }).limit).toBeLessThanOrEqual(10);
+    expect((m.calls[0]!.input.body as { limit: number }).limit).toBeLessThanOrEqual(25);
     expect(r.cost_usd).toBe(0.03);
     expect(r.leads).toHaveLength(3);
   });
@@ -170,8 +192,10 @@ describe('context.dev people search', () => {
   it('runs', async () => {
     const m = new FakeMonid().override('context.dev/people/search', { output: fixture('context.dev__people_search'), cost: 0.02 });
     const r = await peopleSearch.run(makeCtx({ monid: m, ...legal }));
-    expect(r.leads).toHaveLength(5);
-    expect(m.callsTo('context.dev/people/search')).toBe(1);
+    expect(r.leads).toHaveLength(10);
+    expect(m.callsTo('context.dev/people/search')).toBe(2);
+    expect(buildPeopleQuery2(legal)).toContain('independent paralegal');
+    expect(peopleSearch.costEstimateUsd).toBe(0.04);
   });
 });
 
@@ -195,8 +219,9 @@ describe('x users', () => {
   it('one call per query; SourceError if all fail', async () => {
     const m = new FakeMonid().override('anyapi/twitter.search_users', { output: fixture('anyapi__twitter.search_users'), cost: 0.0005 });
     const r = await xUsers.run(makeCtx({ monid: m, ...legal }));
-    expect(m.calls).toHaveLength(2);
-    expect(r.cost_usd).toBeCloseTo(0.001, 6);
+    expect(m.calls).toHaveLength(buildXQueries(legal).length);
+    expect(buildXQueries(legal).length).toBeGreaterThanOrEqual(4);
+    expect(r.cost_usd).toBeCloseTo(0.0005 * m.calls.length, 6);
     const bad = new FakeMonid().override('anyapi/twitter.search_users', { error: 'x' });
     await expect(xUsers.run(makeCtx({ monid: bad, ...legal }))).rejects.toBeInstanceOf(SourceError);
   });
@@ -204,8 +229,9 @@ describe('x users', () => {
 
 describe('reddit for hire', () => {
   it('subreddits: forhire always, SF subs on-site SF', () => {
-    expect(buildRedditQueries(legal).map((q) => q.subreddit)).toEqual(['forhire']);
-    expect(buildRedditQueries(sign).map((q) => q.subreddit)).toEqual(['forhire', 'sanfrancisco', 'bayarea']);
+    expect(buildRedditQueries(legal).map((q) => q.subreddit)).toEqual(['forhire', 'forhire']); // role + second role
+    expect(buildRedditQueries(legal)[1]!.query).toBe('[For Hire] paralegal');
+    expect(buildRedditQueries(sign).map((q) => q.subreddit)).toEqual(['forhire', 'forhire', 'sanfrancisco', 'bayarea']);
   });
   it('keeps only [For Hire] posts', () => {
     const leads = parseRedditForHire(fixture('anyapi__reddit.subreddit_search'));
@@ -226,7 +252,7 @@ describe('reddit for hire', () => {
   it('runs per subreddit', async () => {
     const m = new FakeMonid().override('anyapi/reddit.subreddit_search', { output: fixture('anyapi__reddit.subreddit_search'), cost: 0.00035 });
     await redditForHire.run(makeCtx({ monid: m, ...sign }));
-    expect(m.calls.map((c) => (c.input.body as { subreddit: string }).subreddit)).toEqual(['forhire', 'sanfrancisco', 'bayarea']);
+    expect(m.calls.map((c) => (c.input.body as { subreddit: string }).subreddit)).toEqual(['forhire', 'forhire', 'sanfrancisco', 'bayarea']);
   });
 });
 

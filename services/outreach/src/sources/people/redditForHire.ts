@@ -16,6 +16,8 @@ export interface RedditQuery {
 export function buildRedditQueries(ctx: Pick<SourceContext, 'job' | 'hints' | 'remote'>): RedditQuery[] {
   const role = ctx.hints.roles[0] ?? ctx.job.title;
   const out: RedditQuery[] = [{ subreddit: 'forhire', query: `[For Hire] ${role}` }];
+  const alt = ctx.hints.roles[1] ?? ctx.hints.skills[0];
+  if (alt) out.push({ subreddit: 'forhire', query: `[For Hire] ${alt}` });
   const city = ctx.remote ? null : cityFromAddress(ctx.job.address);
   if (city && /san francisco|bay area/i.test(city)) {
     out.push({ subreddit: 'sanfrancisco', query: '[For Hire]' }, { subreddit: 'bayarea', query: '[For Hire]' });
