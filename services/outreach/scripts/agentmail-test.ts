@@ -27,6 +27,6 @@ const person: Person = {
   open_to_work: true, last_active_at: null,
 };
 const msg = renderEmail({ job, person, link: `${process.env.PUBLIC_BASE_URL ?? 'https://operis.live'}/j/TESTlink00-xxxxxxxx`, payUsd: 75 });
-const r = await new MonidEmailSender(new HttpMonid(key), inbox).send(to, `[TEST] ${msg.subject}`, `${msg.text}\n\n---\n[TEST] Operis outreach test from ${inbox}. The link above is a placeholder.`);
+const r = await new MonidEmailSender(new HttpMonid(key), inbox).send(to, `[TEST] ${msg.subject}`, msg.text, msg.html);
 console.log(r.ok ? `Sent from ${inbox} to ${to} (${r.ref}), cost $${r.cost_usd ?? 0}` : `FAILED: ${r.error}`);
 process.exit(r.ok ? 0 : 1);

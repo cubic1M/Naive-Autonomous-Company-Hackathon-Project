@@ -21,7 +21,7 @@ export interface SmtpConfig {
 
 /** Minimal transport shape so tests can inject a fake. */
 export interface MailTransport {
-  sendMail(msg: { from: string; to: string; replyTo?: string; subject: string; text: string; headers?: Record<string, string> }): Promise<{
+  sendMail(msg: { from: string; to: string; replyTo?: string; subject: string; text: string; html?: string; headers?: Record<string, string> }): Promise<{
     messageId?: string;
     rejected?: unknown[];
   }>;
@@ -58,7 +58,7 @@ export class SmtpEmailSender implements EmailSender {
       });
   }
 
-  async send(to: string, subject: string, text: string): Promise<SendResult> {
+  async send(to: string, subject: string, text: string, html?: string): Promise<SendResult> {
     try {
       const info = await this.transport.sendMail({
         from: this.cfg.from ?? this.cfg.user,
@@ -66,6 +66,7 @@ export class SmtpEmailSender implements EmailSender {
         ...(this.cfg.replyTo ? { replyTo: this.cfg.replyTo } : {}),
         subject,
         text,
+        ...(html ? { html } : {}),
         // One-click unsubscribe hint for mail clients (Gmail/Outlook show an "Unsubscribe" button).
         headers: { 'List-Unsubscribe': `<mailto:${this.cfg.replyTo ?? this.cfg.user}?subject=STOP>` },
       });

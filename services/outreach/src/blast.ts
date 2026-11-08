@@ -132,7 +132,7 @@ export async function sendBlastDetailed(input: SendBlastInput, deps: BlastDeps):
         if (channel === 'sms') res = await deps.sms!.send(to, renderSms(ctx));
         else {
           const m = renderEmail(ctx);
-          res = await deps.email.send(to, m.subject, m.text);
+          res = await deps.email.send(to, m.subject, m.text, m.html);
         }
       } catch (e) {
         res = { ok: false, error: e instanceof Error ? e.message : String(e) };
