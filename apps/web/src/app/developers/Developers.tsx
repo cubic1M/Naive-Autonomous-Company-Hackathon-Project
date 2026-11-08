@@ -68,8 +68,8 @@ ${PUBLIC_MCP || url}
 
 Claude.ai / Claude Desktop:  Settings → Connectors → Add custom connector → paste the URL
 ChatGPT:                     Settings → Connectors (developer mode) → add the URL
-Claude Code:                 claude mcp add --transport http operis ${PUBLIC_MCP || url}
-                             then /mcp → operis → Authenticate
+Claude Code:                 claude mcp add --transport http --scope user operis ${PUBLIC_MCP || url}
+                             restart Claude Code, then /mcp → operis → Authenticate
 Cursor / VS Code:            add an MCP server with just the URL; they prompt you to sign in
 
 You'll see "<app> wants to use Operis for you" on operis.live: sign up or paste your key, and you're connected.`,

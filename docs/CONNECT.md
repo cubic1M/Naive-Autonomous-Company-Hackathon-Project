@@ -74,7 +74,7 @@ The response contains `api_key` (shown once) and the MCP URL.
 **Easiest: just add the URL and sign in (OAuth).** In any client that supports MCP sign-in, add `https://api.operis.live/mcp` with no key. It opens a browser where you sign up or paste an existing key, and the client gets its own key automatically.
 - **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector → `https://api.operis.live/mcp`
 - **ChatGPT:** Settings → Connectors (developer mode) → add `https://api.operis.live/mcp`
-- **Claude Code:** `claude mcp add --transport http operis https://api.operis.live/mcp`, then `/mcp` → operis → Authenticate
+- **Claude Code:** `claude mcp add --transport http --scope user operis https://api.operis.live/mcp`, restart Claude Code (servers load at session start: exit, then `claude --continue`), then `/mcp` → operis → Authenticate
 - **Cursor / VS Code:** add the server with just the URL; they prompt you to sign in
 
 **With an API key instead** (keep the key in the `OPERIS_API_KEY` environment variable, not in config):
