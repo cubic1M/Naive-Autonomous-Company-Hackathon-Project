@@ -123,4 +123,6 @@ export const submitProof = (token: string, body: ProofBody) =>
 export const payoutSetup = (token: string) =>
   postJson<{ url: string | null; note?: string }>(`/v1/worker/payout-setup`, { token });
 
-export const getDashboard = () => api<Dashboard>(`/v1/dashboard`, {}, 1);
+// /v1/dashboard needs the founders' admin key (same browser key as /backoffice).
+export const getDashboard = () =>
+  api<Dashboard>(`/v1/dashboard`, { headers: { Authorization: `Bearer ${typeof window === "undefined" ? "" : localStorage.getItem("operis_admin") ?? ""}` } }, 1);
