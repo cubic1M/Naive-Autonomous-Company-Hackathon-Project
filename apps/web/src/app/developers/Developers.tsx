@@ -9,7 +9,7 @@ import { LogoPill } from "@/components/SiteHeader";
 import { agentPrompt } from "@/lib/agentPrompt";
 
 type Created = { customer_id: string; api_key: string; mcp_url: string };
-type Tab = "prompt" | "claude" | "json" | "naive" | "curl";
+type Tab = "prompt" | "plugin" | "claude" | "json" | "naive" | "curl";
 
 const PUBLIC_MCP = process.env.NEXT_PUBLIC_MCP_URL ?? "";
 
@@ -47,7 +47,8 @@ export default function Developers() {
   const [created, setCreated] = useState<Created | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Tab>("prompt");
+  const [tab, setTab] = useState<Tab>("plugin");
+  const [withKey, setWithKey] = useState(false);
   const [test, setTest] = useState<{ state: "idle" | "running" | "ok" | "fail"; tools?: string[]; msg?: string }>({ state: "idle" });
 
   useEffect(() => {
@@ -60,7 +61,16 @@ export default function Developers() {
   const key = created?.api_key ?? "<YOUR_OPERIS_KEY>";
   const url = created?.mcp_url && PUBLIC_MCP ? created.mcp_url : mcpUrl;
   const snippets = useMemo<Record<Tab, string>>(() => ({
-    prompt: agentPrompt(url, key),
+    prompt: agentPrompt(url, key, withKey),
+    plugin: `# 1. Put your key in your shell profile (~/.zshrc or ~/.bashrc), then open a new terminal:
+export OPERIS_API_KEY=${key}
+
+# 2. In Claude Code: installs the Operis MCP server + the "hire-a-human" skill in one step
+/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project
+
+#    (older Claude Code: /plugin marketplace add cubic1M/Naive-Autonomous-Company-Hackathon-Project
+#                        /plugin install operis@operis)
+# From a shell instead: claude plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project`,
     claude: `claude mcp add --transport http operis ${url} --header "Authorization: Bearer ${key}"`,
     json: JSON.stringify({ mcpServers: { operis: { type: "http", url, headers: { Authorization: `Bearer ${key}` } } } }, null, 2),
     naive: `# 1. store the key in a Naïve vault, bound to the Operis MCP URL
@@ -83,7 +93,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
     "location":{"address":"2102 Union St, San Francisco, CA","lat":37.797,"lng":-122.433},
     "deadline":"${new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 16)}:00Z","budget_usd":30,"certification_required":null,
     "proof":{"photos":{"min":2,"must_show":["storefront","hours sign"]},"geofence_m":150}}}}'`,
-  }), [url, key]);
+  }), [url, key, withKey]);
 
   const signup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +124,10 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
     }
   };
 
-  const tabs: [Tab, string][] = [["prompt", "Prompt for your agent"], ["claude", "Claude Code"], ["json", "Cursor / Claude Desktop"], ["naive", "Naïve agent"], ["curl", "curl"]];
+  const tabs: [Tab, string][] = [["plugin", "Claude Code plugin"], ["claude", "Claude Code (one command)"], ["json", "Cursor / Claude Desktop JSON"], ["naive", "Naïve agent"], ["prompt", "Prompt for your agent"], ["curl", "curl"]];
+  const serverCfg = { url, headers: { Authorization: `Bearer ${key}` } };
+  const cursorLink = `cursor://anysphere.cursor-deeplink/mcp/install?name=operis&config=${typeof window === "undefined" ? "" : btoa(JSON.stringify(serverCfg))}`;
+  const vscodeLink = `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: "operis", type: "http", ...serverCfg }))}`;
 
   return (
     <main className="landing">
@@ -160,13 +173,25 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
         </Step>
 
         <Step n={2} title="Connect your agent">
-          <p className="muted">Pick how your agent runs. Your key is already filled in{created ? "" : " once you create it"}.</p>
+          <p className="muted">One click for Cursor or VS Code, one command for Claude Code. Your key is filled in{created ? "" : " once you create it"}.</p>
+          <div className="row wrap" style={{ gap: 10 }}>
+            <a className="btn" aria-disabled={!created} href={created ? cursorLink : undefined} style={{ maxWidth: 220, minHeight: 48, opacity: created ? 1 : 0.45, pointerEvents: created ? "auto" : "none" }}>Add to Cursor</a>
+            <a className="btn" aria-disabled={!created} href={created ? vscodeLink : undefined} style={{ maxWidth: 220, minHeight: 48, opacity: created ? 1 : 0.45, pointerEvents: created ? "auto" : "none" }}>Add to VS Code</a>
+            <button type="button" className="btn secondary" onClick={() => setTab("plugin")} style={{ maxWidth: 240, minHeight: 48 }}>Claude Code plugin</button>
+          </div>
+          <p className="small muted">Agents can also onboard themselves with no setup at all: point them at <Link href="/llms.txt">operis.live/llms.txt</Link> (they create their own key with your email and call the tools over HTTP).</p>
           <div className="row wrap" style={{ gap: 6 }}>
             {tabs.map(([t, label]) => (
               <button key={t} type="button" onClick={() => setTab(t)} className="pill" style={{ cursor: "pointer", border: 0, padding: "8px 14px", fontSize: 13, background: tab === t ? "var(--accent)" : "var(--surface-2)", color: tab === t ? "var(--accent-text)" : "var(--muted)" }}>{label}</button>
             ))}
           </div>
-          {tab === "prompt" && <p className="small muted">Paste this into your agent&apos;s system prompt, CLAUDE.md, or skill file. It tells the agent when and how to hire a human, what to expect back, and what&apos;s not allowed.</p>}
+          {tab === "prompt" && (
+            <div className="stack" style={{ gap: 6 }}>
+              <p className="small muted">Paste this into your agent&apos;s system prompt, CLAUDE.md, or skill file (the plugin already includes it as a skill). It tells the agent when and how to hire a human, what to expect back, and what&apos;s not allowed. It leaves your key out, since the key belongs in the MCP config or an environment variable.</p>
+              <label className="row small" style={{ gap: 8, cursor: "pointer" }}><input type="checkbox" checked={withKey} onChange={(e) => setWithKey(e.target.checked)} /> My agent can&apos;t use MCP: include my key in the prompt (keep it out of shared files)</label>
+            </div>
+          )}
+          {tab === "plugin" && <p className="small muted">Recommended for Claude Code: one install gives your agent the Operis tools and the knowledge of when and how to use them.</p>}
           <CopyBlock text={snippets[tab]} />
         </Step>
 

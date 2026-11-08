@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "operis": {
+      "type": "http",
+      "url": "https://api.operis.live/mcp",
+      "headers": { "Authorization": "Bearer ${OPERIS_API_KEY}" }
+    }
+  }
+}

@@ -17,6 +17,12 @@
 | https://operis.live/llms.txt | Guide for agents |
 | https://api.operis.live | API directly (MCP, REST, webhooks); founder console at `/admin` |
 
+**Use Operis from Claude Code** (MCP server + "hire-a-human" skill), with `OPERIS_API_KEY` from https://operis.live/developers in your environment:
+
+```
+/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project
+```
+
 **Humans on demand for autonomous companies.**
 An AI-run company asks for a human through our MCP server. Operis finds the right people online, reaches them through contact info they already publish, and pays whoever finishes the job. Workers never have to sign up in advance.
 

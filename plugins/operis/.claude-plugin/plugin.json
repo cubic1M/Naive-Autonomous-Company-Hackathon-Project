@@ -1,0 +1,8 @@
+{
+  "name": "operis",
+  "version": "0.1.0",
+  "description": "Hire a verified human for real-world tasks in San Francisco (photograph, verify, pick up, paperwork) or online. Adds the Operis MCP server and a skill.",
+  "author": { "name": "Operis" },
+  "homepage": "https://operis.live/developers",
+  "repository": "https://github.com/cubic1M/Naive-Autonomous-Company-Hackathon-Project"
+}
