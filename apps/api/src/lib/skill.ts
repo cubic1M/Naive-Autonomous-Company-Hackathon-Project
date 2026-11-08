@@ -15,21 +15,20 @@ MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` 
 
 ## 1. Set up (skip if Operis tools already work)
 
-**Easiest, if your app supports MCP sign-in (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code):** add \`${mcp}\` as a connector / MCP server with no key and ask your user to sign in when the browser opens (Claude Code: \`claude mcp add --transport http --scope user operis ${mcp}\`; servers load only when a session starts, so tell the user to restart Claude Code (exit, then \`claude --continue\`), then run \`/mcp\` → operis → Authenticate). Done. Use the HTTP path below if you need to act right away in this session or can't open a browser.
-
-**Otherwise, set yourself up over HTTP:**
-1. Ask your user for their **email** (and company name). They're the account owner and pay for jobs.
+**Do this, it works right now in this session: no restart, no browser, one question.** If your environment can make HTTP requests (a shell with curl, or a fetch tool), use this path. Don't send your user to restart or sign in first.
+1. Ask your user one question: **"What email should own the Operis account?"** (They pay for jobs; if they also give a company name, use it, otherwise use their app or project name.)
 2. Create a key:
    \`POST ${origin}/v1/customers\` with JSON \`{"name": "<company>", "contact_email": "<email>", "description": "<what you do>"}\`
-   → \`api_key\` (shown once). A 429 means too many sign-ups from this network: wait the \`Retry-After\` seconds and try once more, or use the MCP sign-in path above.
-3. Save it as the environment variable \`OPERIS_API_KEY\` (a private shell profile like \`~/.zshrc\` is fine; never a repo or shared file), or give it to your user to keep.
-4. Connect for future sessions if you can, reading the key from the variable:
-   - Claude Code: \`claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'\`
-   - Cursor: \`~/.cursor/mcp.json\` → \`{"mcpServers": {"operis": {"url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\`
-   - Anything else: use the HTTP calls below.
-5. Until the MCP server loads (usually next session), call it over HTTP:
+   → \`api_key\` (shown once). A 429 means too many sign-ups from this network: wait the \`Retry-After\` seconds and try once more.
+3. **Use it immediately** over HTTP (this is the same MCP server, called directly):
    \`POST ${mcp}\` · headers \`Authorization: Bearer <key>\`, \`Content-Type: application/json\`, \`Accept: application/json, text/event-stream\` ·
-   body \`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}\` → JSON text in \`result.content[0].text\`.
+   body \`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}\` → JSON text in \`result.content[0].text\` (responses may arrive as an SSE \`data:\` line; parse the JSON after \`data: \`).
+   Confirm with \`{"method":"tools/list"}\`, then tell your user: "Operis is set up. I'll use it whenever a task needs a real person."
+4. Keep the key for later (quietly, no extra steps for your user): save it as \`OPERIS_API_KEY\` in a private shell profile (e.g. \`~/.zshrc\`; never a repo or shared file), and if your tool supports it, register the server for future sessions so the tools appear natively next time:
+   - Claude Code: \`claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'\` (takes effect next session; keep using HTTP now; don't ask your user to restart)
+   - Cursor: \`~/.cursor/mcp.json\` → \`{"mcpServers": {"operis": {"url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\`
+
+**Only if you can't make HTTP requests** (a chat app with connectors, e.g. Claude.ai or ChatGPT): add \`${mcp}\` as a connector with no key and ask your user to sign in when the browser opens.
 
 ## 2. Hire someone: request_human
 
