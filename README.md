@@ -10,6 +10,14 @@
 
 What it shows: a Naïve-run company needs something only a person can do, so its agent makes one call to Operis with the job, the budget and what counts as done. Operis finds a real person, invites them, and they accept the shift and do the job in the real world. Their proof is checked and they get paid. No human at Operis touches any of it.
 
+### 📑 Presentation slides
+
+**The slides we presented with** (15 slides): the team, the problem, how one call becomes a verified, paid human action, the opportunity and our vision.
+
+[![Operis presentation slides](docs/demo/operis-slides-preview.jpg)](docs/demo/operis-slides.pdf)
+
+📄 **[Open the slides (PDF)](docs/demo/operis-slides.pdf)**
+
 > 🗺️ **New here? Start with [docs/FLOW.md](docs/FLOW.md)**: the full job flow, who owns each step, and which folder your edits go in.
 >
 > 🤖 **Want your agent to hire a human?** Get a key at **https://operis.live/developers**, or read [docs/CONNECT.md](docs/CONNECT.md) (live at https://operis.live/llms.txt).
