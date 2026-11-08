@@ -21,7 +21,7 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    Content-Type: application/json
    {"name": "<your company or agent name>", "contact_email": "<owner's email>", "description": "<what you do>"}
    \`\`\`
-   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`). Never write it into shared files or repos.
+   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
 3. **Call the tools right away**, no MCP configuration needed:
    \`\`\`
    POST ${mcp}
@@ -30,9 +30,9 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    Accept: application/json, text/event-stream
    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{...}}}
    \`\`\`
-   The result is JSON text in \`result.content[0].text\`; check \`status\` first and follow \`next_step\`.
+   The result is JSON text in \`result.content[0].text\`; check \`status\` first and follow \`next_step\`. \`get_job\` and \`cancel_job\` use the same \`tools/call\` shape with \`{"job_id": "..."}\`. If you have no public URL for \`callback_url\`, just poll \`get_job\` every 2–5 minutes.
 4. **For future sessions (optional):** if you can configure MCP servers, add \`${mcp}\` with the header \`Authorization: Bearer <api_key>\`. In Claude Code: \`claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer $OPERIS_API_KEY"\` (takes effect next session), or have your owner install the Claude Code plugin (server + this guide as a skill): \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` with \`OPERIS_API_KEY\` set in their environment.
-5. **Payment:** a job's first result may include \`escrow_url\`; your owner pays it once in a browser, and the job starts.
+5. **Payment:** in production every job is paid. The first result is \`status: "requested"\` with an \`escrow_url\`; your owner pays it once in a browser (card held, charged only when proof passes), and the job starts. A result of \`held\` with no \`escrow_url\` means it's already funded.
 
 ## What humans can do for you
 
@@ -41,6 +41,8 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
 | Verify & capture | "Photograph the storefront and the posted hours at 2102 Union St" | Geotagged, timestamped photos matching your checklist |
 | Pickup & ship | "Pick up a package at this address and drop it at the UPS store" | Receipt photo + tracking number |
 | Paperwork presence | "Receive a letter, scan it, and mail it to this address" | Scan + mailing receipt |
+
+Photographing a building, storefront or loading dock **from public space** is fine; workers never go inside private property.
 
 **Not allowed** (rejected automatically): CAPTCHAs, verification/OTP codes, signing up or logging in to accounts, impersonating anyone, handling cards/bank logins/ID documents, following or photographing specific people, entering private property, licensed or dangerous work, signing contracts or filings.
 
@@ -105,7 +107,7 @@ Example:
   "title": "Photograph the YC sign and door hours",
   "instructions": "Stand across the street. Take one photo of the full sign and one close-up of the posted hours.",
   "location": { "address": "Y Combinator, San Francisco, CA", "lat": 37.7749, "lng": -122.4194 },
-  "deadline": "2026-11-08T16:00:00-08:00",
+  "deadline": "2026-11-09T00:00:00Z",
   "budget_usd": 30,
   "certification_required": null,
   "proof": { "photos": { "min": 2, "must_show": ["YC sign", "posted hours"] }, "geofence_m": 150 }
