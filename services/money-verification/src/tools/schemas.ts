@@ -155,6 +155,14 @@ export const toolSchemas = {
       name_source: z.enum(['verified_identity', 'typed']),
     }),
   },
+  verify_attorney: {
+    description: 'Check a worker\'s California State Bar licence (connector legal jobs, policy L2): active status and a matching name.',
+    input: z.object({ worker_id: uuid, bar_number: z.string().min(1).max(10), name: z.string().min(2).max(200) }).strict(),
+    output: z.object({
+      status: z.enum(['verified', 'needs_review', 'failed']), reasons: z.array(z.string()),
+      name_on_record: z.string().nullable(), licence_status: z.string().nullable(),
+    }),
+  },
   verify_identity: {
     description:
       "Start the worker's Stripe Identity verification (government ID plus a matching selfie): returns the hosted url to send the worker to, or status 'verified' with url null when the identity is already on file. Tier-2 jobs (over $150, or any certification) need it before a proof can be approved.",

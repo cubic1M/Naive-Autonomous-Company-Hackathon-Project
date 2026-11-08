@@ -22,6 +22,7 @@ export * from './proof/vision.js';
 export * from './proof/decide.js';
 export * from './certs/names.js';
 export * from './certs/notary.js';
+export * from './certs/attorney.js';
 export * from './liability/policy.js';
 export * from './liability/tags.js';
 export * from './liability/pricing.js';

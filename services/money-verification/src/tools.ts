@@ -22,6 +22,7 @@ import type { VisionScorer } from './proof/vision.js';
 import type { Repo } from './repo.js';
 import { settleApprovedJob } from './settle.js';
 import type { StripeClient } from './stripe-client.js';
+import { verifyAttorney } from './certs/attorney.js';
 import { verifyNotary } from './certs/notary.js';
 import { resolveToolName, toolSchemas, type ToolInput, type ToolName, type ToolOutput } from './tools/schemas.js';
 import type { ProofReview } from './types.js';
@@ -183,6 +184,10 @@ export function createTools(deps: ToolDeps): Tools {
         { workerId: worker_id, commissionNumber: commission_number, name, jobDate: new Date(job_date) },
       );
       return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires), name_source: r.nameSource };
+    },
+    async verify_attorney(raw) {
+      const { worker_id, bar_number, name } = parse('verify_attorney', raw);
+      return verifyAttorney({ repo: deps.repo, now: deps.now }, { workerId: worker_id, barNumber: bar_number, name });
     },
     async verify_identity(raw) {
       const { worker_id } = parse('verify_identity', raw);
