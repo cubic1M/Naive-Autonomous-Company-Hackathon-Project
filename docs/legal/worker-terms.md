@@ -2,8 +2,9 @@
 
 **Draft for counsel review, not legal advice.** No lawyer has reviewed this, and it is not in effect. It takes
 effect only once the job page names this version and the job's terms next to the Accept button and the API records
-them. The two liability models are a design the founders chose on 8 Nov 2026; the code that picks a job's model
-isn't built yet.
+them. The two liability models follow the design the founders approved on 8 Nov 2026
+(`docs/specs/2026-11-08-liability-model-design.md` on branch `claude/liability-model`); the code that picks a job's
+model isn't built yet.
 
 **Version:** `2026-11-08`
 
@@ -63,9 +64,10 @@ is depends on the job: see the job terms below.
 
 ### Getting paid
 
-- The company that posts a job sets its price. You get 75% of the posted price, and Operis keeps 25% as its fee.
-  A $60 job pays you $45, and Operis keeps $15. The smallest job is $20.
-- The pay you see in our message and on the job page is your 75% share. We don't take card fees out of it.
+- The company that posts a job sets its price. For most jobs you get 75% of the posted price, and Operis keeps 25%
+  as its fee: a $60 job pays you $45, and Operis keeps $15. Notary and legal jobs pay differently (see connector
+  jobs). The smallest job is $20.
+- The pay you see in our message and on the job page is your share. We don't take card fees out of it.
 - The job's pay is held before you start: the company's card is authorized (not charged) through Stripe before
   the job is sent to anyone. When your proof is approved, the card is charged and we send your share through
   Stripe. Stripe then pays it into your bank account on its own schedule.
@@ -171,16 +173,22 @@ address.]_
 
 ### Connector jobs (`connector`)
 
-- Connector jobs are for work Operis can't be responsible for, because it holds no professional licenses and no
-  insurance: for example, notarial acts or legal review.
-- You provide the service to the company that posted the job, under your own license and in your own name. The
-  company is your client.
+- Connector jobs are for work the law won't let Operis be responsible for, because Operis holds no professional
+  licenses: notarial acts and legal work. A job is also a connector job when our compliance check can't confirm
+  that Operis can be responsible for it.
+- You provide the service to the company that posted the job, under your own license where one applies, and in
+  your own name. The company is your client.
 - You're responsible for the work and for following the rules of your license.
+- Before you can accept a notary or legal job, we check your license: a notary commission against the state's
+  list, or an attorney's license against the State Bar's public profile.
 - Operis is the marketplace. It connects you with the company, checks your proof and handles payment as your
   payment agent: it collects the price from the company for you and pays you your share.
-- Operis isn't responsible for the work itself and doesn't give professional advice.
-- Pay works as described in "Getting paid": the same card hold, 75% to you after your proof is approved, and 25% to
-  Operis as its fee.
+- Operis isn't responsible for the work itself and doesn't give professional advice. If the company is unhappy
+  with the work, we pass that on to you as the provider, with our records of the job. We refund the company only
+  for work that wasn't delivered.
+- For notary and legal jobs, you get the whole posted price, and the company pays Operis's platform fee on top.
+  Other connector jobs pay as described in "Getting paid". Either way, the card hold and payment after approved
+  proof work as described there.
 
 ## Questions for counsel
 
@@ -203,8 +211,9 @@ address.]_
    link, enough for a person who has no account, or do we need a checkbox? Would a YES text reply that links the
    terms ever be enough?
 7. **How the liability model is decided.** A Compliance agent will pick `operis` or `connector` for each job after
-   funding. What criteria and records does that decision need, is an AI agent's decision enough, and what happens
-   if a job lands in the wrong model (for example, licensed work run as an Operis job)?
+   funding, under a versioned policy. When it's unsure, or decides nothing in time, the job becomes a connector job,
+   which makes the worker responsible even for ordinary work. Is that fair and enforceable? What criteria and records
+   does the decision need, is an AI agent's decision enough, and what happens if a job lands in the wrong model?
 8. **What each model means in practice.** In Operis jobs, what does the worker still answer for (their own
    negligence, damage they cause)? In connector jobs, should the terms say that the company's payment to Operis
    counts as payment to the worker (the usual payment-agent clause), and what must the posting company's own terms
