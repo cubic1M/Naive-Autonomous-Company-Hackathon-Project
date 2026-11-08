@@ -52,7 +52,7 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     if (!p) throw new Error(`no proof for job ${job_id}`);
     const req = p.proof_requirement ?? {};
     const gps = p.gps_lat != null ? Math.round(distanceM(p.gps_lat, p.gps_lng, p.job_lat, p.job_lng)) : null;
-    const inFence = gps !== null && gps <= (req.geofence_m ?? 150);
+    const inFence = gps !== null && gps <= (req.geofence_m ?? 300);
     const fresh = p.captured_at ? Date.now() - new Date(p.captured_at).getTime() < 6 * 3600 * 1000 : false;
     const photos = (p.media ?? []).length;
     const enough = photos >= (req.photos?.min ?? 1);
@@ -69,7 +69,7 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
       where p.id = ${proof_id} and p.job_id = ${job_id}`;
     if (!p) throw new Error("proof not found for this job");
     if (p.verifier_score == null || Number(p.verifier_score) < APPROVE_MIN) return { error: "below_threshold" as const };
-    const fence = p.proof_requirement?.geofence_m ?? 150;
+    const fence = p.proof_requirement?.geofence_m ?? 300;
     if (p.gps_lat == null || distanceM(p.gps_lat, p.gps_lng, p.lat, p.lng) > fence) return { error: "outside_geofence" as const };
     await ctx.sql`update proofs set status = 'approved', verifier_notes = ${notes}, reviewed_by = 'verifier-agent' where id = ${proof_id}`;
     await ctx.transition(job_id, "approved");
@@ -166,6 +166,10 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   },
   async redeem_promo() {
     return { eligible: false as const, reason: "mock" };
+  },
+  async reddit_research({ op, subreddit }) {
+    const list = op === "rules" ? { rules: [] } : { posts: [] };
+    return { op, subreddit, error: "mock", note: "mock: no Reddit data was read", ...list, truncated: false, spend_usd: 0, spend_today_usd: 0, daily_cap_usd: 0.25 };
   },
 
   // public tools are implemented in edwin.ts, not mocked

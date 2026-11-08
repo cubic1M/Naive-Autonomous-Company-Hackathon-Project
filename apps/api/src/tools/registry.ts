@@ -20,16 +20,36 @@ export const INTERNAL_TOOLS: ToolName[] = [
   "get_job", "find_people", "send_blast", "check_proof", "approve_proof", "escalate",
   "capture_payment", "payout", "refund", "ledger", "refund_large", "release_payout_large",
   "list_prospects", "send_marketing", "suppress_contact", "post_social", "recruit_search", "recruit_invite", "growth_report", "redeem_promo",
+  "reddit_research",
 ];
 
 export function resolveTool(name: ToolName): { impl: (input: any, ctx: ToolContext) => Promise<any>; source: "real" | "mock" } {
   if (name === "get_job") return { impl: getJob, source: "real" };
   const forcedMock = flag("USE_MOCKS") || list("MOCK_TOOLS").includes(name);
   const real = REAL[name] ?? (outreachConfigured() ? ({ find_people: realFindPeople, send_blast: realSendBlast } as any)[name] : undefined);
-  if (real && !forcedMock) return { impl: real as any, source: "real" };
+  if (real && !forcedMock) return { impl: withX402Jobs(name, real as any), source: "real" };
   const mock = mocks[name];
   if (!mock) throw new Error(`no implementation for ${name}`);
   return { impl: mock as any, source: "mock" };
+}
+
+/**
+ * Jobs funded in USDC over x402 (lib/x402.ts) have no Stripe charge: capture is already done (the USDC moved when the
+ * agent paid), and a refund goes back in USDC (marked due for a founder) instead of through Stripe.
+ */
+function withX402Jobs(name: ToolName, impl: (input: any, ctx: ToolContext) => Promise<any>) {
+  if (name !== "capture_payment" && name !== "refund") return impl;
+  return async (input: any, ctx: ToolContext) => {
+    const { isX402Funded, markX402RefundDue, x402Payment } = await import("@/lib/x402");
+    if (!input?.job_id || !(await isX402Funded(input.job_id))) return impl(input, ctx);
+    if (name === "capture_payment") {
+      const p = await x402Payment(input.job_id);
+      const usd = Number(p?.amount_micro_usd ?? 0) / 1_000_000;
+      await ctx.ledger(input.job_id, "capture", usd, `x402:${p?.tx_hash ?? ""}`);
+      return { job_id: input.job_id, status: "captured", amount_cents: Math.round(usd * 100), charge_id: null, paid_with: "USDC over x402", tx_hash: p?.tx_hash ?? null };
+    }
+    return (await markX402RefundDue(input.job_id, input.reason ?? "refund")) ?? { job_id: input.job_id, status: "refund_already_due_or_sent" };
+  };
 }
 
 export function toolSources() {

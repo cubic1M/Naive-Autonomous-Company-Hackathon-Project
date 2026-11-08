@@ -2,10 +2,13 @@
 import type { Tools } from "@contracts/tools";
 import type { ToolContext } from "@contracts/runtime";
 import { checkSafety } from "@/lib/safety";
-import { inServiceArea } from "@/lib/geo";
+import { inServiceArea, isStreetAddress, serviceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
+import { unknownPaymentMethodText } from "@/lib/stripe-mode";
 import * as compliance from "@services/compliance/index";
 import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
+import { networkLabel, x402Enabled, x402Offer } from "@/lib/x402";
+import { MIN_JOB_PRICE_CENTS } from "@services/money-verification/src/pricing";
 
 /** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
 export const STATUS_MEANING: Record<string, string> = {
@@ -22,7 +25,7 @@ export const STATUS_MEANING: Record<string, string> = {
   refunded: "Refunded in full.",
   cancelled: "Cancelled; any payment hold was released.",
 };
-const MIN_JOB_USD = 20;
+const MIN_JOB_USD = MIN_JOB_PRICE_CENTS / 100;
 
 export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): Promise<Tools["get_job"]["out"]> {
   const [j] = await ctx.sql`select * from jobs where id = ${input.job_id}`;
@@ -69,14 +72,16 @@ const CARD_NOT_CHARGED: Record<string, string> = {
   incorrect_cvc: "the card's security code was refused",
   processing_error: "the card network had an error; trying again later may work",
   authentication_required: "the card's bank wants the cardholder to confirm this payment, which needs a person",
-  invalid_payment_method: "that payment method is unknown to Operis's Stripe account (pass a pm_... created there; in test mode pm_card_visa)",
 };
 
 /** next_step while a human still has to pay escrow_url: why the card was not charged, if one was tried, and how to skip the link. */
 function paymentNeeded(fallbackReason?: string): string {
   const pay = "have your human owner pay escrow_url once (the card is held, charged only when proof passes); the job starts as soon as it's paid";
   if (!fallbackReason) return `Payment needed: ${pay}. To skip the link next time, call setup_payment once and have your owner save a card.`;
-  const why = CARD_NOT_CHARGED[fallbackReason] ?? `the card could not be charged (${fallbackReason})`;
+  const why =
+    fallbackReason === "invalid_payment_method"
+      ? unknownPaymentMethodText()
+      : CARD_NOT_CHARGED[fallbackReason] ?? `the card could not be charged (${fallbackReason})`;
   return `Your card was not charged: ${why}. To fund this job, ${pay}. Or cancel_job it, save another card with setup_payment and request again.`;
 }
 
@@ -85,7 +90,7 @@ function paymentNeeded(fallbackReason?: string): string {
  * the webhook. payment_intent.amount_capturable_updated can reach the webhook first and move it there itself; then the
  * job is already held and that is not an error.
  */
-async function markFunded(ctx: ToolContext, jobId: string): Promise<void> {
+export async function markFunded(ctx: ToolContext, jobId: string): Promise<void> {
   try {
     await ctx.transition(jobId, "held");
   } catch (e) {
@@ -106,13 +111,18 @@ export async function requestHuman(
   if (new Date(input.deadline).getTime() < Date.now() + 15 * 60 * 1000) return reject("Deadline must be at least 15 minutes from now.");
   const remote = input.remote === true;
   if (!remote && !input.location) return reject("On-site jobs need a location (address, lat, lng). For online work, pass remote: true.");
+  const area = serviceArea();
   if (!remote && input.location && !inServiceArea(input.location.lat, input.location.lng))
-    return reject("Outside our service area for on-site work (San Francisco, 8 km around the YC office). Online work can pass remote: true.");
+    return reject(`Outside our service area for on-site work (San Francisco, within ${area.radiusM / 1000} km of ${area.lat}, ${area.lng}). Online work can pass remote: true.`);
+  if (!remote && input.location && input.location.lat.toFixed(4) === area.lat.toFixed(4) && input.location.lng.toFixed(4) === area.lng.toFixed(4))
+    return reject(`${area.lat}, ${area.lng} is the centre of our service area, not the job's spot. Send the exact lat/lng of the street address, e.g. "1 Ferry Building, San Francisco, CA 94111" at 37.7955, -122.3935. Proof is checked against that pin.`);
+  if (!remote && input.location && !isStreetAddress(input.location.address))
+    return reject(`"${input.location.address.slice(0, 80)}" is not a street address. On-site jobs need the address a worker can walk to (number and street, e.g. "1 Ferry Building, San Francisco, CA 94111", or an intersection, e.g. "Haight St & Ashbury St") and that spot's exact lat/lng. Proof is checked against that pin.`);
   const loc = input.location ?? { address: "Remote", lat: null as any, lng: null as any };
   const safety = checkSafety(input.title, input.instructions);
   if (!safety.ok) return reject(`${safety.reason} (${safety.category})`);
 
-  // usage limits: protect the team's agent budgets while payments run in test mode
+  // usage limits: cap how many jobs one key (and Operis overall) can open; in live mode they also bound real card holds
   const [{ open, today }] = await ctx.sql`
     select count(*) filter (where status not in ('paid','refunded','cancelled','rejected','expired'))::int as open,
            count(*) filter (where created_at > now() - interval '24 hours')::int as today
@@ -140,7 +150,7 @@ export async function requestHuman(
                       certification_required, proof_requirement, status, callback_url)
     values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
             ${input.deadline}, ${input.budget_usd}, ${feeUsd}, ${workerPayUsd}, ${input.certification_required},
-            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? 150 })}, 'requested', ${input.callback_url ?? null})
+            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? null })}, 'requested', ${input.callback_url ?? null})
     returning id`;
   await compliance.recordIntake(job.id, q);
   const liabilityNote = "Our Compliance agent decides after funding whether Operis is the provider or only the marketplace for this job; get_job shows liability_model.";
@@ -157,9 +167,14 @@ export async function requestHuman(
       return { job_id: job.id, status: "held", quote_usd: chargeUsd, escrow_url: null,
         next_step: `Funded: your card is held, charged only when proof passes. ${FINDING} ${liabilityNote}` };
     }
+    // x402 (when on): an agent with a USDC wallet funds the job itself, no human (Naïve wallet.pay, Coinbase agent wallets).
+    const x402 = x402Enabled() ? x402Offer(job.id, chargeUsd) : undefined;
     return { job_id: job.id, status: "requested", quote_usd: chargeUsd, escrow_url: hold.escrow_url,
       ...(hold.fallback_reason ? { fallback_reason: hold.fallback_reason } : {}),
-      next_step: `${paymentNeeded(hold.fallback_reason)} ${liabilityNote}` };
+      ...(x402 ? { x402 } : {}),
+      next_step: x402
+        ? `If you have an x402 wallet, fund it yourself now: pay x402.url ($${chargeUsd} USDC on ${networkLabel(x402.network)}; on Naïve call wallet.pay with that url), then the job is held. Otherwise: ${paymentNeeded(hold.fallback_reason)} ${liabilityNote}`
+        : `${paymentNeeded(hold.fallback_reason)} ${liabilityNote}` };
   }
   await ctx.ledger(job.id, "hold", chargeUsd, "mock");
   await ctx.transition(job.id, "held");

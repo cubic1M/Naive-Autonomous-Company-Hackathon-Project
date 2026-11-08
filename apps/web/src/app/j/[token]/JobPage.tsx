@@ -311,7 +311,7 @@ export default function JobPage({ token }: { token: string }) {
                       {req.photos && <li>At least {req.photos.min} photo{req.photos.min === 1 ? "" : "s"}{req.photos.must_show?.length ? ` showing: ${req.photos.must_show.join(", ")}` : ""}</li>}
                       {req.video && <li>A video of at least {req.video.min_seconds} seconds</li>}
                       {req.files && <li>Files: {req.files.kinds.join(", ")}</li>}
-                      <li>Uploaded on site, within {req.geofence_m ?? 150} m of the job</li>
+                      {job.location.lat != null && <li>Uploaded on site, within {req.geofence_m ?? 300} m of the job</li>}
                     </ul>
                   </section>
                 )}

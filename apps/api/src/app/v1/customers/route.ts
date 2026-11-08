@@ -4,6 +4,7 @@
 import { sql } from "@/lib/db";
 import { hashKey, newCustomerKey } from "@/lib/auth";
 import { apiBaseUrl } from "@/lib/env";
+import { logCall, requestIp, userAgent } from "@/lib/apiCalls";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -21,6 +22,8 @@ export async function POST(req: Request) {
   const [c] = await sql`
     insert into customers (name, contact_email, description, api_key_hash, signup_ip)
     values (${name}, ${email}, ${String(b.description ?? "").slice(0, 500) || null}, ${hashKey(key)}, ${ip}) returning id`;
+  logCall({ customer: { id: c.id, name }, channel: "signup", method: "POST /v1/customers", outcome: "ok", http_status: 201,
+            summary: `signed up (${email}) and got an API key`, client: userAgent(req), ip: requestIp(req) });
   return Response.json({
     customer_id: c.id,
     api_key: key,

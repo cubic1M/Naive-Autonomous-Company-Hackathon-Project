@@ -14,9 +14,9 @@ export interface EligibilityResult {
 /**
  * Can this worker take this job? Cheap gate the job page calls before "Yes": not suspended, worker tier high
  * enough, for a notarization job a notary commission verified (verify_notary) that does not expire before
- * the deadline, and for a tier-2 job (over $150 or any certification) a verified Stripe Identity (verify_identity).
+ * the deadline, and for every job a verified Stripe Identity (verify_identity).
  * Under IDENTITY_GATE=log the identity reason is still listed (the job page reads it to offer the identity step)
- * but marked not enforced, and it does not make the worker ineligible.
+ * but marked not enforced, and it does not make the worker ineligible, except for notary and legal jobs.
  */
 export async function checkEligibility(
   deps: { repo: Pick<Repo, 'getJob' | 'getWorker' | 'getWorkerVerification' | 'getJobLiability'>; env?: Pick<Env, 'IDENTITY_GATE'> },
@@ -47,19 +47,18 @@ export async function checkEligibility(
   const needsAttorney = rules.includes('L2') || recorded === 'attorney_license';
   if (needsNotary) await licence('notary_commission', 'notary', 'no verification on file');
   if (needsAttorney) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
-  // Licensed work is tied to a real, verified person: notary and legal jobs need a verified identity whatever IDENTITY_GATE says.
+  // Every job needs a verified identity. Licensed work is tied to a real, verified person, so notary and legal jobs
+  // need it whatever IDENTITY_GATE says; under 'log' any other job only lists the reason.
   const licensedWork = needsNotary || needsAttorney;
   let advisory: string | null = null;
-  if (profile.identityRequired || licensedWork) {
-    const v = await deps.repo.getWorkerVerification(worker.id, 'identity');
-    if (!v || v.status !== 'verified') {
-      const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-      const reason = licensedWork
-        ? `identity_not_verified: notary and legal jobs need a verified identity, so the licence is tied to the person; ${has} (start one with verify_identity)`
-        : `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
-      if (profile.identityEnforced || licensedWork) reasons.push(reason);
-      else advisory = `${reason}; not enforced (IDENTITY_GATE=log)`;
-    }
+  const identity = await deps.repo.getWorkerVerification(worker.id, 'identity');
+  if (!identity || identity.status !== 'verified') {
+    const has = identity ? `identity verification is ${identity.status}` : 'no identity verification on file';
+    const reason = licensedWork
+      ? `identity_not_verified: notary and legal jobs need a verified identity, so the licence is tied to the person; ${has} (start one with verify_identity)`
+      : `identity_not_verified: every job requires a verified identity; ${has} (start one with verify_identity)`;
+    if (profile.identityEnforced || licensedWork) reasons.push(reason);
+    else advisory = `${reason}; not enforced (IDENTITY_GATE=log)`;
   }
   return { eligible: reasons.length === 0, reasons: advisory ? [...reasons, advisory] : reasons, tier: profile.tier };
 }

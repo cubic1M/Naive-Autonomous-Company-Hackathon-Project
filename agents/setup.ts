@@ -107,6 +107,13 @@ const ceoBody: any = {
   system: prompt("ceo"), mcp_servers: [mcpServer], tools: toolsConfig(c.tools), budget: budget(c.budget_usd),
   multiagent: { type: "coordinator", board: true, agents: Object.keys(cfg.members).map((r) => ({ type: "agent", id: ids[r], version: versions[r] })) },
 };
+// Naïve's own control plane for the CEO (agents/control-plane.ts stores its credential first).
+if (process.env.CEO_CONTROL_PLANE === "true" && c.control_plane) {
+  const cp = c.control_plane;
+  ceoBody.mcp_servers = [mcpServer, { name: cp.server_name, url: "https://api.vetta.sh/v1/mcp" }];
+  ceoBody.tools = toolsConfig({ ...c.tools, ...Object.fromEntries(Object.entries(cp.tools as Record<string, string>).map(([t, p]) => [`${cp.server_name}.${t}`, p])) });
+  console.log(`✓ CEO control plane: ${Object.keys(cp.tools).length} Naïve tools`);
+}
 if (process.env.FOUNDER_EMAIL) ceoBody.notifications = { email: process.env.FOUNDER_EMAIL, approvals: true, questions: true, updates: false };
 const ceo = await upsert(c, ceoBody);
 ids.ceo = ceo.id;

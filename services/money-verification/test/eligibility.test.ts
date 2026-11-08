@@ -52,6 +52,23 @@ describe('licences required by the liability tags', () => {
       expect(await checkEligibility({ repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID })).toMatchObject({ eligible: true, reasons: [] });
     }
   });
+  it('under IDENTITY_GATE=log a notarization task and a rule Compliance recorded still need a verified identity', async () => {
+    const later = new Date(T0.getTime() + 30 * 24 * 3600 * 1000);
+    const notarization = new InMemoryRepo();
+    notarization.seedJob(makeJob({ status: 'outreach', worker_id: null, task_type: 'notarization' })); // no liability row, no L1 tag
+    notarization.seedWorker(makeWorker());
+    await notarization.upsertWorkerVerification({ ...attorneyCheck(later), kind: 'notary_commission' });
+    const byTask = await checkEligibility({ repo: notarization, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(byTask.eligible).toBe(false);
+    expect(byTask.reasons).toEqual([expect.stringMatching(/^identity_not_verified: notary and legal jobs need a verified identity/)]);
+
+    const recorded = await setup([]); // untagged at intake; Compliance recorded L2
+    await recorded.decideJobLiability(JOB_ID, { model: 'connector', rule_id: 'L2', reason: 'recorded after intake', policy_version: '2026-11-08', decided_by: 'test', decided_at: T0 });
+    await recorded.upsertWorkerVerification(attorneyCheck(later));
+    const byRule = await checkEligibility({ repo: recorded, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(byRule.eligible).toBe(false);
+    expect(byRule.reasons).toEqual([expect.stringMatching(/^identity_not_verified: notary and legal jobs need a verified identity/)]);
+  });
   it('also requires the licence of the rule Compliance recorded', async () => {
     const repo = await setup(['L2']);
     await repo.decideJobLiability(JOB_ID, { model: 'connector', rule_id: 'L1', reason: 'recorded before the tag check', policy_version: '2026-11-08', decided_by: 'test', decided_at: T0 });
@@ -59,10 +76,11 @@ describe('licences required by the liability tags', () => {
     expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
     expect(r.reasons.some((x) => x.startsWith('attorney_not_verified'))).toBe(true);
   });
-  it('changes nothing for a job without tags', async () => {
+  it('changes nothing for a job without tags: a worker with a verified identity stays eligible', async () => {
     const repo = new InMemoryRepo();
     repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));
     repo.seedWorker(makeWorker());
-    expect((await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).eligible).toBe(true);
+    await repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status: 'verified', provider_ref: 'vs_test', details: {}, verified_at: T0, expires_at: null });
+    expect(await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).toEqual({ eligible: true, reasons: [], tier: 1 });
   });
 });

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { FEE_BPS, MIN_JOB_PRICE_CENTS, quote, quoteFromBudgetUsd } from '../src/pricing.js';
 
 describe('pricing constants', () => {
-  it('keeps 25% and a $20 minimum', () => {
+  it('keeps 25% and a $3 minimum', () => {
     expect(FEE_BPS).toBe(2_500);
-    expect(MIN_JOB_PRICE_CENTS).toBe(2_000);
+    expect(MIN_JOB_PRICE_CENTS).toBe(300);
   });
 });
 
@@ -14,10 +14,10 @@ describe('quote', () => {
   });
 
   it('rejects prices under the minimum and accepts exactly the minimum', () => {
-    expect(() => quote(1999)).toThrow(RangeError);
-    const q = quote(2000);
-    expect(q.feeCents).toBe(500);
-    expect(q.workerPayCents).toBe(1500);
+    expect(() => quote(299)).toThrow(RangeError);
+    const q = quote(300);
+    expect(q.feeCents).toBe(75);
+    expect(q.workerPayCents).toBe(225);
   });
 
   it('rounds the fee half-up', () => {

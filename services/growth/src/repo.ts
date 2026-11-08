@@ -1,4 +1,4 @@
-import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from './types.js';
+import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from './types.js';
 import type { NewSocialPost, SocialPlatform, SocialPost, SocialPostOutcome } from './types.js';
 
 /**
@@ -27,7 +27,12 @@ export interface GrowthRepo {
 
   log(e: LogEntry): Promise<void>;
   messageCountsSince(kind: MessageKind, since: Date): Promise<{ sent: number; dry_run: number }>;
+  /** recruit_search's Monid spend: growth_log kind 'search', without reddit_research's rows. */
   searchSpendSince(since: Date): Promise<number>;
+  /** One reddit_research call, as a growth_log 'search' row with ref REDDIT_REF (redditLogEntry): no migration needed. */
+  logRedditCall(c: RedditCall): Promise<void>;
+  /** reddit_research's Monid spend only: its own budget, never recruit_search's. */
+  redditSpendSince(since: Date): Promise<number>;
 
   getGrantByKey(key: string): Promise<Grant | null>;
   getGrantByJob(jobId: string): Promise<Grant | null>;
@@ -61,3 +66,12 @@ export class GrowthTablesMissing extends Error {
 }
 
 export const contactKindFor = (kind: MessageKind): ContactKind => (kind === 'marketing' ? 'prospect' : 'recruit');
+
+/** growth_log.ref of reddit_research's rows: they share kind 'search' with recruit_search, never its budget. */
+export const REDDIT_REF = 'reddit_research';
+
+/** The growth_log row for one reddit_research call; what was asked, the Monid run and any error go in reason. */
+export function redditLogEntry(c: RedditCall): LogEntry {
+  const what = `${c.op} r/${c.subreddit}${c.query ? ` "${c.query}"` : ''} via ${c.endpoint}${c.run_id ? ` (run ${c.run_id})` : ''}`;
+  return { kind: 'search', status: c.status, cost_usd: c.cost_usd, ref: REDDIT_REF, reason: (c.reason ? `${what}: ${c.reason}` : what).slice(0, 300) };
+}

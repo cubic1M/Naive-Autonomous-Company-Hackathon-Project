@@ -14,7 +14,7 @@ export interface GrowthDeps {
   pool: Pick<PoolRepo, 'upsertLead' | 'setRegular' | 'optOut' | 'findByContact'>;
   /** A missing sender makes that kind of real send fail with reason no_sender (dry runs still work). */
   senders: { sales?: EmailSender; recruit?: EmailSender };
-  /** Needed by recruit_search only. */
+  /** Needed by recruit_search and reddit_research only. */
   monid?: Monid;
   /** post_social's publisher (Zernio). Missing: real posts fail with reason not_configured (dry runs still work). */
   social?: SocialPublisher;

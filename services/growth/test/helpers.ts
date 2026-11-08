@@ -24,6 +24,7 @@ export function testEnv(over: Partial<GrowthEnv> = {}): GrowthEnv {
     GROWTH_SALES_DAILY_CAP: 25,
     GROWTH_RECRUIT_DAILY_CAP: 40,
     GROWTH_SEARCH_DAILY_USD: 2,
+    GROWTH_REDDIT_DAILY_USD: 0.25,
     GROWTH_PROMO_MAX_GRANTS: 20,
     GROWTH_PROMO_CAP_USD: 25,
     GROWTH_PROMO_DAYS: 14,

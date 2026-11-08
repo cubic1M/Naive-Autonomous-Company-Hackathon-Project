@@ -61,7 +61,7 @@ export default function JobsMap({ jobs, activeId }: { jobs: DashJob[]; activeId:
       const active = j.id === activeId;
       const color = TONE[j.status] ?? "#8e958c";
       pts.push([j.lat, j.lng]);
-      if (active) mod.circle([j.lat, j.lng], { radius: 150, color, weight: 1.5, fillOpacity: 0.12, dashArray: "4 4" }).addTo(layer.current);
+      if (active) mod.circle([j.lat, j.lng], { radius: 300, color, weight: 1.5, fillOpacity: 0.12, dashArray: "4 4" }).addTo(layer.current);
       mod
         .circleMarker([j.lat, j.lng], { radius: active ? 10 : 6, color: "#fbf9f5", weight: 2, fillColor: color, fillOpacity: 1 })
         .bindTooltip(`${escapeHtml(j.title)} · ${j.status.replace(/_/g, " ")}`)

@@ -3,7 +3,14 @@ import type { Job, Proof, ProofCheck, ProofCheckStatus, ProofMedia } from '../ty
 import { readExif as defaultReadExif, type ExifData, type ReadMedia } from './exif.js';
 import { verificationProfile, type ExifTimePolicy, type VerificationProfile } from './profile.js';
 
-export const DEFAULT_GEOFENCE_M = 150;
+/** Proof radius when the customer sets no geofence_m. */
+export const DEFAULT_GEOFENCE_M = 300;
+/**
+ * On the default radius, proof farther than DEFAULT_GEOFENCE_M but within this goes to review (needs_review) instead
+ * of failing: the pin may be a block or two off, or the GPS drifted. A geofence_m the customer set stays strict.
+ * needs_review is not a person by itself: the Verifier agent may approve it (agents/prompts/verifier.md says when).
+ */
+export const GEOFENCE_REVIEW_M = 1_000;
 export const GPS_DISAGREEMENT_M = 150;
 export const EARLY_TOLERANCE_MS = 10 * 60_000;
 /** Window used when the job has no accepted_at (contracts/schema.sql lacks the column): the day before the deadline. */
@@ -57,13 +64,19 @@ export function geofenceChecks(job: Job, proof: Proof, exifs: MediaExif[]): Proo
     out.push(check('geofence', 'needs_review', 'no GPS in EXIF or device data'));
     return out;
   }
-  const limit = job.proof_schema.geofence_m ?? DEFAULT_GEOFENCE_M;
+  const custom = job.proof_schema.geofence_m;
+  const limit = custom ?? DEFAULT_GEOFENCE_M;
+  // null and absent both mean "the customer set no radius".
+  const reviewM = custom == null ? GEOFENCE_REVIEW_M : null;
   const dist = haversineMeters(point, { lat: job.lat, lng: job.lng });
   const source = exifGps ? 'EXIF' : 'device';
+  const status = dist <= limit ? 'pass' : reviewM !== null && dist <= reviewM ? 'needs_review' : 'fail';
+  const detail = `${Math.round(dist)} m from job (limit ${limit} m, ${source} GPS)`;
   out.push(
-    check('geofence', dist <= limit ? 'pass' : 'fail', `${Math.round(dist)} m from job (limit ${limit} m, ${source} GPS)`, {
+    check('geofence', status, status === 'needs_review' ? `${detail}; within ${reviewM} m, so it goes to review instead of failing` : detail, {
       distance_m: Math.round(dist),
       limit_m: limit,
+      review_m: reviewM,
       source,
     }),
   );

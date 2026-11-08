@@ -20,6 +20,7 @@ import type {
   WorkerVerification,
 } from '../types.js';
 import { NotFoundError } from '../errors.js';
+import type { StripeMode } from '../stripe-mode.js';
 
 /**
  * In-memory Repo for tests and local demos. Also holds teammates' tables (jobs/workers/proofs)
@@ -42,7 +43,23 @@ export class InMemoryRepo implements Repo {
   disputes = new Map<string, Dispute>();
   jobLiability = new Map<string, JobLiability>();
 
-  constructor(private readonly now: () => Date = () => new Date()) {}
+  /** The mode of the Stripe key in use. Tests flip it to model the test -> live key swap (see PostgresRepo). */
+  stripeMode: StripeMode;
+  /** Mode each stored Stripe id was written under: `customer:<id>`, `connect:<workerId>`, `identity:<workerId>`. Absent = test. */
+  stripeModes = new Map<string, StripeMode>();
+
+  constructor(private readonly now: () => Date = () => new Date(), opts: { stripeMode?: StripeMode } = {}) {
+    this.stripeMode = opts.stripeMode ?? 'test';
+  }
+
+  /** True when the id stored under `key` belongs to the current key's mode. */
+  private sameMode(key: string): boolean {
+    return (this.stripeModes.get(key) ?? 'test') === this.stripeMode;
+  }
+  private maskWorker(w: Worker | undefined): Worker | null {
+    if (!w) return null;
+    return w.stripe_connect_account && !this.sameMode(`connect:${w.id}`) ? { ...w, stripe_connect_account: null } : w;
+  }
 
   // seeding helpers
   seedJob(job: Job): Job {
@@ -70,10 +87,11 @@ export class InMemoryRepo implements Repo {
     return this.jobs.get(id) ?? null;
   }
   async getWorker(id: string) {
-    return this.workers.get(id) ?? null;
+    return this.maskWorker(this.workers.get(id));
   }
   async getWorkerByConnectAccount(accountId: string) {
-    return [...this.workers.values()].find((w) => w.stripe_connect_account === accountId) ?? null;
+    const w = [...this.workers.values()].find((x) => x.stripe_connect_account === accountId);
+    return w && this.sameMode(`connect:${w.id}`) ? w : null;
   }
   async getProof(id: string) {
     return this.proofs.get(id) ?? null;
@@ -89,10 +107,12 @@ export class InMemoryRepo implements Repo {
     const w = this.workers.get(workerId);
     if (!w) throw new Error(`worker ${workerId} not found`);
     w.stripe_connect_account = accountId;
+    this.stripeModes.set(`connect:${workerId}`, this.stripeMode);
   }
   async getCustomerPayment(customerId: string) {
     const c = this.customers.get(customerId);
-    return c ? { ...c } : null;
+    if (!c) return null;
+    return this.sameMode(`customer:${customerId}`) ? { ...c } : { ...c, stripe_customer_id: null, default_payment_method_id: null };
   }
   async getCustomerPaymentForJob(jobId: string) {
     const customerId = this.jobCustomers.get(jobId);
@@ -101,6 +121,12 @@ export class InMemoryRepo implements Repo {
   async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
     const c = this.customers.get(customerId);
     if (!c) throw new Error(`customer ${customerId} not found`);
+    if (!this.sameMode(`customer:${customerId}`)) {
+      // Ids from the other mode are dead under this key: drop them so a partial patch cannot pass them off as this mode's.
+      c.stripe_customer_id = null;
+      c.default_payment_method_id = null;
+    }
+    this.stripeModes.set(`customer:${customerId}`, this.stripeMode);
     if (patch.stripe_customer_id != null) c.stripe_customer_id = patch.stripe_customer_id;
     if (patch.default_payment_method_id != null) c.default_payment_method_id = patch.default_payment_method_id;
   }
@@ -173,11 +199,14 @@ export class InMemoryRepo implements Repo {
   private vkey(workerId: string, kind: VerificationKind) {
     return `${workerId}:${kind}`;
   }
+  /** Only kind 'identity' is a Stripe object (an Identity session); notary and attorney checks are mode-free. */
   async getWorkerVerification(workerId: string, kind: VerificationKind) {
+    if (kind === 'identity' && !this.sameMode(`identity:${workerId}`)) return null;
     return this.workerVerifications.get(this.vkey(workerId, kind)) ?? null;
   }
   async upsertWorkerVerification(v: WorkerVerification) {
     this.workerVerifications.set(this.vkey(v.worker_id, v.kind), { ...v });
+    if (v.kind === 'identity') this.stripeModes.set(`identity:${v.worker_id}`, this.stripeMode);
     return v;
   }
 

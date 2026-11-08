@@ -8,6 +8,9 @@ import { later, wakeForState } from "./naive";
  * cancelled runs it. A failure is logged, never thrown, so it cannot block the cancel; the sweep retries it.
  */
 export async function releaseHoldAfterCancel(jobId: string, reason = "job cancelled") {
+  // Paid in USDC over x402: there is no card hold; the USDC goes back instead.
+  const { isX402Funded, markX402RefundDue } = await import("./x402");
+  if (await isX402Funded(jobId)) return markX402RefundDue(jobId, reason);
   try {
     const r = await payments.releaseCancelledHold(jobId, reason);
     if (r.released) console.log(`[hold] job ${jobId}: card hold released (${reason})`);
