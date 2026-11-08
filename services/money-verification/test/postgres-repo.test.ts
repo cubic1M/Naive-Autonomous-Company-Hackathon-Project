@@ -80,6 +80,11 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(await requested({})).toBe(true);
   });
 
+  it('keeps a remote job NULL location as null, not (0, 0)', async () => {
+    const sql = fakeSql([{ match: 'from jobs', rows: [{ id: JOB, title: 'Remote', lat: null, lng: null, deadline: new Date(), budget_usd: '30', proof_requirement: {}, status: 'accepted' }] }]);
+    expect(await new PostgresRepo(sql).getJob(JOB)).toMatchObject({ lat: null, lng: null });
+  });
+
   it('maps contract media rows {url, kind, exif} to ProofMedia and skips hashless reuse lookups', async () => {
     const sql = fakeSql([
       {

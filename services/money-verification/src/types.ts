@@ -36,8 +36,9 @@ export interface Job {
   budget_cents: number;
   worker_pay_cents: number;
   fee_cents: number;
-  lat: number;
-  lng: number;
+  /** The job's location; null for a remote job (request_human stores NULL coordinates), which has no geofence. */
+  lat: number | null;
+  lng: number | null;
   accepted_at: Date | null;
   deadline: Date;
   proof_schema: ProofSchema;

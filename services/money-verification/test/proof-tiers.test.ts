@@ -59,6 +59,13 @@ describe('tier 0 (under $50): device data is enough', () => {
     expect(check(review, 'time')?.detail).toMatch(/missing EXIF capture time/);
   });
 
+  it('a remote job is approved on device data from anywhere; the geofence no longer measures to (0, 0)', async () => {
+    const { deps } = setup({ job: { budget_cents: 3000, lat: null, lng: null }, proof: { gps_lat: 40.7128, gps_lng: -74.006 }, exif: NO_EXIF, confidence: 0.9 });
+    const review = await reviewProof(deps, PROOF_ID);
+    expect(check(review, 'geofence')).toMatchObject({ status: 'pass', data: { remote: true } });
+    expect(review.decision).toBe('approved');
+  });
+
   it('tier 0 still escalates when the device captured_at is missing too', async () => {
     const { deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: null }, exif: NO_EXIF });
     const review = await reviewProof(deps, PROOF_ID);

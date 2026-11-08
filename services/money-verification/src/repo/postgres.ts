@@ -104,8 +104,8 @@ function mapJob(r: Row): Job {
     budget_cents,
     worker_pay_cents,
     fee_cents,
-    lat: num(r.lat),
-    lng: num(r.lng),
+    lat: r.lat == null ? null : num(r.lat), // NULL is a remote job, not (0, 0)
+    lng: r.lng == null ? null : num(r.lng),
     accepted_at: date(r.accepted_at), // not in contracts/schema.sql yet: null -> the time check asks for review
     deadline: date(r.deadline) as Date,
     proof_schema: proofSchemaOf(r),
