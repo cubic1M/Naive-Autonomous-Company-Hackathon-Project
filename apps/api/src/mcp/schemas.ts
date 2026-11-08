@@ -52,6 +52,26 @@ export const SCHEMAS = {
   escalate: { description: "Send a proof to a human reviewer instead of approving it.", shape: { ...jobId, proof_id: z.string(), reason: z.string().max(1000) } },
   capture_payment: { description: "Capture the customer's held payment for an approved job.", shape: jobId },
   payout: { description: "Pay the worker for an approved, captured job.", shape: jobId },
-  refund: { description: "Refund the customer for a rejected or expired job.", shape: { ...jobId, reason: z.string().max(500) } },
+  refund: {
+    description: "Refund the customer (full, or partial with amount_cents). Capped at $150 cumulative per job; above that it returns requires_approval and the CEO uses refund_large.",
+    shape: { ...jobId, reason: z.string().max(500), amount_cents: z.number().int().positive().optional(), request_id: z.string().max(200).optional() },
+  },
+  refund_large: {
+    description: "CEO only: refund above the $150 cap. Ask a founder (ask_operator) first only for legal threats, safety issues, or above $1,000.",
+    shape: { ...jobId, reason: z.string().max(500), amount_cents: z.number().int().positive().optional(), request_id: z.string().max(200), approved_by: z.string().max(100), approval_note: z.string().max(1000).optional() },
+  },
+  release_payout_large: {
+    description: "CEO only: pay a worker above the $150 cap after Finance reports over_limit.",
+    shape: { ...jobId, approved_by: z.string().max(100), approval_note: z.string().max(1000).optional() },
+  },
   ledger: { description: "Money totals: revenue, payouts, fees, costs, jobs paid.", shape: { since: z.string().optional() } },
+  get_proof_review: {
+    description: "Latest automated/manual review of a job's proof (tier, checks, flags, decision). Pass job_id or proof_id.",
+    shape: { job_id: z.string().uuid().optional(), proof_id: z.string().uuid().optional() },
+  },
+  get_dispute: { description: "Evidence bundle for a Stripe chargeback: dispute, job, proof review, ledger lines.", shape: { dispute_id: z.string().min(1) } },
+  submit_dispute_evidence: {
+    description: "Draft (default) or submit chargeback evidence to Stripe. submit: true sends it and can't be undone.",
+    shape: { dispute_id: z.string().min(1), evidence: z.record(z.any()), submit: z.boolean().optional() },
+  },
 } as const;

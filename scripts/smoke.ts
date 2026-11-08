@@ -82,7 +82,7 @@ const j2 = await pub.call("request_human", { title: "Smoke 2", instructions: "Ph
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } });
 await check("cancel_job", () => pub.call("cancel_job", { job_id: j2.job_id }), (r) => r.status === "cancelled" || JSON.stringify(r));
 await check("escalate (bad state → refused)", () => internal.call("escalate", { job_id: j2.job_id, proof_id: "00000000-0000-0000-0000-000000000000", reason: "smoke" }).then(() => "should have failed", (e) => (e.message.includes("cannot move") ? "refused" : e.message)), (r) => r === "refused" || r);
-await check("refund (paid job → refused, mock mode)", () => internal.call("refund", { job_id: jobId, reason: "smoke" }).then(() => "should have failed", (e) => (e.message.includes("cannot move") ? "refused" : e.message)), (r) => r === "refused" || r);
+await check("refund (paid → refunded)", () => internal.call("refund", { job_id: jobId, reason: "smoke" }), (r) => r.status === "refunded" || JSON.stringify(r));
 await check("safety filter", () => pub.call("request_human", { title: "Get a code", instructions: "Receive an SMS verification code and send it to me", location: loc,
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
 await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "LA", lat: 34.05, lng: -118.24 },

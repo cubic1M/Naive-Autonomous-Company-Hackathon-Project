@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { SCHEMAS } from "./schemas";
+import { describeToolError } from "../../../../services/money-verification/src/tools";
 
 type Handler = (args: any) => Promise<unknown>;
 
@@ -21,7 +22,9 @@ export async function serveMcp(req: Request, name: string, tools: Record<string,
         return { content: [{ type: "text" as const, text: text(out) }] };
       } catch (e: any) {
         console.error(`[mcp:${name}] ${tool} failed`, e);
-        return { isError: true, content: [{ type: "text" as const, text: `Error: ${e?.message ?? String(e)}` }] };
+        // code + message (e.g. requires_approval, idempotency_conflict) so agents can act on it
+        const d = describeToolError(e);
+        return { isError: true, content: [{ type: "text" as const, text: `Error (${d.code}): ${d.message}` }] };
       }
     });
   }

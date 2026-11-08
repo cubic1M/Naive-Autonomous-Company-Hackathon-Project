@@ -86,10 +86,11 @@
         "operis.get_job": "allow",
         "operis.capture_payment": "allow",
         "operis.payout": "allow",
-        "operis.refund": "ask",
+        "operis.refund": "allow",
         "operis.ledger": "allow",
         "board_read": "allow",
-        "board_write": "allow"
+        "board_write": "allow",
+        "send_to_agent": "allow"
       }
     },
     "sales": {
@@ -107,6 +108,27 @@
         "board_read": "allow",
         "board_write": "allow"
       }
+    },
+    "disputes": {
+      "name": "operis-disputes",
+      "description": "Settles complaints, failed jobs, no-shows and Stripe chargebacks on the evidence, inside the money limits.",
+      "budget_usd": {
+        "cap": 20,
+        "max_task": 5
+      },
+      "tools": {
+        "operis.get_job": "allow",
+        "operis.get_proof_review": "allow",
+        "operis.ledger": "allow",
+        "operis.get_dispute": "allow",
+        "operis.submit_dispute_evidence": "allow",
+        "operis.refund": "allow",
+        "send_to_agent": "allow",
+        "email.send": "allow",
+        "board_read": "allow",
+        "board_write": "allow",
+        "ask_operator": "allow"
+      }
     }
   },
   "ceo": {
@@ -119,13 +141,15 @@
     "tools": {
       "operis.get_job": "allow",
       "operis.ledger": "allow",
-      "operis.refund": "ask",
+      "operis.refund": "allow",
       "board_read": "allow",
       "board_write": "allow",
       "send_to_agent": "allow",
       "wait_for_agents": "allow",
       "list_agents": "allow",
-      "ask_operator": "allow"
+      "ask_operator": "allow",
+      "operis.refund_large": "allow",
+      "operis.release_payout_large": "allow"
     },
     "daily_report": {
       "cron": "0 8 * * *",

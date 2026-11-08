@@ -127,6 +127,8 @@ export function hooksFromApiContext(ctx: ApiContext, repo: Repo): Hooks {
     },
     async onDisputeOpened(disputeId, jobId) {
       ctx.log(`[money-verification] dispute ${disputeId} opened on job ${jobId ?? 'unknown'}: wake the Disputes agent`);
+      // apps/api passes wakeDisputes (lib/naive.ts wake('disputes', ...)); without it this stays a log line.
+      await (ctx as ApiContext & { wakeDisputes?: (d: string, j: string | null) => Promise<unknown> }).wakeDisputes?.(disputeId, jobId ?? null);
     },
   };
 }
