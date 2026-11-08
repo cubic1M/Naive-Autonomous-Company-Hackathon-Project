@@ -6,7 +6,8 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  geofence_m: number;
+  /** null or absent on an on-site job: the 300 m default, and proof up to 1 km away goes to review. Remote jobs have no fence. */
+  geofence_m?: number | null;
   fields?: { name: string; type: "string" | "number" }[];
 }
 

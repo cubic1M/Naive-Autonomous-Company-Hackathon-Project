@@ -144,7 +144,7 @@ export async function requestHuman(
                       certification_required, proof_requirement, status, callback_url)
     values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
             ${input.deadline}, ${input.budget_usd}, ${feeUsd}, ${workerPayUsd}, ${input.certification_required},
-            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? 150 })}, 'requested', ${input.callback_url ?? null})
+            ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? null })}, 'requested', ${input.callback_url ?? null})
     returning id`;
   await compliance.recordIntake(job.id, q);
   const liabilityNote = "Our Compliance agent decides after funding whether Operis is the provider or only the marketplace for this job; get_job shows liability_model.";
