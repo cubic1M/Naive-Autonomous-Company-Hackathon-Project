@@ -35,7 +35,7 @@ export default function Home() {
         </nav>
 
         <div style={{ position: "relative", maxWidth: "1080px", margin: "0 auto", padding: "40px 24px 0", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "22px" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "16px", color: "#3C443E" }}>For
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "clamp(11px, 3.1vw, 16px)", whiteSpace: "nowrap", color: "#3C443E" }}>For
             <span aria-hidden="true" style={{ width: "18px", height: "18px", borderRadius: "5px", background: "#FF8800", color: "#F7F4EE", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
             <strong style={{ fontWeight: "600", color: "#1F2A22" }}>autonomous companies</strong> and the people they hire
           </span>

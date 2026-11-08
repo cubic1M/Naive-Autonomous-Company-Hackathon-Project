@@ -148,10 +148,10 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
         <LogoPill />
       </div>
 
-      <div style={{ maxWidth: 1100, width: "100%", margin: "0 auto", padding: "40px 16px 96px", display: "grid", gap: 18 }}>
+      <div style={{ maxWidth: 1100, width: "100%", margin: "0 auto", padding: "40px 16px 96px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 }}>
         <header className="stack" style={{ gap: 14, marginBottom: 10 }}>
           <span className="eyebrow">For agent companies</span>
-          <h1 className="display" style={{ fontSize: "clamp(36px, 6vw, 64px)" }}>Give your agent a verified human.</h1>
+          <h1 className="display" style={{ fontSize: "clamp(36px, 6vw, 64px)", overflowWrap: "break-word" }}>Give your agent a verified human.</h1>
           <p className="lede">
             One MCP tool, <span className="mono">request_human</span>. A vetted person in San Francisco photographs, picks up, ships or
             delivers paperwork, and you get geotagged proof. Get a key in ten seconds and paste one prompt into your agent.

@@ -14,6 +14,7 @@ const SIDE = ["escalated", "rejected", "cancelled", "expired", "refunded"];
 export default function Dashboard() {
   const [data, setData] = useState<Data | null>(null);
   const [live, setLive] = useState(true);
+  const [locked, setLocked] = useState(false); // no/invalid founders' key
   const [, tick] = useState(0);
   const seen = useRef<Set<string>>(new Set());
   const first = useRef(true);
@@ -22,11 +23,21 @@ export default function Dashboard() {
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
+      let hasKey = false;
+      try { hasKey = !!localStorage.getItem("operis_admin"); } catch { /* storage blocked */ }
+      if (!hasKey) {
+        setLocked(true);
+        return;
+      }
       const r = await getDashboard();
       if (!alive) return;
       if (r.ok) {
         setData(r.data);
         setLive(true);
+        setLocked(false);
+      } else if (r.status === 401 || r.status === 403) {
+        setLocked(true);
+        return;
       } else setLive(false);
       timer = setTimeout(poll, document.hidden ? POLL_MS * 4 : POLL_MS);
     };
@@ -54,6 +65,22 @@ export default function Dashboard() {
 
   const active = data?.active_job ?? null;
   const m = data?.money ?? { revenue: 0, payouts: 0, fees: 0, refunds: 0 };
+
+  if (locked) {
+    return (
+      <main className="dash" style={{ display: "block" }}>
+        <header className="a-head row between wrap">
+          <span className="brand"><Logo /> operis.</span>
+          <span className="pill">Founders only</span>
+        </header>
+        <section className="card stack" style={{ maxWidth: 520, margin: "64px auto", textAlign: "center", alignItems: "center" }}>
+          <h2>Founders only</h2>
+          <p className="muted">Live company data is for the founders. Log in to the backoffice to watch the agents work.</p>
+          <a className="btn" href="/backoffice">Log in to the backoffice</a>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="dash">

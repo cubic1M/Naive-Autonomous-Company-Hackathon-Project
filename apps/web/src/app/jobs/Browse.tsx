@@ -186,7 +186,11 @@ export default function Browse() {
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                   <h2 style={{ margin: "0", fontFamily: "var(--font-display)", fontWeight: 500, fontSize: "26px", letterSpacing: "-0.035em", color: "#1F2A22" }}>{headline}</h2>
-                  <span style={{ fontSize: "14px", color: "#5B635C" }}>{resultLabel} · rates set by the posting company</span>
+                  <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px", fontSize: "14px", color: "#5B635C" }}>
+                    <span style={{ padding: "2px 9px", borderRadius: "999px", background: "#E5E1D7", color: "#2F4A37", fontSize: "12px", fontWeight: 600 }}>Example requests</span>
+                    {resultLabel} · rates set by the posting company
+                  </span>
+                  <span style={{ fontSize: "13px", color: "#7A8178" }}>Real jobs reach you by email with a personal link. Sign up to get them.</span>
                 </div>
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#4F5751" }}>
                   Sort by
@@ -238,7 +242,7 @@ export default function Browse() {
                         ) : (
                           <span style={{ alignSelf: "flex-start", padding: "4px 9px", borderRadius: "8px", background: "#E5E1D7", color: "#4F5751", fontSize: "12px", fontWeight: 600 }}>{item.req}</span>
                         )}
-                        <Link href="/j/demo" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "42px", border: `1px solid ${ACCENT}`, borderRadius: "8px", background: "#FBF9F5", color: "#2F4A37", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}>View request</Link>
+                        <Link href="/signup?next=/jobs" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "42px", border: `1px solid ${ACCENT}`, borderRadius: "8px", background: "#FBF9F5", color: "#2F4A37", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}>Sign up to apply</Link>
                       </div>
                     </div>
                   </article>
