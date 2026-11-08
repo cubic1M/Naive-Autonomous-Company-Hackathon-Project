@@ -110,6 +110,7 @@
         "operis.list_prospects": "allow",
         "operis.send_marketing": "allow",
         "operis.suppress_contact": "allow",
+        "operis.post_social": "ask",
         "operis.growth_report": "allow",
         "operis.recruit_search": "allow",
         "operis.recruit_invite": "allow"
