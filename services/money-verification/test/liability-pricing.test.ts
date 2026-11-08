@@ -43,7 +43,7 @@ describe('quoteJob', () => {
     const q = quoteJob({ budgetUsd: 59.99, title: 'Notarize a deed', instructions: '', certification_required: null });
     expect(q).toMatchObject({ pricing: 'connector', budgetCents: 5_999, workerPayCents: 5_999, feeCents: 1_200, chargeCents: 7_199 });
   });
-  it('enforces the $20 minimum on the budget', () => {
-    expect(() => quoteJob({ budgetUsd: 19.99, title: 'Notarize a deed', instructions: '', certification_required: null })).toThrow(/minimum/);
+  it('enforces the $3 minimum on the budget', () => {
+    expect(() => quoteJob({ budgetUsd: 2.99, title: 'Notarize a deed', instructions: '', certification_required: null })).toThrow(/minimum/);
   });
 });

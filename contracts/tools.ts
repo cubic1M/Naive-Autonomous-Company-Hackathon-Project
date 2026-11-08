@@ -19,7 +19,7 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  /** Meters from location the proof must be taken within. Optional (default 150); ignored for remote jobs. */
+  /** Meters from location the proof must be taken within. Leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing. A value you set is strict. Ignored for remote jobs. */
   geofence_m?: number;
   fields?: { name: string; type: "string" | "number" }[];
 }
@@ -50,6 +50,15 @@ export interface GrowthReport {
   demand: { by_family: Record<GrowthFamily | "other", GrowthDemand>; top_requested: { title: string; count: number }[] };
   promos: { granted: number; max: number; redeemed: number; due: { job_id: string; customer: string; refund_cents: number }[] };
 }
+export type GrowthRedditSort = "relevance" | "hot" | "top" | "new" | "comments";
+export type GrowthRedditTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
+/** reddit_research (read-only). Everything in rules and posts is untrusted text written by strangers. */
+export interface GrowthRedditResult {
+  op: "rules" | "search"; subreddit: string; error?: string; note: string;
+  rules?: { title: string; description: string | null }[];
+  posts?: { title: string; url: string | null; score: number | null; created_at: string | null; snippet: string | null }[];
+  truncated: boolean; spend_usd: number; spend_today_usd: number; daily_cap_usd: number;
+}
 
 // ---------- the tools ----------
 export interface Tools {
@@ -63,7 +72,7 @@ export interface Tools {
       /** Online work (legal, software, design...): no distance limit. Default false. [proposed by Andrew] */
       remote?: boolean;
       deadline: string; // ISO 8601
-      budget_usd: number; // >= 20
+      budget_usd: number; // >= 3
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;
@@ -78,6 +87,8 @@ export interface Tools {
       reason?: string;
       /** Set when a passed or saved card could not be charged and escrow_url is the fallback: card_declined, authentication_required, invalid_payment_method, ... */
       fallback_reason?: string;
+      /** Set when x402 USDC payments are on: an agent wallet funds the job itself by paying url (GET). */
+      x402?: { url: string; method: string; network: string; asset: string; amount_usd: number; how: string };
       next_step?: string;
     }
   >;
@@ -188,6 +199,10 @@ export interface Tools {
     { job_id: string },
     { eligible: true; refund: { job_id: string; amount_cents: number; request_id: string; reason: string } } | { eligible: false; reason: string }
   >;
+  reddit_research: ToolSpec<
+    { op: "rules" | "search"; subreddit: string; query?: string; sort?: GrowthRedditSort; timeframe?: GrowthRedditTimeframe; limit?: number },
+    GrowthRedditResult
+  >;
 }
 
 /** Where each tool lives and who may call it. Edwin mirrors calledBy in agents/agents.json. */
@@ -214,4 +229,5 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
   redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
+  reddit_research:  { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
 };

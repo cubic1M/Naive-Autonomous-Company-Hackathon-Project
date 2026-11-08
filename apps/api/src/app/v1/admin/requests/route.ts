@@ -53,8 +53,24 @@ export async function GET(req: Request) {
   const m = Object.fromEntries(money.map((r: any) => [r.kind, r.total]));
   const stages = await sql`select status, count(*)::int as n from jobs
                            where customer_id not in (select id from customers where name = 'smoke-test') group by status`;
+  // Calls from customer agents (api_calls, migration 012). Empty until the table exists.
+  let calls: any[] = [];
+  let callStats = { total_24h: 0, agents_24h: 0, errors_24h: 0, unauthorized_24h: 0, request_human_24h: 0, crawlers_24h: 0 };
+  try {
+    calls = await sql`select id, at, customer_id, customer_name, channel, method, tool, outcome, http_status, duration_ms, job_id, summary, client
+                      from api_calls where coalesce(customer_name, '') <> 'smoke-test' order by at desc limit 150`;
+    const [cs] = await sql`select count(*) filter (where outcome <> 'crawler')::int as total_24h, count(distinct customer_id)::int as agents_24h,
+                             count(*) filter (where outcome = 'error')::int as errors_24h,
+                             count(*) filter (where outcome = 'unauthorized')::int as unauthorized_24h,
+                             count(*) filter (where tool = 'request_human')::int as request_human_24h,
+                             count(*) filter (where outcome = 'crawler')::int as crawlers_24h
+                           from api_calls where at > now() - interval '24 hours' and coalesce(customer_name, '') <> 'smoke-test'`;
+    callStats = cs as any;
+  } catch {
+    // api_calls not migrated yet
+  }
   return Response.json({
-    now: new Date().toISOString(), stats, companies, requests: rows, feed,
+    now: new Date().toISOString(), stats, companies, requests: rows, feed, calls, call_stats: callStats,
     money: { revenue: m.capture ?? 0, payouts: m.payout ?? 0, fees: m.fee ?? 0, refunds: m.refund ?? 0, held: m.hold ?? 0 },
     stages: Object.fromEntries(stages.map((r: any) => [r.status, r.n])),
   });

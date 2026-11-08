@@ -17,5 +17,8 @@
     "agents:setup": "tsx agents/setup.ts",
     "customer:create": "tsx scripts/create-customer.ts",
     "approvals": "tsx scripts/approvals.ts"
+  },
+  "devDependencies": {
+    "@x402/fetch": "^2.30.0"
   }
 }

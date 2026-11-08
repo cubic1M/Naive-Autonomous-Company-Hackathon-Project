@@ -3,6 +3,7 @@
 import { sql } from "@/lib/db";
 import { hashKey } from "@/lib/auth";
 import { json, pkceOk, preflight, sha256, token } from "@/lib/oauth";
+import { logCall } from "@/lib/apiCalls";
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
 
@@ -13,8 +14,13 @@ async function readBody(req: Request): Promise<Record<string, string>> {
 }
 const err = (error: string, error_description: string, status = 400) => json({ error, error_description }, status);
 
-async function issue(customerId: string, clientId: string) {
+async function issue(customerId: string, clientId: string, grant: "authorization_code" | "refresh_token" = "authorization_code") {
   const [cl] = await sql`select client_name from oauth_clients where client_id = ${clientId}`;
+  if (grant === "authorization_code") {
+    const [cu] = await sql`select id, name from customers where id = ${customerId}`;
+    logCall({ customer: cu as any, channel: "oauth", method: "oauth/token", outcome: "ok", http_status: 200,
+              summary: `connected ${cl?.client_name ?? "an app"} through sign-in (OAuth)`, client: cl?.client_name ?? clientId });
+  }
   const access = token("opk_", 24), refresh = token("opr_", 32);
   await sql`insert into customer_keys (customer_id, key_hash, label) values (${customerId}, ${hashKey(access)}, ${`oauth:${cl?.client_name ?? clientId}`})`;
   await sql`insert into oauth_refresh_tokens (token_hash, client_id, customer_id) values (${sha256(refresh)}, ${clientId}, ${customerId})`;
@@ -38,7 +44,7 @@ export async function POST(req: Request) {
     const [r] = await sql`select client_id, customer_id from oauth_refresh_tokens where token_hash = ${sha256(b.refresh_token ?? "")} and not revoked`;
     if (!r) return err("invalid_grant", "refresh token is invalid");
     await sql`update oauth_refresh_tokens set revoked = true where token_hash = ${sha256(b.refresh_token ?? "")}`;
-    return issue(r.customer_id, r.client_id);
+    return issue(r.customer_id, r.client_id, "refresh_token");
   }
   return err("unsupported_grant_type", "use authorization_code or refresh_token");
 }

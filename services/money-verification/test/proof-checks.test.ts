@@ -72,6 +72,40 @@ describe('geofenceChecks', () => {
     expect(c?.status).toBe('fail');
   });
 
+  describe('default radius (the customer set no geofence_m)', () => {
+    const open = makeJob({ proof_schema: { photos: { min: 1, must_show: [] } } });
+
+    it('passes within the 300 m default', () => {
+      const [c] = geofenceChecks(open, proof, withExif(proof, exifAt(metersNorth(250), YC.lng)));
+      expect(c?.status).toBe('pass');
+      expect(c?.detail).toMatch(/limit 300 m/);
+    });
+
+    it('sends a miss inside 1 km to review instead of failing', () => {
+      const [c] = geofenceChecks(open, proof, withExif(proof, exifAt(metersNorth(800), YC.lng)));
+      expect(c?.status).toBe('needs_review');
+      expect(c?.pass).toBe(false);
+      expect(c?.detail).toMatch(/within 1000 m, so it goes to review/);
+      expect(c?.data).toMatchObject({ limit_m: 300, review_m: 1_000 });
+    });
+
+    it('fails beyond 1 km', () => {
+      expect(geofenceChecks(open, proof, withExif(proof, exifAt(metersNorth(1_200), YC.lng)))[0]?.status).toBe('fail');
+      expect(geofenceChecks(open, proof, withExif(proof, exifAt(metersNorth(3_400), YC.lng)))[0]?.status).toBe('fail');
+    });
+
+    it('treats a stored null geofence_m like an absent one', () => {
+      const nulled = makeJob({ proof_schema: { photos: { min: 1, must_show: [] }, geofence_m: null as unknown as undefined } });
+      expect(geofenceChecks(nulled, proof, withExif(proof, exifAt(metersNorth(800), YC.lng)))[0]?.status).toBe('needs_review');
+    });
+  });
+
+  it('keeps a radius the customer set strict: no review band', () => {
+    const strict = makeJob({ proof_schema: { photos: { min: 1, must_show: [] }, geofence_m: 150 } });
+    const [c] = geofenceChecks(strict, proof, withExif(proof, exifAt(metersNorth(800), YC.lng)));
+    expect(c?.status).toBe('fail');
+  });
+
   it('falls back to device GPS when EXIF has none', () => {
     const p = makeProof({ gps_lat: metersNorth(100), gps_lng: YC.lng });
     const checks = geofenceChecks(job, p, withExif(p, exifAt(null, null)));

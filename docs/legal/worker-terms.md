@@ -66,7 +66,7 @@ is depends on the job: see the job terms below.
 
 - The company that posts a job sets its price. For most jobs you get 75% of the posted price, and Operis keeps 25%
   as its fee: a $60 job pays you $45, and Operis keeps $15. Notary and legal jobs pay differently (see connector
-  jobs). The smallest job is $20.
+  jobs). The smallest job is $3.
 - The pay you see in our message and on the job page is your share. We don't take card fees out of it.
 - The job's pay is held before you start: the company's card is authorized (not charged) through Stripe before
   the job is sent to anyone. When your proof is approved, the card is charged and we send your share through

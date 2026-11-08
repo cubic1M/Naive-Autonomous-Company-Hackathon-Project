@@ -53,6 +53,12 @@ type Data = {
   requests: Req[]; feed: Feed[];
   money?: { revenue: number; payouts: number; fees: number; refunds: number; held: number };
   stages?: Record<string, number>;
+  calls?: Call[];
+  call_stats?: { total_24h: number; agents_24h: number; errors_24h: number; unauthorized_24h: number; request_human_24h: number; crawlers_24h?: number };
+};
+type Call = {
+  id: number; at: string; customer_id: string | null; customer_name: string | null; channel: string; method: string | null; tool: string | null;
+  outcome: "ok" | "rejected" | "error" | "unauthorized" | "crawler"; http_status: number | null; duration_ms: number | null; job_id: string | null; summary: string | null; client: string | null;
 };
 
 // Raw tool events → readable lines.
@@ -212,7 +218,7 @@ export default function Backoffice() {
 
       <section style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginTop: 28 }}>
         <div>
-          <span style={{ ...mono, color: C.muted }}>Autonomous company · 6 Naïve agents</span>
+          <span style={{ ...mono, color: C.muted }}>Autonomous company · 8 Naïve agents</span>
           <h1 style={{ ...display, fontSize: "clamp(32px, 4vw, 48px)", margin: "6px 0 0", color: C.heading, lineHeight: 1.05 }}>Requests coming in</h1>
         </div>
         {!!s?.escalated && (
@@ -229,6 +235,8 @@ export default function Backoffice() {
         <Kpi k="Paid jobs" v={s?.paid ?? "–"} />
         <Kpi k="Revenue" v={m ? usd(m.revenue) : "–"} sub={m ? `${usd(m.fees)} fees · ${usd(m.payouts)} to workers` : undefined} />
         <Kpi k="Companies" v={s?.companies ?? "–"} />
+        <Kpi k="Agent calls · 24h" v={data?.call_stats?.total_24h ?? "–"} warn={!!data?.call_stats?.errors_24h}
+          sub={data?.call_stats ? `${plural(data.call_stats.agents_24h, "agent")} · ${plural(data.call_stats.request_human_24h, "request")} · ${plural(data.call_stats.errors_24h, "error")}${data.call_stats.crawlers_24h ? ` · ${data.call_stats.crawlers_24h} directory checks` : ""}` : undefined} />
       </section>
 
       <section style={{ ...card, marginTop: 10, padding: "12px 14px", display: "flex", gap: 6, alignItems: "stretch", overflowX: "auto" }}>
@@ -245,6 +253,8 @@ export default function Backoffice() {
           );
         })}
       </section>
+
+      <AgentCalls calls={data?.calls ?? null} onOpenJob={(id) => setOpenId(id)} />
 
       <div className="bo2-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, marginTop: 14, alignItems: "start" }}>
         <section style={{ ...card, overflow: "hidden" }}>
@@ -354,7 +364,7 @@ function FeedList({ items }: { items: Feed[] }) {
   return (
     <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, maxHeight: 480, overflowY: "auto" }}>
       {rows.slice(0, 40).map((r, i) => (
-        <li key={i} style={{ display: "grid", gridTemplateColumns: "76px minmax(0, 1fr) 54px", gap: 10, alignItems: "start", padding: "9px 0", borderTop: i ? `1px solid ${C.inkLine}` : "none" }}>
+        <li key={i} style={{ display: "grid", gridTemplateColumns: "max-content minmax(0, 1fr) 54px", gap: 10, alignItems: "start", padding: "9px 0", borderTop: i ? `1px solid ${C.inkLine}` : "none" }}>
           <span style={{ justifySelf: "start", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, background: C.inkCard, color: AGENT_COLOR[r.who] ?? C.sage }}>{r.who}</span>
           <span style={{ fontSize: 14, color: r.kind === "wait" ? "#E8C88A" : r.kind === "auto" ? "#8E958C" : "#E9E5DC", lineHeight: 1.45, overflowWrap: "anywhere" }}>
             {r.kind === "say" ? <>&ldquo;{r.text.length > 150 ? r.text.slice(0, 150) + "…" : r.text}&rdquo;</> : r.text}
@@ -429,3 +439,91 @@ function Drawer({ x, onClose }: { x: Req; onClose: () => void }) {
 function Row({ k, v }: { k: string; v: string }) {
   return <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10 }}><span style={{ color: C.muted }}>{k}</span><span style={{ color: C.text, overflowWrap: "anywhere" }}>{v}</span></div>;
 }
+
+// ---------- calls from customer agents (api_calls) ----------
+const OUTCOME: Record<Call["outcome"], [string, string, string]> = {
+  ok: ["OK", "#E2EADE", "#2F4A37"],
+  rejected: ["Rejected", "#F6EAD3", "#8A5300"],
+  error: ["Error", "#F6E1DE", "#A12A22"],
+  unauthorized: ["No key", "#F3EFE7", "#5B635C"],
+  crawler: ["Directory", "#E2EBE8", "#3E5C5A"],
+};
+const CALL_LABEL: Record<string, string> = {
+  request_human: "request_human", get_job: "get_job", cancel_job: "cancel_job", setup_payment: "setup_payment",
+  initialize: "connect", "tools/list": "list tools", "POST /v1/customers": "sign-up", "oauth/token": "OAuth connect",
+};
+/** Real agents by default; directory crawlers (Glama, MCP Yellow Pages, ...) only in their own tab. */
+const match = (f: "all" | "requests" | "problems" | "crawlers", c: Call) =>
+  f === "crawlers" ? c.outcome === "crawler"
+  : c.outcome === "crawler" ? false
+  : f === "requests" ? c.tool === "request_human"
+  : f === "problems" ? c.outcome !== "ok"
+  : true;
+function AgentCalls({ calls, onOpenJob }: { calls: Call[] | null; onOpenJob: (id: string) => void }) {
+  const [filter, setFilter] = useState<"all" | "requests" | "problems" | "crawlers">("all");
+  const [more, setMore] = useState(false);
+  const seenIds = useRef<Set<number> | null>(null);
+  const [fresh, setFresh] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    if (!calls) return;
+    if (seenIds.current) setFresh(new Set(calls.filter((c) => !seenIds.current!.has(c.id)).map((c) => c.id)));
+    seenIds.current = new Set(calls.map((c) => c.id));
+  }, [calls]);
+  const list = (calls ?? []).filter((c) => match(filter, c));
+  const shown = list.slice(0, more ? 150 : 12);
+  const count = (f: typeof filter) => (calls ?? []).filter((c) => match(f, c)).length;
+  return (
+    <section style={{ ...card, marginTop: 14, overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderBottom: `1px solid ${C.border}` }}>
+        <div>
+          <h2 style={{ ...display, fontSize: 20, margin: 0, color: C.heading }}>Calls from agents</h2>
+          <div style={{ fontSize: 13, color: C.muted }}>Every call customer agents make to Operis, live: connects, requests, status checks, errors. MCP directories that index us are under Directories.</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 4, background: C.card2, padding: 4, borderRadius: 10 }}>
+          {([["all", "Agents"], ["requests", "Job requests"], ["problems", "Errors & no key"], ["crawlers", "Directories"]] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setFilter(v)} style={{ ...btn, padding: "7px 12px", fontSize: 13, background: filter === v ? C.card : "transparent", color: filter === v ? C.heading : C.muted, boxShadow: filter === v ? "0 1px 2px rgba(0,0,0,0.08)" : "none" }}>
+              {l} <span style={{ color: C.faint, marginLeft: 4 }}>{count(v)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {!calls && <div style={{ padding: 28, textAlign: "center", color: C.muted }}>Loading…</div>}
+      {calls && shown.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.muted }}>No calls yet. They appear here within seconds of an agent connecting.</div>}
+      {shown.map((c) => {
+        const [label, bg, fg] = OUTCOME[c.outcome] ?? OUTCOME.ok;
+        const call = CALL_LABEL[c.tool ?? c.method ?? ""] ?? c.tool ?? c.method ?? c.channel;
+        const clickable = !!c.job_id;
+        return (
+          <div key={c.id} onClick={clickable ? () => onOpenJob(c.job_id!) : undefined} className="bo2-call" style={{
+            display: "grid", gridTemplateColumns: "70px 84px minmax(110px, 180px) 120px minmax(0, 1fr)", gap: 12, alignItems: "center",
+            padding: "10px 16px", borderBottom: `1px solid ${C.border}`, cursor: clickable ? "pointer" : "default",
+            animation: fresh.has(c.id) ? "bo2flash 1.6s ease-out" : undefined,
+          }}>
+            <span style={{ fontSize: 13, color: C.faint, whiteSpace: "nowrap" }} title={new Date(c.at).toLocaleString()}>{ago(c.at)}</span>
+            <span style={{ justifySelf: "start", background: bg, color: fg, borderRadius: 999, padding: "3px 9px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{label}</span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: 600, color: C.heading, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.customer_name ?? "Unknown agent"}</span>
+              <span style={{ display: "block", fontSize: 12, color: C.faint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={c.client ?? ""}>{c.client ?? c.channel}</span>
+            </span>
+            <span style={{ fontFamily: "var(--font-code)", fontSize: 12.5, color: C.accentInk, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{call}</span>
+            <span style={{ fontSize: 14, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.summary ?? ""}>
+              {c.summary ?? ""}{c.duration_ms != null && <span style={{ color: C.faint, fontSize: 12 }}> · {c.duration_ms} ms</span>}
+            </span>
+          </div>
+        );
+      })}
+      {list.length > 12 && (
+        <button onClick={() => setMore((m) => !m)} style={{ ...btn, width: "100%", borderRadius: 0, background: C.card2, color: C.accentInk, fontSize: 13 }}>
+          {more ? "Show fewer" : `Show all ${list.length}`}
+        </button>
+      )}
+      <style>{`
+        .bo2-call:hover { background: ${C.card2}; }
+        @media (max-width: 760px) { .bo2-call { grid-template-columns: 60px 76px minmax(0, 1fr) !important; } .bo2-call > :nth-child(4), .bo2-call > :nth-child(5) { grid-column: 1 / -1; } }
+      `}</style>
+    </section>
+  );
+}
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;

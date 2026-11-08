@@ -1,5 +1,5 @@
-import { GrowthTablesMissing, type GrowthRepo } from '../repo.js';
-import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from '../types.js';
+import { GrowthTablesMissing, REDDIT_REF, redditLogEntry, type GrowthRepo } from '../repo.js';
+import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from '../types.js';
 
 /** Anything with query(text, params) → { rows }: PGlite, @neondatabase/serverless, or postgres.js through dbFromPostgresJs. */
 export interface Db {
@@ -173,7 +173,22 @@ export class PostgresGrowthRepo implements GrowthRepo {
   }
 
   async searchSpendSince(since: Date): Promise<number> {
-    const rows = await this.q(`select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and created_at >= $1`, [since]);
+    const rows = await this.q(
+      `select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and ref is distinct from $2 and created_at >= $1`,
+      [since, REDDIT_REF],
+    );
+    return Number(rows[0]?.usd ?? 0);
+  }
+
+  async logRedditCall(c: RedditCall): Promise<void> {
+    await this.log(redditLogEntry(c));
+  }
+
+  async redditSpendSince(since: Date): Promise<number> {
+    const rows = await this.q(`select coalesce(sum(cost_usd), 0)::float8 as usd from growth_log where kind = 'search' and ref = $2 and created_at >= $1`, [
+      since,
+      REDDIT_REF,
+    ]);
     return Number(rows[0]?.usd ?? 0);
   }
 

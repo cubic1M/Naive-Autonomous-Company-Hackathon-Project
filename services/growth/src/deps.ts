@@ -13,7 +13,7 @@ export interface GrowthDeps {
   pool: Pick<PoolRepo, 'upsertLead' | 'setRegular' | 'optOut' | 'findByContact'>;
   /** A missing sender makes that kind of real send fail with reason no_sender (dry runs still work). */
   senders: { sales?: EmailSender; recruit?: EmailSender };
-  /** Needed by recruit_search only. */
+  /** Needed by recruit_search and reddit_research only. */
   monid?: Monid;
   /** Cameron's Stripe Identity link (services/verify createIdentityLink); url null when already verified. */
   identity?: (workerId: string) => Promise<{ url: string | null; status: string }>;

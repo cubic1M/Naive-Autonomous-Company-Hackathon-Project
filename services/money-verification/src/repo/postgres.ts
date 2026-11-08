@@ -23,6 +23,7 @@ import type {
   WorkerVerification,
 } from '../types.js';
 import { requiredCertification } from '../proof/profile.js';
+import { modeOfLivemode, type StripeMode } from '../stripe-mode.js';
 
 /**
  * Minimal SQL client shape. `pg.Pool`, `pg.Client` and `@neondatabase/serverless` `Pool` all satisfy it.
@@ -306,8 +307,50 @@ function mapLiability(r: Row): JobLiability {
   };
 }
 
+/** Postgres reports a column that does not exist (migration 0005 not run yet) as 42703. */
+const isMissingColumn = (e: unknown) => (e as { code?: string }).code === '42703';
+
+/**
+ * Stripe ids in Postgres are scoped to the mode of the key in use (`stripeMode`, from STRIPE_SECRET_KEY). Each row that
+ * stores one also stores `stripe_livemode` (customers, worker_verifications kind identity) or `stripe_connect_livemode`
+ * (workers), migration 0005; null means the row predates it, when only the sandbox existed: test. Reads return ids of
+ * the other mode as null, so the flows that need one create it again under this key (a new Stripe Customer and a fresh
+ * setup_payment card, live Connect onboarding, a live Identity session) instead of failing with resource_missing.
+ * Writes stamp the mode. Before migration 0005 a test-mode repo keeps the old statements; a live one fails closed.
+ */
 export class PostgresRepo implements Repo {
-  constructor(private readonly sql: SqlClient) {}
+  private readonly stripeMode: StripeMode;
+
+  constructor(
+    private readonly sql: SqlClient,
+    opts: { stripeMode?: StripeMode } = {},
+  ) {
+    this.stripeMode = opts.stripeMode ?? 'test';
+  }
+
+  private sameMode(livemode: unknown): boolean {
+    return modeOfLivemode(livemode) === this.stripeMode;
+  }
+  private get livemode(): boolean {
+    return this.stripeMode === 'live';
+  }
+  /** The mode-stamping statement; before migration 0005 (42703) only a test-mode repo may fall back to the old one. */
+  private async withModeColumn<T>(stamped: () => Promise<T>, legacy: () => Promise<T>): Promise<T> {
+    try {
+      return await stamped();
+    } catch (e) {
+      if (isMissingColumn(e) && this.stripeMode === 'test') return legacy();
+      throw e;
+    }
+  }
+  private scopeWorker = (r: Row): Worker => {
+    const w = mapWorker(r);
+    return w.stripe_connect_account && !this.sameMode(r.stripe_connect_livemode) ? { ...w, stripe_connect_account: null } : w;
+  };
+  private scopeCustomerPayment = (r: Row): CustomerPayment => {
+    const c = mapCustomerPayment(r);
+    return this.sameMode(r.stripe_livemode) ? c : { ...c, stripe_customer_id: null, default_payment_method_id: null };
+  };
 
   private async one<T>(text: string, params: unknown[], map: (r: Row) => T): Promise<T | null> {
     const { rows } = await this.sql.query(text, params);
@@ -323,10 +366,11 @@ export class PostgresRepo implements Repo {
     return this.one('select * from jobs where id = $1', [id], mapJob);
   }
   getWorker(id: string) {
-    return this.one('select * from workers where id = $1', [id], mapWorker);
+    return this.one('select * from workers where id = $1', [id], this.scopeWorker);
   }
-  getWorkerByConnectAccount(accountId: string) {
-    return this.one('select * from workers where stripe_connect_account = $1 limit 1', [accountId], mapWorker);
+  async getWorkerByConnectAccount(accountId: string) {
+    const w = await this.one('select * from workers where stripe_connect_account = $1 limit 1', [accountId], this.scopeWorker);
+    return w?.stripe_connect_account ? w : null; // an account of the other mode is not this worker's account under this key
   }
   getProof(id: string) {
     return this.one('select * from proofs where id = $1', [id], mapProof);
@@ -344,25 +388,47 @@ export class PostgresRepo implements Repo {
     );
   }
   async setWorkerConnectAccount(workerId: string, accountId: string) {
-    await this.sql.query('update workers set stripe_connect_account = $2 where id = $1', [workerId, accountId]);
+    await this.withModeColumn(
+      () => this.sql.query('update workers set stripe_connect_account = $2, stripe_connect_livemode = $3 where id = $1', [workerId, accountId, this.livemode]),
+      () => this.sql.query('update workers set stripe_connect_account = $2 where id = $1', [workerId, accountId]),
+    );
   }
   getCustomerPayment(customerId: string) {
-    return this.one('select * from customers where id = $1', [customerId], mapCustomerPayment);
+    return this.one('select * from customers where id = $1', [customerId], this.scopeCustomerPayment);
   }
   getCustomerPaymentForJob(jobId: string) {
     return this.one(
       'select c.* from jobs j join customers c on c.id = j.customer_id where j.id = $1',
       [jobId],
-      mapCustomerPayment,
+      this.scopeCustomerPayment,
     );
   }
+  /**
+   * Merges the given ids into the row's, but only with ids of the same mode: after the key changes mode, the first write
+   * replaces both columns, so a new live Customer id never carries the old test card along as if it were live.
+   * (SET expressions all read the row as it was, so the CASEs see the old stripe_livemode.)
+   */
   async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
-    await this.sql.query(
-      `update customers set
-         stripe_customer_id = coalesce($2, stripe_customer_id),
-         default_payment_method_id = coalesce($3, default_payment_method_id)
-       where id = $1`,
-      [customerId, patch.stripe_customer_id ?? null, patch.default_payment_method_id ?? null],
+    const cus = patch.stripe_customer_id ?? null;
+    const pm = patch.default_payment_method_id ?? null;
+    await this.withModeColumn(
+      () =>
+        this.sql.query(
+          `update customers set
+             stripe_customer_id = case when coalesce(stripe_livemode, false) = $4 then coalesce($2, stripe_customer_id) else $2 end,
+             default_payment_method_id = case when coalesce(stripe_livemode, false) = $4 then coalesce($3, default_payment_method_id) else $3 end,
+             stripe_livemode = $4
+           where id = $1`,
+          [customerId, cus, pm, this.livemode],
+        ),
+      () =>
+        this.sql.query(
+          `update customers set
+             stripe_customer_id = coalesce($2, stripe_customer_id),
+             default_payment_method_id = coalesce($3, default_payment_method_id)
+           where id = $1`,
+          [customerId, cus, pm],
+        ),
     );
   }
 
@@ -450,23 +516,38 @@ export class PostgresRepo implements Repo {
     return rows.length > 0;
   }
 
-  getWorkerVerification(workerId: string, kind: VerificationKind) {
-    return this.one(
-      'select * from worker_verifications where worker_id = $1 and kind = $2',
-      [workerId, kind],
-      mapVerification,
-    );
+  /** Only kind 'identity' is a Stripe object (an Identity session); notary and attorney checks are mode-free. */
+  async getWorkerVerification(workerId: string, kind: VerificationKind) {
+    const { rows } = await this.sql.query('select * from worker_verifications where worker_id = $1 and kind = $2', [workerId, kind]);
+    const r = rows[0];
+    if (!r || (kind === 'identity' && !this.sameMode(r.stripe_livemode))) return null;
+    return mapVerification(r);
   }
   async upsertWorkerVerification(v: WorkerVerification) {
-    const row = await this.one(
-      `insert into worker_verifications (worker_id, kind, status, provider_ref, details, verified_at, expires_at)
-       values ($1, $2, $3, $4, $5::jsonb, $6, $7)
-       on conflict (worker_id, kind) do update set
-         status = excluded.status, provider_ref = excluded.provider_ref, details = excluded.details,
-         verified_at = excluded.verified_at, expires_at = excluded.expires_at
-       returning *`,
-      [v.worker_id, v.kind, v.status, v.provider_ref, JSON.stringify(v.details), v.verified_at, v.expires_at],
-      mapVerification,
+    const params = [v.worker_id, v.kind, v.status, v.provider_ref, JSON.stringify(v.details), v.verified_at, v.expires_at];
+    const row = await this.withModeColumn(
+      () =>
+        this.one(
+          `insert into worker_verifications (worker_id, kind, status, provider_ref, details, verified_at, expires_at, stripe_livemode)
+           values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+           on conflict (worker_id, kind) do update set
+             status = excluded.status, provider_ref = excluded.provider_ref, details = excluded.details,
+             verified_at = excluded.verified_at, expires_at = excluded.expires_at, stripe_livemode = excluded.stripe_livemode
+           returning *`,
+          [...params, v.kind === 'identity' ? this.livemode : null],
+          mapVerification,
+        ),
+      () =>
+        this.one(
+          `insert into worker_verifications (worker_id, kind, status, provider_ref, details, verified_at, expires_at)
+           values ($1, $2, $3, $4, $5::jsonb, $6, $7)
+           on conflict (worker_id, kind) do update set
+             status = excluded.status, provider_ref = excluded.provider_ref, details = excluded.details,
+             verified_at = excluded.verified_at, expires_at = excluded.expires_at
+           returning *`,
+          params,
+          mapVerification,
+        ),
     );
     if (!row) throw new Error('upsert worker_verifications returned no row');
     return row;

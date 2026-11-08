@@ -112,7 +112,8 @@
         "operis.suppress_contact": "allow",
         "operis.growth_report": "allow",
         "operis.recruit_search": "allow",
-        "operis.recruit_invite": "allow"
+        "operis.recruit_invite": "allow",
+        "operis.reddit_research": "allow"
       },
       "schedules": [
         {
@@ -123,7 +124,7 @@
           "enabled": false
         }
       ],
-      "$comment": "services/growth (docs/specs/2026-11-08-sales-recruiter-design.md): cold email only through operis.send_marketing, which enforces GROWTH_LIVE / OUTREACH_TEST_ALLOWLIST, opt-outs, caps and the unsubscribe link in code. email.send is for replies only and always waits for a founder (approvals.ts HUMAN_ONLY). Schedule created disabled; enable once live."
+      "$comment": "services/growth (docs/specs/2026-11-08-sales-recruiter-design.md): cold email only through operis.send_marketing, which enforces GROWTH_LIVE / OUTREACH_TEST_ALLOWLIST, opt-outs, caps and the unsubscribe link in code. email.send is for replies only and always waits for a founder (approvals.ts HUMAN_ONLY). operis.reddit_research is read-only (Monid; its own daily cap GROWTH_REDDIT_DAILY_USD); Sales drafts posts on the board and never posts. Schedule created disabled; enable once live."
     },
     "recruiter": {
       "name": "operis-recruiter",
@@ -214,6 +215,30 @@
       "cron": "0 8 * * *",
       "timezone": "America/Los_Angeles",
       "budget_usd": 1
+    },
+    "control_plane": {
+      "$comment": "Naïve's own control plane (api.vetta.sh/v1/mcp) for the CEO. Off until agents/control-plane.ts --apply has stored the credential; then run agents:setup with CEO_CONTROL_PLANE=true. Reads are allowed; anything that starts or changes work asks a founder.",
+      "server_name": "naive",
+      "tools": {
+        "agents_list": "allow",
+        "agents_get": "allow",
+        "agents_get_spend": "allow",
+        "sessions_list": "allow",
+        "sessions_get": "allow",
+        "sessions_list_events": "allow",
+        "deployments_list": "allow",
+        "deployments_get": "allow",
+        "deployments_list_runs": "allow",
+        "credits_get_balance": "allow",
+        "credits_get_spend": "allow",
+        "organizations_get": "allow",
+        "audit_logs_list": "allow",
+        "deployments_run": "ask",
+        "deployments_pause": "ask",
+        "deployments_resume": "ask",
+        "sessions_create": "ask",
+        "sessions_patch_budget": "ask"
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
-/** The seven growth tools as plain functions over GrowthDeps: services/growth/index.ts serves them to the agents. */
+/** The eight growth tools as plain functions over GrowthDeps: services/growth/index.ts serves them to the agents. */
 import type { GrowthDeps } from './deps.js';
 import { isFamily } from './families.js';
+import { redditResearch, type RedditResearchInput } from './reddit.js';
 import { redeemPromo } from './redeem.js';
 import { growthReport } from './report.js';
 import { recruitInvite, recruitSearch } from './recruit.js';
@@ -20,6 +21,7 @@ export function createGrowthTools(deps: GrowthDeps) {
     recruit_invite: async (input: { family: string; person_ids: string[] }) => recruitInvite(deps, { ...input, family: family('recruit_invite', input.family) }),
     growth_report: async () => growthReport(deps),
     redeem_promo: async (input: { job_id: string }) => redeemPromo(deps, input.job_id),
+    reddit_research: async (input: RedditResearchInput) => redditResearch(deps, input),
   };
 }
 

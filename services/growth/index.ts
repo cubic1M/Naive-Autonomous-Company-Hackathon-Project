@@ -53,6 +53,7 @@ const growth: ServiceModule = {
   recruit_invite: (input, ctx) => tools(ctx).recruit_invite(input),
   growth_report: (_input, ctx) => tools(ctx).growth_report(),
   redeem_promo: (input, ctx) => tools(ctx).redeem_promo(input),
+  reddit_research: (input, ctx) => tools(ctx).reddit_research(input),
 };
 export default growth;
 
