@@ -291,10 +291,10 @@ function mapDispute(r: Row): Dispute {
   };
 }
 function mapLiability(r: Row): JobLiability {
-  const tags = json<{ rules?: string[]; forced?: 'connector' | 'refuse' | null }>(r.tags, {});
+  const tags = json<{ rules?: string[]; forced?: 'connector' | 'refuse' | null; hints?: string[] }>(r.tags, {});
   return {
     job_id: String(r.job_id),
-    tags: { rules: tags.rules ?? [], forced: tags.forced ?? null },
+    tags: { rules: tags.rules ?? [], forced: tags.forced ?? null, hints: tags.hints ?? [] },
     pricing: r.pricing === 'connector' ? 'connector' : 'standard',
     model: (r.model ?? null) as JobLiability['model'],
     rule_id: r.rule_id == null ? null : String(r.rule_id),

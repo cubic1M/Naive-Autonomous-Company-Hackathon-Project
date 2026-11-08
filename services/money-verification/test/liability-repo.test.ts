@@ -25,6 +25,11 @@ describe('job_liability in the repo', () => {
     expect(second.row.model).toBe('operis');
     expect((await repo.getJobLiability(JOB_ID))?.decided_at).toEqual(T0);
   });
+  it('keeps the hints intake stored next to the tags', async () => {
+    const repo = new InMemoryRepo();
+    await repo.insertJobLiability({ job_id: JOB_ID, tags: { rules: [], forced: null, hints: ['L2'] }, pricing: 'standard' });
+    expect((await repo.getJobLiability(JOB_ID))?.tags).toEqual({ rules: [], forced: null, hints: ['L2'] });
+  });
   it('returns null for an unknown job', async () => {
     expect(await new InMemoryRepo().getJobLiability(JOB_ID)).toBeNull();
   });

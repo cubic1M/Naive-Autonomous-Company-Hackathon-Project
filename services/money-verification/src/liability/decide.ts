@@ -12,7 +12,8 @@ export interface LiabilityDeps {
 export interface LiabilityContext {
   job_id: string;
   pricing: JobLiability['pricing'];
-  tags: JobLiability['tags'];
+  /** hints: mentions intake found that force nothing; the agent judges them (policy text, "Tags and hints"). */
+  tags: { rules: string[]; forced: JobLiability['tags']['forced']; hints: string[] };
   decision: { model: string; rule_id: string | null; reason: string | null; decided_by: string | null; decided_at: string | null } | null;
   allowed_models: LiabilityModel[];
   policy_version: string;
@@ -44,7 +45,7 @@ export async function getLiabilityContext(deps: LiabilityDeps, jobId: string): P
   return {
     job_id: jobId,
     pricing: row.pricing,
-    tags: row.tags,
+    tags: { rules: row.tags.rules, forced: row.tags.forced, hints: row.tags.hints ?? [] },
     decision: row.model
       ? { model: row.model, rule_id: row.rule_id, reason: row.reason, decided_by: row.decided_by, decided_at: row.decided_at?.toISOString() ?? null }
       : null,

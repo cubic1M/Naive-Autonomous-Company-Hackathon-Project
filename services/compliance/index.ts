@@ -30,7 +30,7 @@ export function refusalReason(ruleId: string): string {
 
 /** request_human: store the intake tags and pricing next to the new job. */
 export async function recordIntake(jobId: string, q: JobQuote): Promise<void> {
-  await depsFromProcessEnv().repo.insertJobLiability({ job_id: jobId, tags: { rules: q.tags.rules, forced: q.tags.forced }, pricing: q.pricing });
+  await depsFromProcessEnv().repo.insertJobLiability({ job_id: jobId, tags: { rules: q.tags.rules, forced: q.tags.forced, hints: q.tags.hints }, pricing: q.pricing });
 }
 
 const tools = (ctx: ToolContext) => createTools(depsFromApiContext(ctx as ApiContext));

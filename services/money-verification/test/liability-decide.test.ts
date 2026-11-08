@@ -86,6 +86,13 @@ describe('getLiabilityContext', () => {
     expect(ctx).toMatchObject({ job_id: JOB_ID, pricing: 'connector', allowed_models: ['connector', 'refuse'], decision: null, policy_version: '2026-11-08' });
     expect(ctx.policy).toContain('L2 Legal services');
   });
+  it('passes the hints to the agent, and an empty list when intake stored none', async () => {
+    const d = deps();
+    await d.repo.insertJobLiability({ job_id: JOB_ID, tags: { rules: [], forced: null, hints: ['L1'] }, pricing: 'standard' });
+    expect((await getLiabilityContext(d, JOB_ID)).tags).toEqual({ rules: [], forced: null, hints: ['L1'] });
+    const other = deps(); await seed(other.repo, ['L2'], 'connector', 'connector');
+    expect((await getLiabilityContext(other, JOB_ID)).tags.hints).toEqual([]);
+  });
 });
 
 describe('liability tools', () => {

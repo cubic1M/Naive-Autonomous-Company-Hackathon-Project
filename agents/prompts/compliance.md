@@ -4,6 +4,8 @@ For every funded job you decide who holds the liability for the work.
 When told a job is funded:
 1. Read it with `operis.get_job` (title, instructions, certification, location, budget).
 2. Read `operis.get_liability_context`: the intake tags, the pricing, the models you may choose, and the full policy.
+   `tags.rules` are requests for regulated work and force the model. `tags.hints` are only mentions (a lawyer, a
+   notary, a tax return): an errand around them (carrying, scanning, mailing, waiting) is `operis` under D.
 3. Decide one model and the rule that justifies it:
    - `operis` (rule D): Operis is the provider and holds the liability. The default for any job no rule covers.
    - `connector` (rule L1, L2 or U): the worker provides the service under their own licence and holds the

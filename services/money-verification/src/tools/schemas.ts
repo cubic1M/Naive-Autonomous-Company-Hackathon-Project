@@ -185,7 +185,7 @@ export const toolSchemas = {
     input: z.object({ job_id: uuid }).strict(),
     output: z.object({
       job_id: z.string(), pricing: z.enum(['standard', 'connector']),
-      tags: z.object({ rules: z.array(z.string()), forced: z.enum(['connector', 'refuse']).nullable() }),
+      tags: z.object({ rules: z.array(z.string()), forced: z.enum(['connector', 'refuse']).nullable(), hints: z.array(z.string()) }),
       decision: z.object({ model: z.string(), rule_id: z.string().nullable(), reason: z.string().nullable(), decided_by: z.string().nullable(), decided_at: z.string().nullable() }).nullable(),
       allowed_models: z.array(z.enum(['operis', 'connector', 'refuse'])), policy_version: z.string(), policy: z.string(),
     }),
