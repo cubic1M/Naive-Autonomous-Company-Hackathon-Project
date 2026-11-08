@@ -152,8 +152,9 @@ export function renderEmail(ctx: MessageContext): EmailMessage {
 }
 
 /**
- * Branded HTML version. Table layout + inline styles (works in Gmail/Outlook/Apple Mail), no images
- * (images and tracking pixels hurt deliverability and trust), one clear button, a real footer.
+ * Branded HTML version, "editorial" style (cream page, serif headings, sage green, soft beige cards,
+ * pill buttons). Table layout + inline styles for Gmail/Outlook/Apple Mail. No images or tracking
+ * pixels (they hurt deliverability and trust): the green hero is a CSS gradient with a solid fallback.
  */
 export function renderEmailHtml(ctx: MessageContext): string {
   const { job, person } = ctx;
@@ -161,48 +162,92 @@ export function renderEmailHtml(ctx: MessageContext): string {
   const when = formatDeadline(job.deadline);
   const where = whereLine(job);
   const name = greetingName(person);
-  const row = (label: string, value: string) =>
-    `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:96px;vertical-align:top">${esc(label)}</td><td style="padding:6px 0;color:#111827;font-size:14px;font-weight:500">${esc(value)}</td></tr>`;
+  const C = {
+    page: '#fbfaf6',
+    card: '#f0eee8',
+    ink: '#2f3a33',
+    body: '#4a514c',
+    muted: '#8a8f8a',
+    sage: '#6f8f7b',
+    deep: '#2f4a3b',
+  };
+  const serif = "Georgia,'Times New Roman',Times,serif";
+  const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  const pill = (label: string, wide = false) =>
+    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};color:#ffffff;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
+  const detail = (label: string, value: string) =>
+    `<tr><td style="padding:4px 12px 4px 0;font-family:${sans};font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-family:${sans};font-size:14px;color:${C.ink}">${esc(value)}</td></tr>`;
   const details = [
-    ...(where ? [row(job.remote ? 'Location' : 'Where', where)] : []),
-    ...(when ? [row('Due', `${when} (PT)`)] : []),
-    row('Pay', `${pay}, paid on approval`),
-    ...(job.certification_required ? [row('Requires', job.certification_required)] : []),
+    ...(where ? [detail(job.remote ? 'Location' : 'Where', where)] : []),
+    ...(when ? [detail('Due', `${when} (PT)`)] : []),
+    detail('Pay', `${pay}, paid when the work is approved`),
+    ...(job.certification_required ? [detail('Requires', job.certification_required)] : []),
   ].join('');
+  const bullet = (t: string) =>
+    `<tr><td style="padding:3px 10px 3px 0;vertical-align:top;font-family:${sans};font-size:14px;color:${C.body}">&#9679;</td><td style="padding:3px 0;font-family:${sans};font-size:14px;line-height:1.5;color:${C.body}">${t}</td></tr>`;
+
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(job.title)}</title></head>
-<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-<div style="display:none;max-height:0;overflow:hidden">${esc(`${job.title} · ${pay}. First qualified person to accept gets it.`)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb">
-  <tr><td style="padding:22px 28px;border-bottom:1px solid #f0f1f3">
-    <span style="font-size:18px;font-weight:700;letter-spacing:-0.2px;color:#111827">${COMPANY.name}</span>
-    <span style="font-size:12px;color:#6b7280;padding-left:8px">${esc(COMPANY.tagline)}</span>
+<body style="margin:0;padding:0;background:${C.page}">
+<div style="display:none;max-height:0;overflow:hidden">${esc(`${job.title} · ${pay}. The first qualified person to accept gets it.`)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:24px 12px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+
+  <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
+
+  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:linear-gradient(135deg,#9db8a6 0%,#6f8f7b 45%,#2f4a3b 100%);border-radius:16px;padding:56px 28px">
+    <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">A job that<br>fits you</div>
   </td></tr>
-  <tr><td style="padding:28px 28px 8px">
-    <p style="margin:0 0 14px;font-size:15px;color:#111827">Hi${name ? ` ${esc(name)}` : ''},</p>
-    <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#374151">${COMPANY.name} matches businesses with skilled people for short, paid jobs. A new one fits your background:</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px">
-      <tr><td style="padding:18px 20px">
-        <div style="font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#4f46e5;margin-bottom:6px">${job.remote ? 'Remote job' : 'On-site job'}</div>
-        <div style="font-size:17px;font-weight:650;color:#111827;margin-bottom:10px;line-height:1.35">${esc(job.title)}</div>
-        <table role="presentation" cellpadding="0" cellspacing="0">${details}</table>
-      </td></tr>
+
+  <tr><td align="center" style="padding:22px 20px 26px;font-family:${sans};font-size:16px;line-height:1.5;color:${C.body}">
+    Hi${name ? ` ${esc(name)}` : ''}, a short, paid job just opened up.<br>The first qualified person to accept gets it.
+  </td></tr>
+
+  <tr><td style="background:${C.card};border-radius:16px;padding:28px 30px" align="center">
+    <div style="font-family:${sans};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${C.sage};margin-bottom:8px">${job.remote ? 'Remote job' : 'On-site job'}</div>
+    <div style="font-family:${serif};font-size:25px;line-height:1.25;color:${C.ink};margin-bottom:14px">${esc(job.title)}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 20px;text-align:left">${details}</table>
+    ${pill('View job & accept')}
+  </td></tr>
+
+  <tr><td style="padding:26px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td width="52%" style="padding:0 18px 0 30px;vertical-align:middle">
+        <div style="font-family:${serif};font-size:23px;line-height:1.25;color:${C.ink};margin-bottom:10px">How it works</div>
+        <div style="font-family:${sans};font-size:14px;line-height:1.6;color:${C.body}">Accept the job, do the work, and upload proof when you're done. Operis checks it and pays you directly. No account or signup needed.</div>
+      </td>
+      <td width="48%" bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:linear-gradient(160deg,#6f8f7b 0%,#2f4a3b 70%,#1f3329 100%);border-radius:16px;padding:44px 12px">
+        <div style="font-family:${sans};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#d7e4da">You earn</div>
+        <div style="font-family:${serif};font-size:46px;line-height:1.1;color:#ffffff">${esc(pay)}</div>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td style="background:${C.card};border-radius:16px;padding:28px 30px">
+    <div style="font-family:${serif};font-size:23px;color:${C.ink};margin-bottom:12px">Easiest next step</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      ${bullet('Open the job to see the full details, then accept in one tap')}
+      ${bullet('Not a fit? No need to reply, we won’t follow up on this job')}
+      ${bullet('Questions? Just reply to this email')}
     </table>
+    ${pill('Accept this job', true)}
   </td></tr>
-  <tr><td align="center" style="padding:22px 28px 6px">
-    <a href="${esc(ctx.link)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px">View job &amp; accept</a>
-    <p style="margin:12px 0 0;font-size:13px;color:#6b7280">The first qualified person to accept gets the job. No account needed.</p>
-  </td></tr>
-  <tr><td style="padding:20px 28px 26px">
-    <p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af">Why you got this: ${esc(whyLine(person))}</p>
-  </td></tr>
+
+  <tr><td align="center" style="padding:26px 20px 30px;font-family:${serif};font-style:italic;font-size:16px;color:${C.body}">Either way, thanks for considering it.</td></tr>
+
 </table>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td align="center" style="padding:16px 12px;font-size:12px;line-height:1.6;color:#9ca3af">
-  ${COMPANY.name} · <a href="https://${COMPANY.site}" style="color:#9ca3af">${COMPANY.site}</a> · ${esc(COMPANY.address.replace(/^Operis · /, ''))}<br>
-  Not interested? Reply <strong>STOP</strong> and we'll never contact you again.
-</td></tr></table>
-</td></tr></table>
+</td></tr>
+<tr><td align="center" style="background:${C.card};padding:26px 16px 30px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td style="padding:0 18px">
+    <div style="font-family:${serif};font-size:21px;font-weight:700;color:${C.ink};margin-bottom:10px">Operis</div>
+    <div style="font-family:${sans};font-size:12px;line-height:1.6;color:${C.muted}">
+      Why you got this: ${esc(whyLine(person))}<br>
+      ${esc(COMPANY.address)} · <a href="https://${COMPANY.site}" style="color:${C.muted}">${COMPANY.site}</a><br>
+      Not interested? Reply <strong>STOP</strong> and we'll never contact you again.
+    </div>
+  </td></tr></table>
+</td></tr>
+</table>
 </body></html>`;
 }
 
