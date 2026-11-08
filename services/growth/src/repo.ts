@@ -1,4 +1,4 @@
-import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from './types.js';
+import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from './types.js';
 
 /**
  * Persistence for growth. Writes only the growth_* tables (migrations/0001_growth.sql); reads jobs and customers
@@ -27,6 +27,9 @@ export interface GrowthRepo {
   log(e: LogEntry): Promise<void>;
   messageCountsSince(kind: MessageKind, since: Date): Promise<{ sent: number; dry_run: number }>;
   searchSpendSince(since: Date): Promise<number>;
+  /** reddit_research's own table (migrations/0002_reddit_research.sql), so its budget never mixes with recruit_search's. */
+  logRedditCall(c: RedditCall): Promise<void>;
+  redditSpendSince(since: Date): Promise<number>;
 
   getGrantByKey(key: string): Promise<Grant | null>;
   getGrantByJob(jobId: string): Promise<Grant | null>;

@@ -49,6 +49,21 @@ export interface LogEntry {
   ref?: string | null;
 }
 
+/** One Monid call made by reddit_research (growth_reddit_calls): its daily budget is the sum of cost_usd. */
+export interface RedditCall {
+  op: 'rules' | 'search';
+  subreddit: string;
+  query?: string | null;
+  /** Provider and endpoint, e.g. "tikhub/api/v1/reddit/app/fetch_subreddit_style". */
+  endpoint: string;
+  status: 'ok' | 'failed';
+  /** What Monid charged; an estimate when the call threw or timed out (it may still have been charged). */
+  cost_usd: number;
+  reason?: string | null;
+  /** Monid's run id: GET /v1/runs/{id} has the provider's full response. */
+  run_id?: string | null;
+}
+
 /** A free-first-job grant (growth_promos). */
 export interface Grant {
   id: string;
