@@ -115,6 +115,9 @@ export async function callMonid(
 }
 
 /** Run one call per query; tolerate partial failure, throw only if all failed. */
+/** Parallel provider calls per source (Monid handles bursts; each call is still budget-reserved up front). */
+export const PER_QUERY_CONCURRENCY = 6;
+
 export async function perQueryRun(
   ctx: SourceContext,
   call: (q: string) => Promise<{ leads: Lead[]; cost_usd: number }>,
@@ -123,17 +126,25 @@ export async function perQueryRun(
   let cost = 0;
   let ok = 0;
   let lastErr: SourceError | null = null;
-  for (const q of ctx.queries) {
-    try {
-      const r = await call(q);
-      leads.push(...r.leads);
-      cost += r.cost_usd;
-      ok++;
-    } catch (e) {
-      lastErr = e instanceof SourceError ? e : new SourceError(e instanceof Error ? e.message : String(e));
-      cost += lastErr.cost_usd;
+  // Queries run in parallel (up to PER_QUERY_CONCURRENCY at a time): a source with ~14 queries at ~6 s each
+  // would otherwise take ~80 s and miss find_people's search window.
+  let next = 0;
+  const worker = async () => {
+    while (next < ctx.queries.length) {
+      const q = ctx.queries[next++]!;
+      try {
+        const r = await call(q);
+        leads.push(...r.leads);
+        cost += r.cost_usd;
+        ok++;
+      } catch (e) {
+        lastErr = e instanceof SourceError ? e : new SourceError(e instanceof Error ? e.message : String(e));
+        cost += lastErr.cost_usd;
+      }
     }
-  }
-  if (ok === 0 && lastErr) throw new SourceError(lastErr.message, cost);
+  };
+  await Promise.all(Array.from({ length: Math.min(PER_QUERY_CONCURRENCY, ctx.queries.length) }, worker));
+  const failed = lastErr as SourceError | null;
+  if (ok === 0 && failed) throw new SourceError(failed.message, cost);
   return { leads, cost_usd: cost };
 }
