@@ -1,6 +1,6 @@
 // POST /v1/customers: self-serve API key for another team's agent.
 // Body: { "name": "Acme Agent", "contact_email": "ops@acme.dev", "description": "what your agent does" }
-// Returns the key ONCE. Limited to 5 sign-ups per IP per hour.
+// Returns the key ONCE. Limited per IP per hour (SIGNUPS_PER_IP_PER_HOUR, default 60).
 import { sql } from "@/lib/db";
 import { hashKey, newCustomerKey } from "@/lib/auth";
 import { apiBaseUrl } from "@/lib/env";
@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "send { name, contact_email } (and optionally description)" }, { status: 400 });
   const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
   const [{ n }] = await sql`select count(*)::int as n from customers where signup_ip = ${ip} and created_at > now() - interval '1 hour'`;
-  if (n >= 5) return Response.json({ error: "too many sign-ups from this address; try again later" }, { status: 429 });
+  // Venues share one IP (hackathon Wi-Fi), so the per-IP cap is generous; SIGNUPS_PER_IP_PER_HOUR overrides.
+  if (n >= Number(process.env.SIGNUPS_PER_IP_PER_HOUR ?? 60))
+    return Response.json({ error: "too many sign-ups from this address; try again in a few minutes, or add https://operis.live/mcp as an MCP server and sign in through the browser", retry_after_seconds: 600 }, { status: 429, headers: { "Retry-After": "600" } });
   const key = newCustomerKey();
   const [c] = await sql`
     insert into customers (name, contact_email, description, api_key_hash, signup_ip)

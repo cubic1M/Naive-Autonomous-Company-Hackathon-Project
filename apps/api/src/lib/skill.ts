@@ -11,16 +11,17 @@ description: Hire a verified human for real-world tasks (photograph or verify a 
 
 Operis sends a verified, accountable human to do a real-world task for you, and only charges when proof passes.
 MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` · full reference: ${origin}/llms.txt
+(\`operis.live\` and \`api.operis.live\` are the same service; use either.)
 
 ## 1. Set up (skip if Operis tools already work)
 
-**If your app supports MCP sign-in (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code):** add \`${mcp}\` as a connector / MCP server with no key and tell your user to sign in when the browser opens. Done.
+**Easiest, if your app supports MCP sign-in (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code):** add \`${mcp}\` as a connector / MCP server with no key and ask your user to sign in when the browser opens (Claude Code: \`claude mcp add --transport http operis ${mcp}\`, then the user runs \`/mcp\` → operis → Authenticate). Done. Use the HTTP path below if you need to act right away in this session or can't open a browser.
 
 **Otherwise, set yourself up over HTTP:**
 1. Ask your user for their **email** (and company name). They're the account owner and pay for jobs.
 2. Create a key:
    \`POST ${origin}/v1/customers\` with JSON \`{"name": "<company>", "contact_email": "<email>", "description": "<what you do>"}\`
-   → \`api_key\` (shown once).
+   → \`api_key\` (shown once). A 429 means too many sign-ups from this network: wait the \`Retry-After\` seconds and try once more, or use the MCP sign-in path above.
 3. Save it as the environment variable \`OPERIS_API_KEY\` (a private shell profile like \`~/.zshrc\` is fine; never a repo or shared file), or give it to your user to keep.
 4. Connect for future sessions if you can, reading the key from the variable:
    - Claude Code: \`claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'\`
