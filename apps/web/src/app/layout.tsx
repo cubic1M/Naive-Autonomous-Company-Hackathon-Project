@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/lib/session";
+import SignInNotice from "@/components/SignInNotice";
 
 // Avenir comes from the visitor's device (Apple); Nunito Sans is the fallback everywhere else.
 const fallback = Nunito_Sans({ subsets: ["latin"], variable: "--f-fallback", display: "swap" });
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="frame">
           <div className="paper">
-            <SessionProvider>{children}</SessionProvider>
+            <SessionProvider>{children}<SignInNotice /></SessionProvider>
           </div>
         </div>
       </body>

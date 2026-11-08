@@ -11,6 +11,7 @@ import { LogoPill } from "@/components/SiteHeader";
 import LoginMethods from "./LoginMethods";
 import { Divider, FormError, GoogleButton, Spinner, errorText, input, label, primary, secondary } from "./ui";
 import PasswordInput from "@/components/PasswordInput";
+import { markJustSignedIn } from "@/lib/signin";
 
 export function AuthFooter() {
   return (
@@ -69,6 +70,7 @@ export default function AuthPage({ mode: initialMode, next, error: initialError 
     setBusy(false);
     if (!r.ok) return setError(errorText(r.error));
     setUser(r.data.user);
+    markJustSignedIn("signup", "new");
     router.push(`/onboarding?next=${encodeURIComponent(next)}`);
   }
 
