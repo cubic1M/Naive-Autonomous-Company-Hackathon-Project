@@ -19,17 +19,17 @@ html,body{width:100%;height:100%;background:#0e130f;overflow:hidden;font-family:
 .kick{position:absolute;left:90px;top:70px;font-size:20px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
 .dark .kick{color:#9dc3a4}
 .g{color:var(--green)}
-.chip{position:absolute;width:270px;height:330px;border-radius:28px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.12);text-align:center;padding-top:50px;opacity:.4}
-.chip h3{font-size:34px;font-weight:600;margin:22px 0 8px}.chip p{font-size:22px;color:#cfd9cc;opacity:0}
+.chip{position:absolute;width:220px;height:300px;border-radius:26px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.12);text-align:center;padding-top:46px;opacity:.4}
+.chip h3{font-size:30px;font-weight:600;margin:20px 0 8px}.chip p{font-size:19px;color:#cfd9cc;opacity:0;padding:0 8px}
 .src{position:absolute;width:112px;text-align:center;font-size:18px;color:#cfd9cc}
-.src i{display:flex;width:112px;height:112px;border-radius:28px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.16);align-items:center;justify-content:center;margin-bottom:10px;font-style:normal;font-size:44px;font-weight:700;color:#fff}
+.src b{display:block;font-size:30px;font-weight:600;color:#9dc3a4;margin-top:2px}.src i{display:flex;width:112px;height:112px;border-radius:28px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.16);align-items:center;justify-content:center;margin-bottom:10px;font-style:normal;font-size:44px;font-weight:700;color:#fff}
 .pc{position:absolute;width:330px;height:86px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:14px;padding:0 16px;color:#fff;opacity:0}
 .av{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none}
 .pc b{font-size:20px;display:block}.pc span{font-size:16px;color:#bfd0c0}.pc em{margin-left:auto;font-style:normal;font-size:15px;color:#9dc3a4}
 .gate{position:absolute;top:150px;width:220px;height:70px;border-radius:16px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;opacity:.4}
 .gate.on{}
 .mini{position:absolute;width:84px;height:36px;border-radius:10px;background:#cfe3cf;opacity:0}
-.rk{position:absolute;left:1440px;width:400px;height:84px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:14px;padding:0 18px;opacity:0;font-size:20px}
+.rk{position:absolute;left:1440px;width:400px;height:76px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:14px;padding:0 18px;opacity:0;font-size:20px}
 .rk strong{margin-left:auto;font-size:30px;font-family:'Instrument Serif',serif;font-weight:400;color:#9dc3a4}
 .pill{display:inline-block;background:linear-gradient(180deg,#567760,#3f5e48);border:1px solid #34503d;color:#f4f1e8;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:11px 34px;border-radius:999px}
 #phone{position:absolute;left:1100px;top:40px;width:480px;height:1000px;border-radius:70px;background:#1a1f1b;padding:14px}
@@ -40,6 +40,7 @@ html,body{width:100%;height:100%;background:#0e130f;overflow:hidden;font-family:
 .cap p{font-size:30px;color:var(--body);margin-top:20px}
 .cardb{position:absolute;border-radius:28px;background:var(--card)}
 .lbl{font-size:22px;color:var(--body)}
+.frame{position:absolute;border-radius:22px;overflow:hidden;box-shadow:0 30px 80px rgba(25,33,26,.28),0 0 0 1px rgba(47,58,51,.12);background:#fff}.frame img{display:block;position:absolute}
 #ui{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:9;background:rgba(20,28,22,.82);padding:8px 12px;border-radius:999px;color:#fff;font:600 14px Inter,sans-serif;backdrop-filter:blur(6px)}
 #ui button{background:#46664f;color:#fff;border:0;border-radius:999px;padding:8px 14px;font:600 14px Inter,sans-serif;cursor:pointer}
 #ui button:active{background:#2f4b38}
@@ -54,6 +55,8 @@ body.render #ui{display:none}
   <div id="s1b" class="a c serif g" style="top:520px;font-size:140px;font-style:italic">People can.</div>
   <div id="s1l" class="a c serif" style="top:330px;font-size:230px">operis<span class="g">.</span></div>
   <div id="s1s" class="a c" style="top:640px;font-size:40px;color:var(--body)">Humans on demand for autonomous companies</div>
+  <div id="s1f" class="frame" style="left:360px;top:90px;width:1200px;height:750px"><img src="assets/real/site-home.png" style="left:0;top:0;width:1200px"></div>
+  <div id="s1c" class="a c" style="top:890px;font-size:30px;color:var(--body)">The product, live at <b>operis.live</b></div>
 </div>
 
 <!-- 2 -->
@@ -72,20 +75,25 @@ body.render #ui{display:none}
     <path d="M70 470h420" stroke-width="6"/>
   </svg>
   <div class="a" style="left:80px;top:950px;font-size:24px;color:var(--muted)">An AI company's agent</div>
-  <div id="bub" class="a" style="left:700px;top:150px;width:1140px;height:430px;border-radius:32px;background:var(--dark);padding:44px 52px;opacity:0">
-    <pre id="code" class="mono" style="font-size:30px;line-height:1.55;color:#e6efe4;white-space:pre"></pre></div>
-  <div id="cap2" class="a serif" style="left:700px;top:640px;font-size:56px;opacity:0">One MCP tool. That's the whole integration.</div>
+  <div id="ep" class="a mono" style="left:700px;top:96px;font-size:22px;color:var(--body);opacity:0"><b style="color:#46664f">POST</b> https://operis.live/mcp &nbsp;·&nbsp; Authorization: Bearer opk_…</div>
+  <div id="bub" class="a" style="left:700px;top:140px;width:1140px;height:520px;border-radius:32px;background:var(--dark);padding:36px 48px;opacity:0">
+    <pre id="code" class="mono" style="font-size:27px;line-height:1.5;color:#e6efe4;white-space:pre"></pre></div>
+  <div id="inset" class="frame" style="left:700px;top:710px;width:420px;height:262px;opacity:0"><img src="assets/real/site-developers.png" style="left:0;top:0;width:420px"></div>
+  <div id="insl" class="a" style="left:700px;top:984px;font-size:20px;color:var(--muted);opacity:0">Get your API key · operis.live/developers</div>
+  <div id="cap2" class="a serif" style="left:1160px;top:730px;width:680px;font-size:60px;line-height:1.05;opacity:0">One MCP tool.<br>That's the whole integration.</div>
 </div>
 
 <!-- 3 -->
 <div class="sc cream" style="left:3840px">
   <div class="kick">Inside Operis</div>
-  <div id="cap3" class="a serif" style="left:90px;top:400px;width:400px;font-size:68px;line-height:1.05;opacity:0">Four agents.<br>Zero humans.</div>
+  <div id="cap3" class="a serif" style="left:90px;top:380px;width:400px;font-size:64px;line-height:1.05;opacity:0">5 Naïve agents.<br>Zero humans.</div>
   <div id="panel" class="a" style="left:520px;top:140px;width:1320px;height:800px;border-radius:44px;background:linear-gradient(135deg,#2f4b38,#19211a);color:#fff">
     <div class="a serif" style="left:60px;top:44px;font-size:52px">operis<span style="color:#9dc3a4">.</span></div>
     <div class="a mono" style="right:60px;top:60px;font-size:20px;color:#9dc3a4">request_human received</div>
     <div id="chips"></div>
-    <div id="esc" class="a" style="left:400px;top:600px;width:520px;height:110px;border-radius:55px;background:rgba(255,255,255,.1);border:1.5px solid #9dc3a4;display:flex;align-items:center;justify-content:center;gap:18px;font-size:32px;font-weight:600;opacity:0"><span id="lk"></span>Escrow · $100 held</div>
+    <div id="esc" class="a" style="left:60px;top:600px;width:480px;height:110px;border-radius:55px;background:rgba(255,255,255,.1);border:1.5px solid #9dc3a4;display:flex;align-items:center;justify-content:center;gap:18px;font-size:30px;font-weight:600;opacity:0"><span id="lk"></span>Escrow · $100 held</div>
+    <div id="feedl" class="a" style="left:600px;top:535px;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:#9dc3a4;opacity:0">Live agent feed</div>
+    <div id="feed" class="frame" style="left:600px;top:570px;width:660px;height:170px;opacity:0;border-radius:16px"><img src="assets/real/site-dashboard.png" style="left:-1035px;top:-245px;width:1810px"></div>
   </div>
 </div>
 
@@ -93,20 +101,22 @@ body.render #ui{display:none}
 <div class="sc dark" style="left:5760px">
   <div class="kick">Ops agent · finding people</div>
   <svg id="beams" class="a" style="left:0;top:0" width="1920" height="1080"></svg>
-  <div id="hub" class="a" style="left:890px;top:450px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,#6a8a71,#2f4b38);border:2px solid #9dc3a4;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:600">Ops</div>
+  <div id="hub" class="a" style="left:870px;top:430px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,#6a8a71,#2f4b38);border:2px solid #9dc3a4;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:24px;font-weight:600;text-align:center">Talent pool<span class="serif" style="font-size:56px;line-height:1">259</span></div>
   <div id="srcs"></div><div id="pile"></div>
-  <div class="a" style="left:100px;top:690px"><div id="cnt" class="serif" style="font-size:260px;line-height:1">0</div>
-    <div style="font-size:30px;color:#cfd9cc">people found · 0.8 s</div></div>
+  <div id="blkA" class="a" style="left:100px;top:660px"><div id="cnt" class="serif" style="font-size:230px;line-height:1">0</div>
+    <div style="font-size:28px;color:#cfd9cc;width:520px">verified-contact people in the talent pool</div></div>
+  <div id="blkB" class="a" style="left:100px;top:660px;opacity:0"><div class="serif" style="font-size:230px;line-height:1"><span id="cnt2">0</span></div>
+    <div style="font-size:28px;color:#cfd9cc;width:560px">matches in <b id="ms" style="color:#9dc3a4;font-size:34px">0 ms</b></div></div>
 </div>
 
 <!-- 5 -->
 <div class="sc dark" style="left:7680px">
   <div class="kick">Ops agent · filtering</div>
   <svg class="a" style="left:0;top:0" width="1920" height="1080"><polygon points="360,260 1380,410 1380,670 360,820" fill="rgba(157,195,164,.10)" stroke="rgba(157,195,164,.35)" stroke-width="2"/></svg>
-  <div class="a" style="left:100px;top:470px"><div class="serif" style="font-size:150px;line-height:1">47</div><div style="font-size:26px;color:#cfd9cc">people found</div></div>
+  <div class="a" style="left:100px;top:470px"><div class="serif" style="font-size:150px;line-height:1">259</div><div style="font-size:26px;color:#cfd9cc">in the pool</div></div>
   <div id="gates"></div><div id="minis"></div>
   <div id="rks"></div>
-  <div id="rkh" class="a serif" style="left:1440px;top:190px;font-size:56px;opacity:0">12 ranked</div>
+  <div id="rkh" class="a serif" style="left:1440px;top:150px;font-size:50px;opacity:0">19 match · <span style="color:#9dc3a4">12 invited</span></div>
 </div>
 
 <!-- 6 -->
@@ -122,55 +132,28 @@ body.render #ui{display:none}
 <div class="sc cream" style="left:11520px">
   <div class="kick">Their side of the screen</div>
   <div class="cap" id="c71"><h2>An email lands.</h2><p>A real job, matched by skills and distance.</p></div>
-  <div class="cap" id="c72"><h2>One tap.</h2><p>The first qualified person to accept gets it.</p></div>
-  <div class="cap" id="c73"><h2>Verify. Accept. Done.</h2><p>ID check by Stripe Identity. No resumes, no interviews.</p></div>
+  <div class="cap" id="c72"><h2>Verify once.</h2><p>ID check by Stripe Identity. No resumes, no interviews.</p></div>
+  <div class="cap" id="c73"><h2>Say yes. Done.</h2><p>First qualified person to accept gets the job.</p></div>
   <div id="phone"><div id="pscr">
     <div class="a mono" style="left:44px;top:18px;font-size:16px;font-weight:500">9:41</div>
     <div class="a" style="left:158px;top:14px;width:136px;height:34px;border-radius:17px;background:#1a1f1b;z-index:5"></div>
-    <!-- inbox -->
-    <div class="scr" id="p1">
-      <div style="font-size:40px;font-weight:700;padding:16px 22px">Inbox</div>
-      <div id="r1" style="margin:0 10px;padding:18px 14px;border-radius:20px;background:var(--card);display:flex;gap:14px">
-        <div class="av serif" style="background:#46664f;color:#fff;font-size:26px">o.</div>
-        <div><div style="font-size:20px;font-weight:700">Operis <span style="font-weight:400;color:var(--muted);font-size:15px;margin-left:80px">now</span></div>
-        <div style="font-size:17px;font-weight:600;margin-top:4px">Opportunity: Fix our Next.js deploy bug…</div>
-        <div style="font-size:15px;color:var(--muted);margin-top:4px">Hi Andrew, a short, paid job just opened up.</div></div></div>
-      <div style="padding:18px 24px;display:flex;gap:14px;opacity:.55"><div class="av" style="background:#d6d3c8">L</div><div><b style="font-size:19px">Linear</b><div style="font-size:15px;color:var(--muted);margin-top:6px">3 issues assigned to you</div></div></div>
-      <div style="padding:18px 24px;display:flex;gap:14px;opacity:.55"><div class="av" style="background:#d6d3c8">V</div><div><b style="font-size:19px">Vercel</b><div style="font-size:15px;color:var(--muted);margin-top:6px">Deployment failed on main</div></div></div>
-      <div style="padding:18px 24px;display:flex;gap:14px;opacity:.55"><div class="av" style="background:#d6d3c8">C</div><div><b style="font-size:19px">Calendar</b><div style="font-size:15px;color:var(--muted);margin-top:6px">Invitation: sync at 4pm</div></div></div>
-    </div>
-    <!-- email -->
-    <div class="scr" id="p2" style="font-family:Georgia,'Times New Roman',serif">
-      <div style="text-align:center;font-weight:700;font-size:19px;padding:16px 0">Operis</div>
-      <div style="margin:0 14px;border-radius:16px;padding:40px 20px;text-align:center;color:#fff;background:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,.16),rgba(214,226,206,0) 55%),linear-gradient(135deg,#6a8a71,#4f6f57 40%,#3a5a43 70%,#2a4433)">
-        <div style="font:700 12px Inter;letter-spacing:2.4px;color:#cfd9cc;margin-bottom:12px">$75 · TODAY</div>
-        <div style="font-size:42px;line-height:1.1">You've been<br>selected</div></div>
-      <div style="text-align:center;font:15px/1.5 Inter;color:var(--body);padding:20px 16px 22px">Hi Andrew, a short, paid job just opened up.<br>The first qualified person to accept gets it.</div>
-      <div style="margin:0 14px;border-radius:16px;background:var(--card);padding:24px 18px;text-align:center">
-        <div style="font:700 11px Inter;letter-spacing:1.6px;color:#46664f;margin-bottom:8px">ON-SITE JOB</div>
-        <div style="font-size:24px;line-height:1.25;margin-bottom:12px">Fix our Next.js deploy bug at the YC office</div>
-        <div style="font:14px/1.9 Inter;text-align:left;margin:0 auto 18px;width:max-content"><span style="color:var(--muted);display:inline-block;width:56px">Where</span>Y Combinator, San Francisco<br><span style="color:var(--muted);display:inline-block;width:56px">Due</span>Today, 8:32 PM (PT)<br><span style="color:var(--muted);display:inline-block;width:56px">Pay</span>$75, paid on approval</div>
-        <span id="btn" class="pill">View job &amp; accept</span></div>
-    </div>
-    <!-- job -->
-    <div class="scr" id="p3">
-      <div style="margin:8px 14px;padding:10px 16px;border-radius:14px;background:var(--card);font:500 15px Inter;color:var(--body)">operis.live/j/Xk3pQ9…</div>
-      <div style="padding:14px 22px 0"><div style="font:700 11px Inter;letter-spacing:1.6px;color:#46664f">ON-SITE JOB · $75</div>
-        <div class="serif" style="font-size:34px;line-height:1.1;margin-top:6px">Fix our Next.js deploy bug at the YC office</div></div>
-      <div style="margin:18px 14px 0;border-radius:20px;background:var(--card);padding:18px">
-        <div style="font:700 16px Inter">1 · Verify your ID</div>
-        <div style="display:flex;justify-content:center;gap:30px;margin:16px 0 12px;position:relative" id="idrow">
-          <div id="idc"></div><div id="selfie"></div>
-          <div id="scan" class="a" style="left:40px;top:0;width:150px;height:3px;background:#46664f;box-shadow:0 0 12px #46664f"></div></div>
-        <div style="height:8px;border-radius:4px;background:#dcd9cf;overflow:hidden"><div id="pbar" style="height:100%;width:100%;background:#46664f;transform-origin:0 0"></div></div>
-        <div id="vok" style="margin-top:12px;font:600 17px Inter;color:#46664f;opacity:0">✓ Identity verified <span style="font-weight:500;color:var(--muted);font-size:14px">· Stripe Identity</span></div></div>
-      <div id="step2" style="margin:14px 14px 0;border-radius:20px;background:var(--card);padding:18px;opacity:0">
-        <div style="font:700 16px Inter;margin-bottom:12px">2 · Accept the job</div>
-        <div id="yes" style="background:#46664f;color:#fff;font:600 22px Inter;text-align:center;padding:18px;border-radius:999px">Yes, I'll do it</div></div>
+    <div class="scr" id="p2"><img id="emimg" src="assets/real/phone-email.png" style="position:absolute;left:0;top:0;width:452px">
+      <div id="btn" class="a" style="left:116px;top:629px;width:220px;height:44px"></div></div>
+    <div class="scr" id="p3"><div style="position:absolute;left:0;top:0;width:452px;height:660px;overflow:hidden"><img src="assets/real/phone-verification.png" style="position:absolute;left:0;top:0;width:452px"></div>
+      <div class="a" style="left:0;top:660px;width:452px;height:252px;background:var(--cream);padding:14px 18px">
+        <div style="font:700 16px Inter;margin-bottom:12px">Verify your ID · <span style="color:#635bff">Stripe Identity</span></div>
+        <div style="display:flex;gap:18px;align-items:center;position:relative"><div id="idc"></div><div id="selfie"></div>
+          <div style="flex:1"><div style="height:8px;border-radius:4px;background:#dcd9cf;overflow:hidden"><div id="pbar" style="height:100%;width:100%;background:#46664f;transform-origin:0 0"></div></div></div></div>
+        <div id="vok" style="margin-top:14px;font:600 20px Inter;color:#46664f;opacity:0">✓ Identity verified</div></div></div>
+    <div class="scr" id="p4">
+      <div style="padding:34px 24px 0"><div style="font:700 11px Inter;letter-spacing:1.6px;color:#46664f">ON-SITE JOB</div>
+        <div class="serif" style="font-size:42px;line-height:1.1;margin-top:8px">Fix our Next.js deploy bug at the YC office</div>
+        <div style="font:16px/1.9 Inter;color:var(--body);margin-top:14px">Y Combinator, San Francisco<br>Due today · 8:32 PM (PT)</div>
+        <div style="margin-top:20px;border-radius:20px;background:var(--card);padding:18px"><div style="font:600 14px Inter;color:var(--muted)">PAY</div><div class="serif" style="font-size:56px">$75</div><div style="font:15px Inter;color:var(--body)">paid when the work is approved</div></div>
+        <div id="yes" style="margin-top:28px;background:#46664f;color:#fff;font:600 24px Inter;text-align:center;padding:20px;border-radius:999px">Yes, I'll do it</div></div>
       <div id="won" class="a" style="left:0;top:0;width:452px;height:912px;background:linear-gradient(135deg,#6a8a71,#2a4433);color:#fff;text-align:center;padding-top:300px;opacity:0">
         <div style="width:110px;height:110px;margin:0 auto 30px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center" id="wchk"></div>
-        <div class="serif" style="font-size:56px">You got the job!</div><div style="font-size:18px;margin-top:14px;color:#dce6d9">$75 · Y Combinator, SF · Today</div></div>
-    </div>
+        <div class="serif" style="font-size:56px">You got the job!</div><div style="font-size:18px;margin-top:14px;color:#dce6d9">$75 · Y Combinator, SF · Today</div></div></div>
   </div></div>
 </div>
 
@@ -193,14 +176,16 @@ body.render #ui{display:none}
     <div id="pf1" class="lbl" style="opacity:0;font-size:28px;margin:16px 0">GPS location ✓</div>
     <div id="pf2" class="lbl" style="opacity:0;font-size:28px;margin:16px 0">Timestamp ✓</div>
     <div id="pf3" class="lbl" style="opacity:0;font-size:28px;margin:16px 0">Screenshot ✓</div></div>
-  <div id="ver" class="a" style="left:90px;top:730px;width:520px;height:120px;border-radius:60px;background:var(--deep);color:#fff;display:flex;align-items:center;justify-content:center;gap:16px;font-size:30px;font-weight:600;opacity:0">
+  <div id="ver" class="a" style="left:90px;top:710px;width:440px;height:110px;border-radius:55px;background:var(--deep);color:#fff;display:flex;align-items:center;justify-content:center;gap:14px;font-size:26px;font-weight:600;opacity:0">
     <span id="vs"></span><span id="vt">Verifier · checking…</span></div>
-  <div id="escc" class="a" style="left:720px;top:690px;width:420px;height:200px;border-radius:28px;background:var(--card);text-align:center;padding-top:26px;opacity:0">
-    <div id="lk8" style="height:76px"></div><div style="font-size:30px;font-weight:600;margin-top:8px">Escrow · $100</div></div>
-  <div id="pers" class="a" style="left:1260px;top:690px;width:570px;height:200px;border-radius:28px;background:var(--dark);color:#fff;display:flex;align-items:center;gap:24px;padding:0 36px;opacity:0">
-    <div class="av" style="width:90px;height:90px;background:#6a8a71;font-size:30px">A. R.</div><div><div style="font-size:26px">Andrew</div><div id="plus" class="serif" style="font-size:80px;line-height:1;color:#9dc3a4;opacity:0">+$75</div></div></div>
+  <div id="escc" class="a" style="left:570px;top:665px;width:300px;height:200px;border-radius:28px;background:var(--card);text-align:center;padding-top:26px;opacity:0">
+    <div id="lk8" style="height:76px"></div><div style="font-size:28px;font-weight:600;margin-top:8px">Escrow · $100</div></div>
+  <div id="dlab" class="a" style="left:930px;top:640px;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);opacity:0">Operis dashboard · live</div>
+  <div id="dash" class="frame" style="left:930px;top:680px;width:900px;height:141px;opacity:0;border-radius:18px"><img src="assets/real/site-dashboard.png" style="left:-595px;top:-120px;width:2092px">
+    <div class="a" style="left:22px;top:52px;width:330px;height:60px;background:#faf9f5"><span id="n75" style="font:600 52px Inter;color:#2f3a33">$0</span></div>
+    <div class="a" style="left:480px;top:52px;width:330px;height:60px;background:#faf9f5"><span id="n25" style="font:600 52px Inter;color:#2f3a33">$0</span></div></div>
   <div id="coins"></div>
-  <div id="ledger" class="a mono" style="left:560px;top:930px;width:800px;height:80px;border-radius:40px;background:var(--dark);color:#cfe3cf;display:flex;align-items:center;justify-content:center;font-size:30px;opacity:0">Paid $75 · fee $25</div>
+  <div id="ledger" class="a mono" style="left:560px;top:920px;width:800px;height:80px;border-radius:40px;background:var(--dark);color:#cfe3cf;display:flex;align-items:center;justify-content:center;font-size:30px;opacity:0">Paid to worker $75 · Operis fee $25</div>
 </div>
 
 <!-- 9 -->
@@ -208,11 +193,11 @@ body.render #ui{display:none}
   <div id="e1" class="a c serif" style="top:130px;font-size:110px">Request → paid human.</div>
   <div id="e2" class="a c serif" style="top:270px;font-size:72px;color:#dce6d9;font-style:italic">No humans at Operis touched it.</div>
   <div id="e3" class="a c serif" style="top:430px;font-size:230px">operis<span style="color:#cfe3cf">.</span></div>
-  <div id="e4" class="a c mono" style="top:730px;font-size:48px">operis.live/mcp</div>
-  <div id="e5" class="a c" style="top:880px;font-size:28px;color:#dce6d9">Built on Naïve</div>
+  <div id="e4" class="a c mono" style="top:720px;font-size:48px">operis.live/mcp</div>
+  <div id="e6" class="a c" style="top:800px;font-size:34px;font-weight:600">operis.live</div>
+  <div id="e5" class="a c" style="top:900px;font-size:28px;color:#dce6d9">Built on Naïve</div>
 </div>
 
-<!-- packet in world layer -->
 <div id="packet" class="a" style="left:0;top:0;width:130px;height:130px;border-radius:30px;background:linear-gradient(135deg,#6a8a71,#2a4433);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:34px;letter-spacing:2px;box-shadow:0 0 50px rgba(106,138,113,.7);z-index:8;opacity:0">MCP</div>
 </div></div>
 
@@ -239,142 +224,144 @@ const svg=(n,s=24,c='currentColor',w=1.8)=>`<svg viewBox="0 0 24 24" width="${s}
 const lockSvg=(s,c)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path class="sh" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
 let sd=7;const rnd=()=>{sd|=0;sd=sd+0x6D2B79F5|0;let t=Math.imul(sd^sd>>>15,1|sd);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
 const COL=[['#46664f','#fff'],['#6a8a71','#fff'],['#d6c7a8','#2f3a33'],['#a7b8a0','#2f3a33'],['#8a9a7e','#fff']];
-const B=[0,10,22,34,50,60,68,84,94], DURATION=100;
+const B=[0,6.5,13.5,20.5,28.5,34.5,39,49.5,56.5], DURATION=60;
 const T=gsap.timeline({paused:true,defaults:{ease:'power2.inOut'}});
 const rise=(els,at,o={})=>T.fromTo(els,{opacity:0,y:o.y??24},{opacity:1,y:0,duration:o.d??.8,ease:'power2.out',stagger:o.s??0},at);
 const out=(els,at,d=.6)=>T.to(els,{opacity:0,duration:d,ease:'power1.in'},at);
 function counter(el,to,at,dur,ease='power2.out'){const o={v:0};T.fromTo(o,{v:0},{v:to,duration:dur,ease,onUpdate(){el.textContent=Math.round(o.v)}},at)}
 function pos(el,root){let x=0,y=0,e=el;while(e&&e!==root){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent}return{x:x+el.offsetWidth/2,y:y+el.offsetHeight/2}}
 
+
 // camera
-for(let i=1;i<9;i++)T.to('#world',{x:-i*1920,duration:1.2,ease:'power2.inOut'},B[i]-.5);
+for(let i=1;i<9;i++)T.to('#world',{x:-i*1920,duration:.9,ease:'power2.inOut'},B[i]-.4);
 
-// S1
-rise('#s1a',.4,{d:1.2,y:30});rise('#s1b',3.4,{d:1.2,y:30});out(['#s1a','#s1b'],6);
-rise('#s1l',6.4,{d:1.2});rise('#s1s',7.5,{d:1});
+// S1 (0-6.5)
+rise('#s1a',.2,{d:.8,y:30});rise('#s1b',1.1,{d:.8,y:30});out(['#s1a','#s1b'],2.2,.4);
+rise('#s1l',2.4,{d:.8});rise('#s1s',3.0,{d:.7});out(['#s1l','#s1s'],4.0,.4);
+rise('#s1f',4.2,{d:.9,y:60});rise('#s1c',4.8,{d:.6,y:10});
 
-// S2
+// S2 (6.5-13.5)
 $('#lk').innerHTML=lockSvg(44,'#9dc3a4');
-rise('#robot',10.9);rise('#bub',11.4);
-const CODE=`request_human({\n  title: "Fix our Next.js deploy bug at the YC office",\n  budget_usd: 100,\n  location: "San Francisco"\n})`;
+rise('#robot',7.0,{d:.6});rise('#bub',7.2,{d:.6});rise('#ep',7.4,{d:.5,y:10});
+const CODE=`request_human({\n  title: "Fix our Next.js deploy bug",\n  instructions: "Deploy fails on main. Fix it, link the PR.",\n  location: null,\n  remote: true,\n  deadline: "2026-11-08T18:00:00Z",\n  budget_usd: 100,\n  proof: { files: ["pr_link"] }\n})`;
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-const hl=s=>esc(s).replace(/("[^"]*"?)/g,'<span style="color:#9dc3a4">$1</span>').replace(/\b(request_human)\b/,'<span style="color:#f4d9a0">$1</span>').replace(/\b(\d+)\b/g,'<span style="color:#f4d9a0">$1</span>');
-{const o={n:0};T.fromTo(o,{n:0},{n:CODE.length,duration:5,ease:'none',snap:{n:1},onUpdate(){$('#code').innerHTML=hl(CODE.slice(0,o.n))+'<span style="color:#9dc3a4">▌</span>'}},12);}
-T.to('#lap',{y:-3,duration:.18,repeat:26,yoyo:true,ease:'sine.inOut'},12);
-rise('#cap2',17.4);
-T.fromTo('#packet',{x:3560,y:720,scale:0,opacity:0},{x:3560,y:720,scale:1,opacity:1,duration:.5,ease:'power2.out'},18.4);
-T.to('#packet',{x:3840+520+60,y:475,duration:3.6,ease:'power1.inOut'},19.2);
-T.to('#packet',{scale:0,opacity:0,duration:.4,ease:'power2.in'},23.0);
+const hl=s=>esc(s).replace(/("[^"]*"?)/g,'<span style="color:#9dc3a4">$1</span>').replace(/\b(request_human)\b/,'<span style="color:#f4d9a0">$1</span>').replace(/\b(\d+|true|null)\b(?![^<]*>)/g,'<span style="color:#f4d9a0">$1</span>');
+{const o={n:0};T.fromTo(o,{n:0},{n:CODE.length,duration:3.2,ease:'none',snap:{n:1},onUpdate(){$('#code').innerHTML=hl(CODE.slice(0,o.n))+'<span style="color:#9dc3a4">▌</span>'}},7.7);}
+T.to('#lap',{y:-3,duration:.18,repeat:17,yoyo:true,ease:'sine.inOut'},7.7);
+rise('#inset',11.0,{d:.6});rise('#insl',11.2,{d:.5,y:8});rise('#cap2',11.2,{d:.6});
+T.fromTo('#packet',{x:3620,y:820,scale:0,opacity:0},{x:3620,y:820,scale:1,opacity:1,duration:.4,ease:'power2.out'},11.6);
+T.to('#packet',{x:3840+580,y:475,duration:2.5,ease:'power1.inOut'},12.0);
+T.to('#packet',{scale:0,opacity:0,duration:.35,ease:'power2.in'},14.5);
 
-// S3
-const roles=[['briefcase','CEO','assigns the job'],['search','Ops','finds people'],['shield','Verifier','checks proof'],['coin','Finance','pays']];
-roles.forEach((r,i)=>{const d=document.createElement('div');d.className='chip';d.id='ch'+i;d.style.left=(60+i*310)+'px';d.style.top='190px';
- d.innerHTML=`${svg(r[0],84,'#cfe3cf',1.5)}<h3>${r[1]}</h3><p>${r[2]}</p>`;$('#chips').appendChild(d);
- const at=23.7+i*1.8;
- T.to(d,{opacity:1,backgroundColor:'rgba(106,138,113,.30)',borderColor:'#9dc3a4',boxShadow:'0 0 60px rgba(124,176,134,.4)',duration:.7,ease:'power2.out'},at);
- T.to(d.querySelector('p'),{opacity:1,duration:.6},at+.3);});
-rise('#cap3',23.6);rise('#esc',30.8);
+// S3 (13.5-20.5)
+const roles=[['briefcase','CEO','assigns the job'],['search','Ops','finds people'],['shield','Verifier','checks proof'],['coin','Finance','pays'],['users','Sales','brings customers']];
+roles.forEach((r,i)=>{const d=document.createElement('div');d.className='chip';d.id='ch'+i;d.style.left=(60+i*245)+'px';d.style.top='170px';
+ d.innerHTML=`${svg(r[0],76,'#cfe3cf',1.5)}<h3>${r[1]}</h3><p>${r[2]}</p>`;$('#chips').appendChild(d);
+ const at=14.5+i*.7;
+ T.to(d,{opacity:1,backgroundColor:'rgba(106,138,113,.30)',borderColor:'#9dc3a4',boxShadow:'0 0 60px rgba(124,176,134,.4)',duration:.5,ease:'power2.out'},at);
+ T.to(d.querySelector('p'),{opacity:1,duration:.4},at+.2);});
+rise('#cap3',14.2,{d:.6});rise('#esc',17.6,{d:.5});rise('#feedl',18.1,{d:.4,y:8});rise('#feed',18.2,{d:.6});
 
-// S4
-const SR=[['in','LinkedIn'],['&lt;/&gt;','GitHub'],['G','Google'],['X','X'],['r/','Reddit'],['scale','Lawyer directories'],['browser','Portfolio sites'],['users','Operis talent pool']];
-const cx=960,cy=560,rx=800,ry=400,hx=960,hy=520;let sx=[];
-SR.forEach((s,i)=>{const a=(190+150*i/7)*Math.PI/180,x=cx+rx*Math.cos(a),y=cy+ry*Math.sin(a);
- const d=document.createElement('div');d.className='src';d.style.left=(x-56)+'px';d.style.top=(y-56)+'px';
- d.innerHTML=`<i>${IC[s[0]]?svg(s[0],52,'#fff',1.6):s[0]}</i>${s[1]}`;$('#srcs').appendChild(d);
+// S4 (20.5-28.5)
+const SR=[['X','X',75],['G','Google',64],['pin','Google Maps',57],['search','AI people search',30],['r/','Reddit',29],['in','LinkedIn',4]];
+const cx=960,cy=560,rx=800,ry=400,hx=960,hy=520;
+SR.forEach((s,i)=>{const a=(195+150*i/5)*Math.PI/180,x=cx+rx*Math.cos(a),y=cy+ry*Math.sin(a);
+ const d=document.createElement('div');d.className='src';d.style.left=(x-56)+'px';d.style.top=(y-56)+'px';d.style.width='140px';d.style.marginLeft='-14px';
+ d.innerHTML=`<i style="margin-left:14px">${IC[s[0]]?svg(s[0],52,'#fff',1.6):s[0]}</i>${s[1]}<b>${s[2]}</b>`;$('#srcs').appendChild(d);
  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
- [['x1',x],['y1',y+0],['x2',hx],['y2',hy]].forEach(([k,v])=>ln.setAttribute(k,v));
+ [['x1',x],['y1',y],['x2',hx],['y2',hy]].forEach(([k,v])=>ln.setAttribute(k,v));
  ln.setAttribute('stroke','rgba(157,195,164,.25)');ln.setAttribute('stroke-width','2');$('#beams').appendChild(ln);
  const p=ln.cloneNode();p.setAttribute('stroke','#b9e0bf');p.setAttribute('stroke-width','4');p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-dasharray','60 3000');$('#beams').appendChild(p);
  const L=Math.hypot(x-hx,y-hy);
- T.fromTo(d,{opacity:0,y:20},{opacity:1,y:0,duration:.7,ease:'power2.out'},34.9+i*.15);
- T.fromTo(ln,{opacity:0},{opacity:1,duration:.5},35.5+i*.1);
- T.fromTo(p,{strokeDashoffset:60,opacity:0},{strokeDashoffset:-L,opacity:1,duration:1.1,ease:'power1.in',repeat:5,repeatDelay:.4},36+i*.15);});
-T.fromTo('#hub',{scale:.6,opacity:0},{scale:1,opacity:1,duration:.7,ease:'power2.out'},35);
+ T.fromTo(d,{opacity:0,y:20},{opacity:1,y:0,duration:.5,ease:'power2.out'},21.0+i*.12);
+ T.fromTo(ln,{opacity:0},{opacity:1,duration:.4},21.4+i*.08);
+ T.fromTo(p,{strokeDashoffset:60,opacity:0},{strokeDashoffset:-L,opacity:1,duration:.8,ease:'power1.in',repeat:3,repeatDelay:.3},21.6+i*.1);});
+T.fromTo('#hub',{scale:.6,opacity:0},{scale:1,opacity:1,duration:.6,ease:'power2.out'},21.0);
 const PR=['Next.js developer','Full-stack engineer','React developer','DevOps engineer','Frontend developer','Node.js engineer','Freelance developer'],IN=['J. R.','M. K.','S. P.','A. L.','D. W.','T. N.','R. B.','E. C.','L. M.','K. S.'];
-for(let i=0;i<30;i++){const c=COL[i%5],d=document.createElement('div');d.className='pc';
+for(let i=0;i<16;i++){const c=COL[i%5],d=document.createElement('div');d.className='pc';
  d.innerHTML=`<div class="av" style="background:${c[0]};color:${c[1]}">${IN[(i*3)%10].replace(/[ .]/g,'')}</div><div><b>${IN[(i*3)%10]}</b><span>${PR[i%7]}</span></div><em>${(0.6+i*0.37).toFixed(1)} km</em>`;
- const px=660+rnd()*840,py=640+rnd()*300,rot=(rnd()-.5)*8;d.style.left=px+'px';d.style.top=py+'px';d.style.zIndex=i;d.style.background='#2d4434';
- T.fromTo(d,{x:hx-px-165,y:hy-py-40,scale:.2,opacity:0,rotation:0},{x:0,y:0,scale:1,opacity:1,rotation:rot,duration:.8,ease:'power3.out'},37+i*.2);$('#pile').appendChild(d);}
-counter($('#cnt'),47,37,6.2);
+ const px=660+rnd()*840,py=660+rnd()*290,rot=(rnd()-.5)*8;d.style.left=px+'px';d.style.top=py+'px';d.style.zIndex=i;d.style.background='#2d4434';
+ T.fromTo(d,{x:hx-px-165,y:hy-py-40,scale:.2,opacity:0,rotation:0},{x:0,y:0,scale:1,opacity:1,rotation:rot,duration:.6,ease:'power3.out'},22.0+i*.16);$('#pile').appendChild(d);}
+counter($('#cnt'),259,22.0,3.0);
+T.to('#blkA',{opacity:0,duration:.3},25.3);T.to('#blkB',{opacity:1,duration:.4},25.5);
+counter($('#cnt2'),19,25.7,1.0);
+{const o={v:0};T.fromTo(o,{v:0},{v:12,duration:1.0,ease:'none',onUpdate(){$('#ms').textContent=Math.round(o.v)+' ms'}},25.7);}
 
-// S5
-const GN=['Skills match ✓','Near the job ✓','Public work email ✓','Not opted out ✓'],GX=[560,800,1040,1280],CNT=[38,29,20,12];
-GN.forEach((g,i)=>{const d=document.createElement('div');d.className='gate';d.style.left=(GX[i]-110)+'px';d.textContent=g;$('#gates').appendChild(d);
- const c=document.createElement('div');c.id='gc'+i;c.className='serif';c.style.cssText=`position:absolute;left:${GX[i]-110}px;width:220px;text-align:center;top:860px;font-size:60px;opacity:0`;c.textContent=CNT[i];$('#gates').appendChild(c);
- const tt=53.2+i*.9;T.to(d,{opacity:1,backgroundColor:'rgba(106,138,113,.35)',borderColor:'#9dc3a4',duration:.5},tt);rise(c,tt+.4,{d:.5,y:10});});
-const SPD=450;let n=0;
-for(let i=0;i<20;i++){const d=document.createElement('div');d.className='mini';const surv=i>=8,g=surv?-1:Math.floor(i/2);
+// S5 (28.5-34.5)
+const GN=['Skills match','Public work email','Not opted out','Ranked'],GX=[560,800,1040,1280],CNT=['19','19','19','12'];
+GN.forEach((g,i)=>{const d=document.createElement('div');d.className='gate';d.style.left=(GX[i]-110)+'px';d.textContent=g+' ✓';$('#gates').appendChild(d);
+ const c=document.createElement('div');c.className='serif';c.style.cssText=`position:absolute;left:${GX[i]-110}px;width:220px;text-align:center;top:860px;font-size:60px;opacity:0`;c.textContent=CNT[i];$('#gates').appendChild(c);
+ const tt=29.9+i*.5;T.to(d,{opacity:1,backgroundColor:'rgba(106,138,113,.35)',borderColor:'#9dc3a4',duration:.4},tt);rise(c,tt+.3,{d:.4,y:10});});
+const SPD=620;
+for(let i=0;i<20;i++){const d=document.createElement('div');d.className='mini';const surv=i>=8,g=i<5?0:i<7?1:2;
  const y0=300+rnd()*480,y1=470+rnd()*140;d.style.left='0';d.style.top='0';$('#minis').appendChild(d);
- const x0=220,x1=surv?1420:GX[g],dur=(x1-x0)/SPD,at=52+(i*7%20)*.14;
- T.fromTo(d,{x:x0,y:y0,opacity:0},{x:x0,y:y0,opacity:1,duration:.2},at);
+ const x0=220,x1=surv?1420:GX[g],dur=(x1-x0)/SPD,at=29.5+(i*7%20)*.1;
+ T.fromTo(d,{x:x0,y:y0,opacity:0},{x:x0,y:y0,opacity:1,duration:.15},at);
  T.to(d,{x:x1,duration:dur,ease:'none'},at);T.to(d,{y:y1,duration:dur,ease:'power1.inOut'},at);
- if(surv)T.to(d,{opacity:0,duration:.3},at+dur);else T.to(d,{y:'+=160',opacity:0,duration:.6,ease:'power2.in'},at+dur);}
-const SC=['0.96','0.93','0.91','0.89','0.87'];
-for(let i=0;i<5;i++){const c=COL[i%5],d=document.createElement('div');d.className='rk';d.style.top=(280+i*100)+'px';
- d.innerHTML=`<div class="av" style="background:${c[0]};color:${c[1]};width:46px;height:46px;font-size:16px">${IN[i*2].replace(/[ .]/g,'')}</div>${i+1}. ${PR[i]}<strong>${SC[i]}</strong>`;$('#rks').appendChild(d);rise(d,55.6+i*.4,{d:.6,y:16});}
-rise('#rkh',55.3,{d:.6});
-{const m=document.createElement('div');m.className='a';m.style.cssText='left:1440px;top:790px;font-size:24px;color:#cfd9cc;opacity:0';m.textContent='+7 more';$('#rks').appendChild(m);rise(m,58,{d:.6,y:10});}
+ if(surv)T.to(d,{opacity:0,duration:.25},at+dur);else T.to(d,{y:'+=160',opacity:0,duration:.5,ease:'power2.in'},at+dur);}
+const SC=['0.82','0.81','0.76','0.76','0.76','0.71'];
+for(let i=0;i<6;i++){const c=COL[i%5],d=document.createElement('div');d.className='rk';d.style.top=(240+i*88)+'px';
+ d.innerHTML=`<div class="av" style="background:${c[0]};color:${c[1]};width:46px;height:46px;font-size:16px">${IN[i*2%10].replace(/[ .]/g,'')}</div>${i+1}. ${PR[i]}<strong>${SC[i]}</strong>`;$('#rks').appendChild(d);rise(d,32.0+i*.25,{d:.5,y:16});}
+rise('#rkh',31.7,{d:.5});
+{const m=document.createElement('div');m.className='a';m.style.cssText='left:1440px;top:780px;font-size:24px;color:#cfd9cc;opacity:0';m.textContent='+6 more invited';$('#rks').appendChild(m);rise(m,33.5,{d:.5,y:10});}
 
-// S6
+// S6 (34.5-39)
 $('#hub6').innerHTML=svg('mail',72,'#fff',1.5);
-T.fromTo('#hub6',{scale:.6,opacity:0},{scale:1,opacity:1,duration:.7,ease:'power2.out'},61);
+T.fromTo('#hub6',{scale:.6,opacity:0},{scale:1,opacity:1,duration:.5,ease:'power2.out'},35.0);
 for(let i=0;i<12;i++){const col=i%4,row=Math.floor(i/4),x=1000+col*200,y=250+row*230,c=COL[i%5];
  const a=document.createElement('div');a.className='av';a.style.cssText=`position:absolute;left:${x}px;top:${y}px;width:110px;height:110px;font-size:30px;background:${c[0]};color:${c[1]};border:3px solid transparent;opacity:0`;a.textContent=IN[i%10].replace(/[ .]/g,'');$('#avs').appendChild(a);
- T.fromTo(a,{opacity:0,scale:.8},{opacity:1,scale:1,duration:.5,ease:'power2.out'},61.2+i*.05);
+ T.fromTo(a,{opacity:0,scale:.8},{opacity:1,scale:1,duration:.4,ease:'power2.out'},35.1+i*.03);
  const e=document.createElement('div');e.className='a';e.style.cssText='left:0;top:0;width:64px;height:48px;opacity:0';e.innerHTML=svg('mail',64,'#9dc3a4',1.6).replace('width="64" height="64"','width="64" height="48"');$('#envs').appendChild(e);
- const at=62.3+i*.3;
- T.fromTo(e,{x:360,y:376,scale:.5,opacity:0},{x:x+23,y:y+30,scale:1,opacity:1,duration:1.1,ease:'power2.inOut'},at);
- T.to(e,{scale:0,opacity:0,duration:.25},at+1.1);T.to(a,{borderColor:'#9dc3a4',duration:.3},at+1.1);}
-counter($('#cnt6'),12,63.4,3.6,'none');
+ const at=35.4+i*.17;
+ T.fromTo(e,{x:360,y:376,scale:.5,opacity:0},{x:x+23,y:y+30,scale:1,opacity:1,duration:.8,ease:'power2.inOut'},at);
+ T.to(e,{scale:0,opacity:0,duration:.2},at+.8);T.to(a,{borderColor:'#9dc3a4',duration:.25},at+.8);}
+counter($('#cnt6'),12,36.2,2.0,'none');
 
-// S7
-$('#idc').innerHTML=svg('id',100,'#2f3a33',1.4);$('#selfie').innerHTML=svg('selfie',100,'#2f3a33',1.4);$('#wchk').innerHTML=svg('check',70,'#fff',2.4);
-T.fromTo('#phone',{x:700,opacity:0},{x:0,opacity:1,duration:1,ease:'power2.out'},68.9);
-rise('#c71',69.2);
-rise('#r1',69.9,{d:.7,y:-20});
+// S7 (39-49.5)
+$('#idc').innerHTML=svg('id',64,'#2f3a33',1.4);$('#selfie').innerHTML=svg('selfie',64,'#2f3a33',1.4);$('#wchk').innerHTML=svg('check',70,'#fff',2.4);
+T.fromTo('#phone',{x:700,opacity:0},{x:0,opacity:1,duration:.8,ease:'power2.out'},39.5);
+rise('#c71',39.8,{d:.6});
+T.to('#emimg',{y:-120,duration:.9,ease:'power1.inOut'},40.8);
 const fing=document.createElement('div');fing.style.cssText='position:absolute;left:0;top:0;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:rgba(47,58,51,.28);border:2px solid rgba(47,58,51,.5);opacity:0;z-index:6';
 const rip=fing.cloneNode();rip.style.background='rgba(70,102,79,.35)';rip.style.border='2px solid #46664f';
 $('#pscr').append(fing,rip);
-function tap(el,at){const p=pos(el,$('#pscr'));
+function tap(el,at){const p=pos(el,$('#pscr'));p.y+=60;
  T.fromTo(fing,{x:p.x+90,y:p.y+160,opacity:0,scale:1},{x:p.x,y:p.y,opacity:1,duration:.6,ease:'power2.out'},at-.7);
  T.to(fing,{scale:.8,duration:.12},at-.1);T.fromTo(rip,{x:p.x,y:p.y,scale:.4,opacity:.9},{x:p.x,y:p.y,scale:2.2,opacity:0,duration:.6,ease:'power1.out'},at);
  T.to(fing,{opacity:0,scale:1,duration:.3},at+.15);}
-tap($('#r1'),71.6);
-T.fromTo('#p2',{xPercent:100},{xPercent:0,duration:.7},72);T.to('#p1',{xPercent:-30,opacity:0,duration:.7},72);
-out('#c71',71.8);rise('#c72',72.2);
-tap($('#btn'),75.4);
-T.fromTo('#p3',{xPercent:100},{xPercent:0,duration:.7},75.9);T.to('#p2',{xPercent:-30,opacity:0,duration:.7},75.9);
-out('#c72',75.7);rise('#c73',76.2);
-T.fromTo('#scan',{y:0},{y:100,duration:.9,repeat:2,yoyo:true,ease:'sine.inOut'},77);
-T.fromTo('#pbar',{scaleX:0},{scaleX:1,duration:2.6,ease:'power1.inOut'},77);
-rise('#vok',79.7,{d:.5,y:8});rise('#step2',80.4,{d:.6,y:12});
-tap($('#yes'),82.2);
-T.to('#yes',{scale:.96,duration:.15},82.1);
-T.to('#won',{opacity:1,duration:.5},82.5);
+tap($('#btn'),42.6);
+T.fromTo('#p3',{xPercent:100},{xPercent:0,duration:.6},43.0);T.to('#p2',{xPercent:-30,opacity:0,duration:.6},43.0);
+out('#c71',42.8,.4);rise('#c72',43.3,{d:.6});
+T.fromTo('#pbar',{scaleX:0},{scaleX:1,duration:1.6,ease:'power1.inOut'},43.8);
+rise('#vok',45.4,{d:.4,y:8});
+T.fromTo('#p4',{xPercent:100},{xPercent:0,duration:.6},46.2);T.to('#p3',{xPercent:-30,opacity:0,duration:.6},46.2);
+out('#c72',46.0,.4);rise('#c73',46.5,{d:.6});
+tap($('#yes'),48.0);
+T.to('#yes',{scale:.96,duration:.15},47.9);
+T.to('#won',{opacity:1,duration:.4},48.3);
 
-// S8
+// S8 (49.5-56.5)
 $('#pin').innerHTML=svg('pin',56,'#46664f',1.8);$('#walker').innerHTML=svg('person',44,'#2f3a33',2);
 $('#lk8').innerHTML=lockSvg(76,'#2f3a33');$('#dck').innerHTML=svg('check',30,'#fff',2.6);$('#vs').innerHTML=svg('shield',44,'#fff',1.8);
-rise('#map',84.9);T.fromTo('#pin',{y:-40,opacity:0},{y:0,opacity:1,duration:.6,ease:'power2.in'},85.2);rise('#pinl',85.6,{d:.5,y:8});
-rise('#walker',85.4,{d:.3,y:0});
-[[230-48,0,.7],[330-48,-120,.7],[440-48,-120+0,.55],[500-48,-150,.5]].forEach(()=>0);
-const wp=[[182,0],[282,-120],[392,-120],[452,-195]];let tw=85.7;
-wp.forEach(w=>{const dd=.65;T.to('#walker',{x:w[0],y:w[1],duration:dd,ease:'none'},tw);tw+=dd;});
-rise('#lapt',87.4);rise('#t1',87.8,{d:.3,y:0});rise('#t2',88.3,{d:.3,y:0});rise('#t3',88.9,{d:.3,y:0});rise('#dfx',89.2,{d:.5,y:12});
-rise('#proof',89.5);rise('#pf1',89.9,{d:.4,y:8});rise('#pf2',90.2,{d:.4,y:8});rise('#pf3',90.5,{d:.4,y:8});
-rise('#ver',90.8);T.to('#vt',{opacity:0,duration:.2},91.4);T.call(()=>{},null,91.6);
-{const o={n:0};T.to(o,{n:1,duration:.01,onUpdate(){$('#vt').textContent=o.n>=1?'Proof approved ✓':'Verifier · checking…'}},91.6);T.to('#vt',{opacity:1,duration:.3},91.65);}
-rise('#escc',91.8,{d:.6});
-T.to('#lk8 .sh',{y:-5,rotation:-25,svgOrigin:'16 11',duration:.5,ease:'power2.inOut'},92.3);
-rise('#pers',92.3,{d:.6});
-for(let i=0;i<5;i++){const c=document.createElement('div');c.className='a av';c.style.cssText='left:0;top:0;width:56px;height:56px;background:#46664f;color:#fff;font-size:26px;border:3px solid #cfe3cf;opacity:0';c.textContent='$';$('#coins').appendChild(c);
- T.fromTo(c,{x:900,y:760,opacity:0,scale:.6},{x:1330,y:760,opacity:1,scale:1,duration:.9,ease:'power1.inOut'},92.6+i*.18);T.to(c,{opacity:0,duration:.2},93.5+i*.18);}
-rise('#plus',93.2,{d:.5,y:10});rise('#ledger',93.2,{d:.5,y:10});
+rise('#map',50.0,{d:.5});T.fromTo('#pin',{y:-40,opacity:0},{y:0,opacity:1,duration:.4,ease:'power2.in'},50.2);rise('#pinl',50.5,{d:.4,y:8});
+rise('#walker',50.3,{d:.2,y:0});
+{const wp=[[182,0],[282,-120],[392,-120],[452,-195]];let tw=50.5;wp.forEach(w=>{T.to('#walker',{x:w[0],y:w[1],duration:.4,ease:'none'},tw);tw+=.4;});}
+rise('#lapt',52.0,{d:.4});rise('#t1',52.2,{d:.2,y:0});rise('#t2',52.5,{d:.2,y:0});rise('#t3',52.8,{d:.2,y:0});rise('#dfx',53.0,{d:.4,y:12});
+rise('#proof',52.4,{d:.4});rise('#pf1',52.7,{d:.3,y:8});rise('#pf2',52.9,{d:.3,y:8});rise('#pf3',53.1,{d:.3,y:8});
+rise('#ver',53.3,{d:.4});
+{const o={n:0};T.to(o,{n:1,duration:.01,onUpdate(){$('#vt').textContent=o.n>=1?'Proof approved ✓':'Verifier · checking…'}},53.9);}
+rise('#escc',54.0,{d:.4});
+T.to('#lk8 .sh',{y:-5,rotation:-25,svgOrigin:'16 11',duration:.4,ease:'power2.inOut'},54.4);
+rise('#dlab',54.4,{d:.4,y:8});rise('#dash',54.4,{d:.5});
+for(let i=0;i<4;i++){const c=document.createElement('div');c.className='a av';c.style.cssText='left:0;top:0;width:56px;height:56px;background:#46664f;color:#fff;font-size:26px;border:3px solid #cfe3cf;opacity:0';c.textContent='$';$('#coins').appendChild(c);
+ T.fromTo(c,{x:690,y:730,opacity:0,scale:.6},{x:1010,y:722,opacity:1,scale:1,duration:.6,ease:'power1.inOut'},54.7+i*.14);T.to(c,{opacity:0,duration:.15},55.3+i*.14);}
+{const o={v:0};T.fromTo(o,{v:0},{v:1,duration:.8,ease:'power2.out',onUpdate(){$('#n75').textContent='$'+Math.round(o.v*75);$('#n25').textContent='$'+Math.round(o.v*25)}},55.1);}
+rise('#ledger',55.4,{d:.4,y:10});
 
-// S9
-rise('#e1',94.9,{d:1});rise('#e2',95.8,{d:1});rise('#e3',97,{d:1});rise('#e4',98,{d:.8});rise('#e5',98.7,{d:.8});
+// S9 (56.5-60)
+rise('#e1',57.0,{d:.6});rise('#e2',57.4,{d:.6});rise('#e3',57.9,{d:.6});rise('#e4',58.4,{d:.5});rise('#e6',58.6,{d:.5});rise('#e5',59.0,{d:.5});
 
-T.to({},{duration:DURATION-T.duration()>0?DURATION-T.duration():0.001},T.duration());
+T.to({},{duration:.001},DURATION-.001);
 window.DURATION=DURATION;window.seek=t=>{T.seek(Math.max(0,Math.min(DURATION,t)),false)};
 window.__ready=false;
 
