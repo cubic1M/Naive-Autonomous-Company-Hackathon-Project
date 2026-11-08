@@ -37,8 +37,9 @@ export default verify;
 
 /**
  * Named export, read with `import * as verify from "@services/verify/index"` like createPayoutLink after PR #15.
- * Called by POST /v1/worker/identity (Dora's job page, before a worker accepts any job): a hosted Stripe
- * Identity link for the worker (government ID plus a matching selfie), or { url: null, status: 'verified' }
+ * Called by POST /v1/worker/identity, which verifies the job link's own worker; nothing in apps/web calls it yet
+ * (the job page verifies the signed-in account's worker through POST /v1/me/identity/session). Returns a hosted
+ * Stripe Identity link for the worker (government ID plus a matching selfie), or { url: null, status: 'verified' }
  * when the identity is already on file. Needs DATABASE_URL, STRIPE_SECRET_KEY and PUBLIC_BASE_URL (the
  * return URL is <PUBLIC_BASE_URL>/join/<workerId>/identity/done). The outcome arrives by webhook
  * (identity.verification_session.verified / requires_input / canceled, handled by stripeWebhook).

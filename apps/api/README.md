@@ -37,7 +37,7 @@ npm run smoke                                    # 20 checks: every tool, worker
 | `GET /v1/admin/requests` | Backoffice (admin key) | Every request with company, agent activity, wake-ups, proof |
 | `GET/POST /v1/admin/escalations[/:jobId]` | Founder console (admin key) | Proofs waiting for a founder; approve → pay, reject → refund |
 | `GET/POST /v1/admin/approvals` | Founder console (admin key) | Naïve tool approvals waiting; allow once / for the session / deny |
-| `POST /v1/worker/identity` | Job page (every job) | `{token}` → Stripe Identity link |
+| `POST /v1/worker/identity` | Nothing yet (the job page verifies through onboarding: `POST /v1/me/identity/session`) | `{token}` → Stripe Identity link for the link's own worker |
 | `GET /v1/files/:id` | Anyone with the URL | Proof files stored in Postgres when Blob isn't used |
 | `GET /api/cron/sweep`, `/api/cron/approvals` | Vercel cron (`CRON_SECRET`) | Expiry + no-taker nudges; agent feed + auto-approve |
 | `GET /admin` | Founders (`?key=ADMIN_KEY` once) | Founder console: agent approvals, escalated proofs, numbers |

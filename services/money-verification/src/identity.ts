@@ -1,6 +1,6 @@
 /**
- * Stripe Identity for workers. A tier-2 job (over $150, or any certification; see proof/profile.ts) needs
- * a verified identity: the worker opens a hosted Stripe Identity session (government ID plus a matching
+ * Stripe Identity for workers. Every job needs a verified identity under IDENTITY_GATE=enforce (env.ts,
+ * eligibility.ts): the worker opens a hosted Stripe Identity session (government ID plus a matching
  * selfie), Stripe reports the outcome by webhook, and the verified name on the ID is what verifyNotary
  * compares against the commission. One worker_verifications row per worker (kind 'identity'); the
  * verified first and last name live in its details and never in a proof review.
