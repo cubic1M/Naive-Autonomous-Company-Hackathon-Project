@@ -19,11 +19,11 @@ const agentIds = new Set(["CEO", "OPS", "VERIFIER", "FINANCE", "SALES"].map((r) 
 const sessions = (await (await fetch(`${NAIVE}/sessions?limit=50`, { headers: H })).json()).data ?? [];
 let pending = 0;
 for (const s of sessions.filter((s: any) => agentIds.has(s.agent_id))) {
-  const ev = (await (await fetch(`${NAIVE}/sessions/${s.id}/events?limit=200`, { headers: H })).json()).data ?? [];
+  const ev = (await (await fetch(`${NAIVE}/sessions/${s.id}/events?limit=100`, { headers: H })).json()).data ?? [];
   const resolved = new Set(ev.filter((e: any) => e.type.startsWith("tool.confirm.")).map((e: any) => e.data?.tool_call_id));
   for (const e of ev.filter((e: any) => e.type === "tool.confirm" && !resolved.has(e.data?.tool_call_id))) {
     pending++;
-    console.log(`⏳ ${s.id}  ${e.data?.name ?? e.data?.tool?.name}  call=${e.data?.tool_call_id}\n   input: ${JSON.stringify(e.data?.input ?? e.data?.arguments ?? {}).slice(0, 300)}`);
+    console.log(`⏳ ${s.id}  ${e.data?.name ?? e.data?.tool?.name}  call=${e.data?.tool_call_id}\n   input: ${JSON.stringify(e.data?.args ?? e.data?.input ?? {}).slice(0, 300)}`);
   }
 }
 console.log(pending ? `\n${pending} pending. Approve: npm run approvals -- allow <session> <call>` : "No pending approvals.");
