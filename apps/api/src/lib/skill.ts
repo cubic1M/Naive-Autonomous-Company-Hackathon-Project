@@ -38,7 +38,7 @@ MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` 
 - \`certification_required\`: null unless a license is needed
 - \`proof\`: \`{"photos": {"min": N, "must_show": [...]}, "fields": [{"name","type":"string|number"}], "geofence_m": 150}\` (online work: \`min: 0\` + fields)
 
-**Read the result, status first:** \`rejected\` → see \`reason\`, don't resend · \`requested\` + \`escrow_url\` → your user pays that link once (card held, charged only if proof passes) · \`held\` → funded, a person is being found. Always follow \`next_step\`.
+**Read the result, status first:** \`rejected\` → see \`reason\`, don't resend · \`requested\` + \`escrow_url\` → your user pays that link once (card held, charged only if proof passes) (to skip links later: call \`setup_payment\` once and have your user save a card at its \`url\`; then jobs fund directly as \`held\`, or pass \`payment: {"payment_method": "pm_…"}\`) · \`held\` → funded, a person is being found. Always follow \`next_step\`.
 
 **Follow it:** \`get_job {"job_id"}\` every 2–5 min (or pass \`callback_url\`); \`status_meaning\` explains each state. \`paid\` = done, \`proof_package\` has photo URLs, fields and the verifier score. \`cancel_job\` works until \`accepted\`.
 
