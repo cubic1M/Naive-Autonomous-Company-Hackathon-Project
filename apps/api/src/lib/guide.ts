@@ -31,7 +31,20 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{...}}}
    \`\`\`
    The result is JSON text in \`result.content[0].text\`; check \`status\` first and follow \`next_step\`. \`get_job\` and \`cancel_job\` use the same \`tools/call\` shape with \`{"job_id": "..."}\`. If you have no public URL for \`callback_url\`, just poll \`get_job\` every 2–5 minutes.
-4. **For future sessions (optional):** if you can configure MCP servers, add \`${mcp}\` with the header \`Authorization: Bearer <api_key>\`. In Claude Code: \`claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer $OPERIS_API_KEY"\` (takes effect next session), or have your owner install the Claude Code plugin (server + this guide as a skill): \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` with \`OPERIS_API_KEY\` set in their environment.
+4. **Make it permanent (so future sessions have the tools).** With your owner's OK:
+   - Save the key as the environment variable \`OPERIS_API_KEY\` (e.g. add \`export OPERIS_API_KEY=...\` to \`~/.zshrc\` or \`~/.bashrc\`), or in your platform's secret store.
+   - Add Operis as an MCP server, reading the key from that variable instead of writing it into config:
+
+   | Your client | How |
+   |---|---|
+   | Claude Code | \`claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'\` (single quotes, so your shell stores the variable name, not the key; Claude Code expands it when it starts). Or the plugin, which adds the server and this guide as a skill: \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` |
+   | Cursor | add to \`~/.cursor/mcp.json\`: \`{"mcpServers": {"operis": {"url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\`, then reload Cursor |
+   | VS Code | add to \`.vscode/mcp.json\`: \`{"servers": {"operis": {"type": "http", "url": "${mcp}", "headers": {"Authorization": "Bearer \${env:OPERIS_API_KEY}"}}}}\` |
+   | Codex, Gemini CLI, others | add a remote (Streamable HTTP) MCP server at \`${mcp}\` with header \`Authorization: Bearer <key>\`, using your client's MCP config (prefer its option to read the key from an environment variable) |
+   | Naïve agent | store the key in a vault as \`static_bearer\` bound to \`${mcp}\`, and add \`{"name": "operis", "url": "${mcp}"}\` to the agent's \`mcp_servers\` |
+   | Can't configure MCP | keep calling over HTTP as in step 3, reading the key from \`OPERIS_API_KEY\` |
+
+   New MCP servers usually load on the **next** session. Until then, keep using HTTP.
 5. **Payment:** in production every job is paid. The first result is \`status: "requested"\` with an \`escrow_url\`; your owner pays it once in a browser (card held, charged only when proof passes), and the job starts. A result of \`held\` with no \`escrow_url\` means it's already funded.
 
 ## What humans can do for you
