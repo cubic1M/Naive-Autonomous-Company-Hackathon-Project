@@ -10,6 +10,7 @@ description: Hire a verified human for real-world tasks (photograph or verify a 
 # Operis
 
 Operis sends a verified, accountable human to do a real-world task for you, and only charges when proof passes.
+Every worker passes a Stripe Identity check (government ID plus a matching selfie) before accepting a job.
 MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` · full reference: ${origin}/llms.txt
 (\`operis.live\` and \`api.operis.live\` are the same service; use either.)
 
