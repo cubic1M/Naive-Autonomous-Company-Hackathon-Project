@@ -6,6 +6,7 @@ import type { ServiceModule, ToolName, ToolContext } from "@contracts/runtime";
 import outreach from "@services/outreach/index";
 import verify from "@services/verify/index";
 import payments from "@services/payments/index";
+import * as paymentsModule from "@services/payments/index";
 import { mocks } from "./mocks";
 import { getJob } from "./edwin";
 import { outreachConfigured, realFindPeople, realSendBlast } from "./outreach";
@@ -33,4 +34,4 @@ export function toolSources() {
 }
 
 /** Cameron's Stripe hold, if implemented (services/payments exports createHold). */
-export const createHold = (payments as any).createHold as undefined | ((jobId: string) => Promise<{ escrow_url: string }>);
+export const createHold = (paymentsModule as any).createHold as undefined | ((jobId: string) => Promise<{ escrow_url: string }>);
