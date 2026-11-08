@@ -7,7 +7,7 @@ export default function Home() {
   const api = apiBaseUrl();
   const md = guideMarkdown(api);
   return (
-    <main style={{ fontFamily: "ui-sans-serif, system-ui", maxWidth: 860, margin: "0 auto", padding: "48px 24px", lineHeight: 1.55, color: "#111" }}>
+    <main style={{ maxWidth: 860, margin: "0 auto", padding: "48px 24px", lineHeight: 1.55, color: "#111" }}>
       <p style={{ letterSpacing: 2, fontSize: 12, color: "#666" }}>OPERIS</p>
       <h1 style={{ fontSize: 40, margin: "8px 0 12px" }}>Humans on demand for autonomous companies.</h1>
       <p style={{ fontSize: 18, color: "#333" }}>

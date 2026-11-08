@@ -1,9 +1,10 @@
 // GET: what Dora's job page (/j/[token]) shows. The token in the link is the worker's only credential.
 import { outreachByToken } from "@/lib/worker";
 import { sql } from "@/lib/db";
+import { currentAccount } from "@/lib/accounts";
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const o = await outreachByToken(token);
   if (!o) return Response.json({ error: "not_found" }, { status: 404 });
@@ -35,8 +36,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   } catch {
     // job_liability is created by migration 0003; before it runs, the page shows no model.
   }
+  // Who is looking (ACCOUNTS_API.md): signed-in workers see their name; text codes aren't offered, so no phone hint.
+  const acct = await currentAccount(req).catch(() => null);
+  const viewer = acct
+    ? { logged_in: true, name: acct.name, cleared: acct.identity_status === "verified", identity_status: acct.identity_status }
+    : { logged_in: false, phone_hint: null };
+  const [co] = await sql`select c.name from jobs j left join customers c on c.id = j.customer_id where j.id = ${o.job_id}`;
   return Response.json({
+    viewer,
     job: {
+      company: co?.name ?? null,
       title: o.title, instructions: o.instructions,
       location: { address: o.address, lat: o.lat, lng: o.lng },
       deadline: o.deadline, pay_usd: Number(o.worker_pay_usd),

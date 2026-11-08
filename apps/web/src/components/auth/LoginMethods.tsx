@@ -9,6 +9,7 @@ import { useState } from "react";
 import { postJson } from "@/lib/api";
 import { useSession, type User } from "@/lib/session";
 import { DevHint, Divider, FormError, MailIcon, PhoneIcon, Spinner, errorText, input, label, primary, secondary, textBtn } from "./ui";
+import PasswordInput from "@/components/PasswordInput";
 
 export type Mode = "start" | "phone" | "code" | "email" | "link_sent" | "password";
 
@@ -177,7 +178,7 @@ export default function LoginMethods({
             <input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={input} required />
           </label>
           <label style={label}>Password
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={input} required />
+            <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={input} required />
           </label>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", fontSize: "14px", flexWrap: "wrap" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "8px", minHeight: "40px", cursor: "pointer" }}>

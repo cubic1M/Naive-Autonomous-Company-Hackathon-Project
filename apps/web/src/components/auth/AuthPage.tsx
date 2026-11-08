@@ -10,6 +10,7 @@ import { useSession, type User } from "@/lib/session";
 import { LogoPill } from "@/components/SiteHeader";
 import LoginMethods from "./LoginMethods";
 import { Divider, FormError, GoogleIcon, Spinner, errorText, input, label, primary, secondary } from "./ui";
+import PasswordInput from "@/components/PasswordInput";
 
 export function AuthFooter() {
   return (
@@ -131,7 +132,7 @@ export default function AuthPage({ mode: initialMode, next, error: initialError 
                       <span style={{ fontSize: "13px", fontWeight: 400, color: "#5B635C" }}>Used for job alerts. You choose how we contact you in the next step.</span>
                     </label>
                     <label style={label}>Password
-                      <input type="password" autoComplete="new-password" placeholder="At least 10 characters" minLength={10} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} style={input} required />
+                      <PasswordInput autoComplete="new-password" placeholder="At least 10 characters" minLength={10} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} style={input} required />
                     </label>
                     <FormError>{error}</FormError>
                     <button type="submit" disabled={busy} style={{ ...primary, marginTop: "4px" }}>{busy && <Spinner />}Create account and continue</button>
