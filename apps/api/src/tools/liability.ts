@@ -4,18 +4,30 @@
 import type { ToolContext } from "@contracts/runtime";
 import * as compliance from "@services/compliance/index";
 import { notifyCustomer } from "@/lib/callbacks";
+import { TransitionError } from "@/lib/db";
 import { transition } from "@/lib/jobs";
 import { later, liabilityDecidedMessage, wake } from "@/lib/naive";
 
-export async function afterDecision(jobId: string, out: { model: string; next: "wake_ceo" | "cancel"; reason: string; changed: boolean }) {
-  if (!out.changed) return; // a repeated call never repeats the side effects
+/**
+ * What follows a recorded decision, driven by the job's state rather than by whether this call wrote the decision,
+ * so a retry (the agent's, or the sweep's re-drive) finishes what a failure left undone. Every step is idempotent.
+ * - refuse: move held -> cancelled first (atomic; it refuses a job that has moved past held), then release the
+ *   card hold (releaseEscrow returns early once released). A job already cancelled goes straight to the release.
+ * - operis / connector: wake the CEO once per job (wake_events (job, liability_decided)); the customer's callback
+ *   goes out with the wake that is new, not with a duplicate.
+ */
+export async function afterDecision(jobId: string, out: { model: string; next: "wake_ceo" | "cancel"; reason: string }) {
   if (out.next === "cancel") {
+    try {
+      await transition(jobId, "cancelled"); // also sends the customer's callback
+    } catch (e) {
+      if (!(e instanceof TransitionError && e.current === "cancelled")) throw e; // never release the hold of a job past held
+    }
     await compliance.releaseHold(jobId, `liability policy: ${out.reason}`);
-    await transition(jobId, "cancelled"); // also sends the customer's callback
     return;
   }
-  await wake("ceo", jobId, "liability_decided", liabilityDecidedMessage(jobId, out.model));
-  later(() => notifyCustomer(jobId)); // the customer hears the decision (callbacks carry liability_model)
+  const woke = await wake("ceo", jobId, "liability_decided", liabilityDecidedMessage(jobId, out.model));
+  if (!("skipped" in woke && woke.skipped === "duplicate")) later(() => notifyCustomer(jobId)); // callbacks carry liability_model
 }
 
 export const LIABILITY_EXTRA_TOOLS = {

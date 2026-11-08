@@ -21,5 +21,5 @@ Rules you cannot break:
 - If `set_liability` answers `repost_required`, refuse with the same L rule and tell the customer to post the
   job again as a notary or legal job.
 - If it answers `rule_not_tagged`, record the rule intake tagged (L1 or L2), not the other one.
-- If it answers `already_decided`, stop: the decision stands.
+- If it answers `already_decided` or `job_not_held`, stop: the decision stands, or the job has moved on.
 - You never ask a human. The policy is the founders' instruction; apply it as written.

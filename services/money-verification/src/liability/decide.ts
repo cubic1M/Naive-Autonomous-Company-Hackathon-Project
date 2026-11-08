@@ -1,11 +1,11 @@
 // services/money-verification/src/liability/decide.ts
-import { InvalidStateError } from '../errors.js';
+import { InvalidStateError, NotFoundError } from '../errors.js';
 import type { Repo } from '../repo.js';
 import type { JobLiability } from '../types.js';
 import { POLICY_VERSION, RULES, policyText, ruleById, type LiabilityModel } from './policy.js';
 
 export interface LiabilityDeps {
-  repo: Pick<Repo, 'getJobLiability' | 'insertJobLiability' | 'decideJobLiability'>;
+  repo: Pick<Repo, 'getJob' | 'getJobLiability' | 'insertJobLiability' | 'decideJobLiability'>;
   now?: () => Date;
 }
 
@@ -59,6 +59,12 @@ export async function setLiability(
   deps: LiabilityDeps,
   input: { jobId: string; model: LiabilityModel; ruleId: string; reason: string; decidedBy: string },
 ): Promise<DecisionOutcome> {
+  // A decision belongs to a funded job that is not dispatched yet: later states would cancel or release the wrong thing.
+  const job = await deps.repo.getJob(input.jobId);
+  if (!job) throw new NotFoundError('job', input.jobId);
+  if (job.status !== 'held') {
+    throw new InvalidStateError(`job_not_held: job ${input.jobId} is ${job.status}; a liability decision is recorded only while the job is held (funded, not yet dispatched)`);
+  }
   const row = await intakeRow(deps, input.jobId);
   const rule = ruleById(input.ruleId);
   if (!rule) throw new InvalidStateError(`unknown_rule: ${input.ruleId} is not in liability policy ${POLICY_VERSION}`);

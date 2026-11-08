@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryRepo } from '../src/repo/memory.js';
 import { allowedModels, decideFallback, getLiabilityContext, setLiability } from '../src/liability/decide.js';
 import { createTools } from '../src/tools.js';
-import { JOB_ID, T0, makeWorld } from './helpers.js';
+import { JOB_ID, T0, makeJob, makeWorld } from './helpers.js';
 
-const deps = (repo = new InMemoryRepo()) => ({ repo, now: () => T0 });
+/** A funded job: decisions are recorded only while a job is held. */
+const heldRepo = () => { const repo = new InMemoryRepo(); repo.seedJob(makeJob({ status: 'held', worker_id: null })); return repo; };
+const deps = (repo = heldRepo()) => ({ repo, now: () => T0 });
 const seed = async (repo: InMemoryRepo, rules: string[], forced: 'connector' | 'refuse' | null, pricing: 'standard' | 'connector') =>
   repo.insertJobLiability({ job_id: JOB_ID, tags: { rules, forced }, pricing });
 const set = (d: ReturnType<typeof deps>, model: 'operis' | 'connector' | 'refuse', ruleId: string, reason = 'per policy') =>
@@ -55,6 +57,14 @@ describe('setLiability', () => {
     await expect(set(d, 'connector', 'L1')).rejects.toThrow(/^rule_not_tagged/);
     expect((await set(d, 'connector', 'L2')).liability.rule_id).toBe('L2');
   });
+  it('records nothing for a job that is not held', async () => {
+    for (const status of ['requested', 'outreach', 'accepted', 'cancelled'] as const) {
+      const repo = new InMemoryRepo(); repo.seedJob(makeJob({ status, worker_id: null }));
+      await expect(set(deps(repo), 'operis', 'D')).rejects.toThrow(/^job_not_held: .* is /);
+      expect((await repo.getJobLiability(JOB_ID))?.model ?? null).toBeNull();
+    }
+    await expect(set(deps(new InMemoryRepo()), 'operis', 'D')).rejects.toThrow(/not found/);
+  });
   it('creates the intake row for a job created before this shipped', async () => {
     const d = deps();
     expect((await set(d, 'operis', 'D')).liability.pricing).toBe('standard');
@@ -103,6 +113,7 @@ describe('getLiabilityContext', () => {
 describe('liability tools', () => {
   it('set_liability trims the reason and reports what happens next', async () => {
     const world = makeWorld();
+    world.repo.seedJob(makeJob({ status: 'held', worker_id: null }));
     const tools = createTools(world.deps);
     const out = await tools.set_liability({ job_id: JOB_ID, model: 'operis', rule_id: 'D', reason: '  photo job, no licence  ' });
     expect(out).toEqual({ job_id: JOB_ID, model: 'operis', rule_id: 'D', reason: 'photo job, no licence', next: 'wake_ceo', changed: true });

@@ -13,7 +13,7 @@ const NUDGES = [
 ];
 
 export async function sweep() {
-  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, errors: [] as string[] };
+  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, redriven: 0, errors: [] as string[] };
 
   // 1. Past the deadline and nobody delivered: stop the job and give the customer their money back.
   const overdue = await sql`
@@ -54,7 +54,29 @@ export async function sweep() {
     }
   }
 
-  // 3. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
+  // 3. Decisions whose follow-up did not happen (a CEO wake or a hold release that failed): drive them again from
+  //    state. Held jobs refused, or cleared without a liability_decided wake; refused jobs already cancelled whose
+  //    card hold is still open (the release failed after the cancel). Legacy decisions (migration 0004) were
+  //    dispatched by the old flow; two minutes leave the agent's own call time to finish.
+  const pending = await sql`
+    select j.id, l.model, l.reason from jobs j
+    join job_liability l on l.job_id = j.id
+    where l.model is not null and l.decided_by <> 'legacy' and l.decided_at < now() - interval '2 minutes'
+      and ((j.status = 'held' and (l.model = 'refuse'
+             or not exists (select 1 from wake_events w where w.job_id = j.id and w.event = 'liability_decided')))
+        or (j.status = 'cancelled' and l.model = 'refuse'
+             and exists (select 1 from escrows e where e.job_id = j.id and e.status in ('pending', 'authorized'))))`
+    .catch(() => [] as any[]); // before migration 0003
+  for (const j of pending) {
+    try {
+      await afterDecision(j.id, { model: j.model, next: j.model === "refuse" ? "cancel" : "wake_ceo", reason: j.reason ?? "" });
+      report.redriven++;
+    } catch (e) {
+      report.errors.push(`redrive ${j.id}: ${String(e).slice(0, 120)}`);
+    }
+  }
+
+  // 4. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
   for (const n of NUDGES) {
     const stuck = await sql`
       select j.id from jobs j
