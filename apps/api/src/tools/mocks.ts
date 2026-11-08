@@ -169,4 +169,5 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   request_human: null as any,
   get_job: null as any,
   cancel_job: null as any,
+  setup_payment: null as any,
 };

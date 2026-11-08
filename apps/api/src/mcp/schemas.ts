@@ -33,6 +33,11 @@ export const SCHEMAS = {
   },
   get_job: { description: "Get a job's status and details; includes the proof package once approved.", shape: jobId },
   cancel_job: { description: "Cancel a job before a worker accepts it.", shape: jobId },
+  setup_payment: {
+    description:
+      "Get a one-time Stripe link where your human owner saves a card (nothing is charged then). Once saved, request_human funds every job from it in the call: status held, escrow_url null. Call again to replace the card.",
+    shape: {},
+  },
   find_people: {
     description: "Find candidate workers near the job from public, work-related sources. Returns ranked candidate ids.",
     shape: {

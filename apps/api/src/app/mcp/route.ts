@@ -1,9 +1,9 @@
-// Public MCP server for customer agents: request_human, get_job, cancel_job.
+// Public MCP server for customer agents: request_human, get_job, cancel_job, setup_payment.
 import { serveMcp } from "@/mcp/server";
 import { authCustomer } from "@/lib/auth";
 import { makeContext } from "@/tools/context";
-import { requestHuman, getJob, cancelJob } from "@/tools/edwin";
-import { createHold } from "@/tools/registry";
+import { requestHuman, getJob, cancelJob, setupPayment } from "@/tools/edwin";
+import { createHold, createPaymentSetupLink } from "@/tools/registry";
 import { apiBaseUrl } from "@/lib/env";
 import { publicOrigin, CORS } from "@/lib/oauth";
 
@@ -42,6 +42,7 @@ async function handle(req: Request) {
       return out;
     },
     cancel_job: (a) => cancelJob(a, ctx, customer.id),
+    setup_payment: () => setupPayment(customer.id, createPaymentSetupLink),
   }, INSTRUCTIONS);
 }
 export { handle as GET, handle as POST, handle as DELETE };

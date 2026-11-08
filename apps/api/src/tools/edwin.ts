@@ -167,6 +167,21 @@ export async function requestHuman(
     next_step: `Funded. ${FINDING} ${liabilityNote}` };
 }
 
+/**
+ * setup_payment and POST /v1/customers/payment-setup: Cameron's createPaymentSetupLink, a Stripe Checkout page (setup
+ * mode) where the customer's human owner saves a card once. The Stripe webhook stores it, and from then on createHold
+ * funds every request_human from it with no link.
+ */
+export async function setupPayment(
+  customerId: string,
+  createPaymentSetupLink?: (customerId: string) => Promise<{ url: string }>,
+): Promise<Tools["setup_payment"]["out"]> {
+  if (!createPaymentSetupLink || flag("MOCK_PAYMENTS") || flag("USE_MOCKS"))
+    return { url: null, next_step: "No card to save on this server: when request_human needs payment, it answers with an escrow_url." };
+  const { url } = await createPaymentSetupLink(customerId);
+  return { url, next_step: "Give url to your human owner to open once and save a card; nothing is charged now. From then on request_human funds each job from that card in the call: status held, escrow_url null. The link works for 24 hours; call setup_payment again for a new one or to replace the card." };
+}
+
 export async function cancelJob(input: Tools["cancel_job"]["in"], ctx: ToolContext, customerId: string): Promise<Tools["cancel_job"]["out"]> {
   const [j] = await ctx.sql`select customer_id from jobs where id = ${input.job_id}`;
   if (!j || j.customer_id !== customerId) throw new Error("job not found");

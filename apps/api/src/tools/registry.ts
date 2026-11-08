@@ -43,3 +43,8 @@ export function toolSources() {
 export const createHold = (paymentsModule as any).createHold as
   | undefined
   | ((jobId: string, opts?: CreateHoldOptions) => Promise<CreateHoldResult>);
+
+/** Cameron's card on file, if implemented (services/payments exports createPaymentSetupLink): a setup-mode Checkout URL. */
+export const createPaymentSetupLink = (paymentsModule as any).createPaymentSetupLink as
+  | undefined
+  | ((customerId: string) => Promise<{ url: string }>);
