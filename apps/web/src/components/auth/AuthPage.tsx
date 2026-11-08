@@ -9,7 +9,7 @@ import { postJson } from "@/lib/api";
 import { useSession, type User } from "@/lib/session";
 import { LogoPill } from "@/components/SiteHeader";
 import LoginMethods from "./LoginMethods";
-import { Divider, FormError, GoogleIcon, Spinner, errorText, input, label, primary, secondary } from "./ui";
+import { Divider, FormError, GoogleButton, Spinner, errorText, input, label, primary, secondary } from "./ui";
 
 export function AuthFooter() {
   return (
@@ -112,10 +112,7 @@ export default function AuthPage({ mode: initialMode, next, error: initialError 
                   <button type="button" onClick={() => { setMode("login"); setError(null); }} aria-pressed={!signup} style={signup ? off : on}>Log in</button>
                 </div>
 
-                <a href={`/api/v1/auth/google/start?next=${encodeURIComponent(next)}`} style={secondary}>
-                  <GoogleIcon />
-                  Continue with Google
-                </a>
+                <GoogleButton next={next} label={signup ? "Sign up with Google" : "Log in with Google"} />
                 <Divider>{signup ? "or with email" : "or"}</Divider>
 
                 {signup ? (
@@ -140,7 +137,7 @@ export default function AuthPage({ mode: initialMode, next, error: initialError 
                 ) : (
                   <>
                     <FormError>{error}</FormError>
-                    <LoginMethods next={next} initialMode="password" />
+                    <LoginMethods next={next} initialMode="password" showGoogle={false} />
                     <p style={{ margin: "0", fontSize: "13px", lineHeight: 1.5, color: "#5B635C", textAlign: "center" }}>Opened a job link from a text or email? You&apos;ll go straight back to it after logging in.</p>
                   </>
                 )}

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Logo } from "@/components/SiteHeader";
+import { Divider, GoogleButton } from "@/components/auth/ui";
 import { ago, usd } from "@/lib/format";
 
 const POLL_MS = 3000;
@@ -87,6 +88,12 @@ function humanize(f: Feed): Line | null {
   return said ? { who, text: said, kind: "say", at } : null;
 }
 
+const GOOGLE_ERRORS: Record<string, string> = {
+  not_a_founder: "That Google account isn't on the founders list.",
+  google_cancelled: "Google sign-in was cancelled.",
+  google_not_configured: "Google sign-in isn't switched on yet. Use your password.",
+};
+
 export default function Backoffice() {
   const [key, setKey] = useState<string | null>(null);
   const [me, setMe] = useState<string | null>(null);
@@ -105,7 +112,15 @@ export default function Backoffice() {
   const first = useRef(true);
   const [, tick] = useState(0);
 
-  useEffect(() => { setKey(localStorage.getItem("operis_admin")); setMe(localStorage.getItem("operis_admin_email")); }, []);
+  useEffect(() => {
+    // Back from "Continue with Google": the API puts the founder token in the URL fragment (never sent to a server).
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    const t = h.get("admin_token"), e = h.get("email"), err = h.get("admin_error");
+    if (t || err) history.replaceState(null, "", window.location.pathname + window.location.search);
+    if (t && e) { localStorage.setItem("operis_admin", t); localStorage.setItem("operis_admin_email", e); }
+    if (err) setLoginErr(GOOGLE_ERRORS[err] ?? "Google sign-in didn't go through. Please try again.");
+    setKey(localStorage.getItem("operis_admin")); setMe(localStorage.getItem("operis_admin_email"));
+  }, []);
 
   const poll = useCallback(async () => {
     if (!key) return;
@@ -156,6 +171,8 @@ export default function Backoffice() {
           <p style={{ margin: 0, color: C.muted }}>Sign in with your Operis founder email.</p>
           {authErr && !loginErr && <Notice warn>Your session expired. Sign in again.</Notice>}
           {loginErr && <Notice>{loginErr}</Notice>}
+          <GoogleButton flow="admin" label="Sign in with Google" />
+          <Divider>or with password</Divider>
           <form style={{ display: "flex", flexDirection: "column", gap: 10 }} onSubmit={async (e) => {
             e.preventDefault(); setSigningIn(true); setLoginErr("");
             const r = await fetch("/api/v1/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
