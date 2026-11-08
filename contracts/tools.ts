@@ -63,7 +63,7 @@ export interface Tools {
       /** Online work (legal, software, design...): no distance limit. Default false. [proposed by Andrew] */
       remote?: boolean;
       deadline: string; // ISO 8601
-      budget_usd: number; // >= 20
+      budget_usd: number; // >= 3
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;

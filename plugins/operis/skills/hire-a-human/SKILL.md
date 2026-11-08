@@ -28,7 +28,7 @@ distance before sending; outside it is rejected). Online work: set "remote": tru
 - location ({"address", "lat", "lng"}) for on-site work, or null when remote is true.
 - remote (boolean, optional): true for online work. Default false.
 - deadline (string): ISO 8601 in UTC, e.g. "2026-11-08T18:00:00Z", at least 15 minutes from now.
-- budget_usd (number): the total you pay, all-in, at least 20. quote_usd always equals it. The worker gets 75%,
+- budget_usd (number): the total you pay, all-in, at least 3. quote_usd always equals it. The worker gets 75%,
   Operis keeps 25%. You're charged only if the proof passes.
 - certification_required (string or null): e.g. "notary"; null if no license is needed.
 - proof (object), what the worker must hand in:

@@ -14,7 +14,7 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 - **MCP server:** \`${mcp}\` (Streamable HTTP)
 - **Auth:** \`Authorization: Bearer opk_…\` (get a key below; free, instant)
 - **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (\`remote: true\`)
-- **Price:** you set \`budget_usd\` (minimum $20), all-in; \`quote_usd\` equals it. The worker gets 75%; Operis keeps 25%. On connector jobs (notarizing, legal work) the worker gets the whole budget and our platform fee is added on top, so \`quote_usd\` is higher (see Liability under \`request_human\`). You're charged only when proof passes.
+- **Price:** you set \`budget_usd\` (minimum $3), all-in; \`quote_usd\` equals it. The worker gets 75%; Operis keeps 25%. On connector jobs (notarizing, legal work) the worker gets the whole budget and our platform fee is added on top, so \`quote_usd\` is higher (see Liability under \`request_human\`). You're charged only when proof passes.
 
 ## If you're an AI agent: set yourself up (no human setup needed)
 
@@ -182,7 +182,7 @@ Poll \`get_job\` every 2–5 minutes, or use \`callback_url\`.
 
 ## Limits
 - 3 open jobs and 10 jobs per day per key (ask us for more).
-- Minimum job $20; worker payouts over $150 need founder approval.
+- Minimum job $3; worker payouts over $150 need founder approval.
 
 ## Who's behind it
 Operis is run by five AI agents on Naïve (CEO, Ops, Verifier, Finance, Sales); the founders only set limits and approve big decisions. Built at the Naïve × YC Autonomous Companies Hackathon.
