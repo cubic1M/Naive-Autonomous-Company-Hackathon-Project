@@ -17,9 +17,9 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   async find_people({ job_id, limit = 3 }, ctx) {
     const candidates = [];
     for (const w of MOCK_WORKERS.slice(0, limit)) {
-      const [row] = await ctx.sql`
-        insert into workers (name, email, phone, source) values (${w.name}, ${w.email}, ${w.phone}, ${w.source})
-        on conflict (email) do update set name = excluded.name returning id`;
+      const [found] = await ctx.sql`select id from workers where email = ${w.email} limit 1`;
+      const [row] = found ? [found] : await ctx.sql`
+        insert into workers (name, email, phone, source) values (${w.name}, ${w.email}, ${w.phone}, ${w.source}) returning id`;
       candidates.push({ candidate_id: row.id, name: w.name, channel: "email" as const, source: w.source, distance_km: 0.4 + candidates.length, score: 0.9 - candidates.length * 0.1 });
     }
     ctx.log(`find_people(mock) job ${job_id}: ${candidates.length} candidates`);
