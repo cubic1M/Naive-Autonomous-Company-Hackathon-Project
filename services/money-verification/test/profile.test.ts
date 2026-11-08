@@ -98,10 +98,11 @@ describe('verificationProfile: certification, risk class, floors, customer requi
     }
   });
 
-  it('required_tier is a floor, clamped to 2, and never lowers', () => {
-    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 1 })).tier).toBe(1);
-    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 5 })).tier).toBe(2);
+  it('required_tier does not move the verification tier: it is the worker-tier gate in check_eligibility', () => {
+    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 1 })).tier).toBe(0);
+    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 5 }))).toMatchObject({ tier: 0, identityRequired: false, minPhotos: 1 });
     expect(verificationProfile(job({ budget_cents: 30000, required_tier: 0 })).tier).toBe(2);
+    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 3 })).notes.join(' ')).not.toContain('required_tier');
   });
 
   it("composes the customer's photo minimum by max", () => {

@@ -9,9 +9,9 @@
  *   tier 1  $50 to $150                          EXIF capture time required (missing -> review), >= 0.85
  *   tier 2  above $150, or any certification     2 photos, EXIF required, verified identity, >= 0.90
  *
- * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2;
- * `required_tier` is a floor; the customer's own proof requirement (photos.min, must_show, geofence_m,
- * fields) always applies on top, the photo minimum by max.
+ * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2; the
+ * customer's own proof requirement (photos.min, must_show, geofence_m, fields) always applies on top, the photo
+ * minimum by max. `required_tier` is not read here: it is the minimum worker tier (eligibility.ts).
  */
 import type { Job } from '../types.js';
 
@@ -57,8 +57,6 @@ export function budgetTier(budgetCents: number): VerificationTier {
   return 2;
 }
 
-const clampTier = (n: number): VerificationTier => (n >= 2 ? 2 : n >= 1 ? 1 : 0);
-
 /** What a customer agent writes when it means "no certification", compared trimmed, lowercased, spaces collapsed. */
 const NO_CERTIFICATION = new Set(['', 'none', 'no', 'n/a', 'na', 'nil', 'null', 'false', 'not required', 'not applicable', '-']);
 
@@ -96,12 +94,6 @@ export function verificationProfile(job: Job): VerificationProfile {
   if (certificationRequired) {
     if (tier < 2) tier = 2;
     notes.push(`certification required (${certification}): tier 2`);
-  }
-
-  const floor = clampTier(job.required_tier);
-  if (floor > tier) {
-    tier = floor;
-    notes.push(`required_tier ${job.required_tier}: floor tier ${floor}`);
   }
 
   const rules = TIER_RULES[tier];
