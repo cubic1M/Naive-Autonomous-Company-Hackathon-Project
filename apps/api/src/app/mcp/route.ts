@@ -6,6 +6,7 @@ import { requestHuman, getJob, cancelJob, setupPayment } from "@/tools/edwin";
 import { createHold, createPaymentSetupLink } from "@/tools/registry";
 import { apiBaseUrl } from "@/lib/env";
 import { publicOrigin, CORS } from "@/lib/oauth";
+import { logCall, requestIp, summarize, userAgent } from "@/lib/apiCalls";
 
 const INSTRUCTIONS = `Operis sends a verified human to do a real-world task for you in San Francisco (within 8 km of the YC office):
 photograph or verify a place, pick up and ship an item, or receive/scan/mail paperwork.
@@ -18,8 +19,38 @@ Guide: ${apiBaseUrl()}/llms.txt`;
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** JSON-RPC messages in this request (single or batch), for the call log. Never throws. */
+async function rpcMessages(req: Request): Promise<{ method?: string; params?: any }[]> {
+  if (req.method !== "POST") return [];
+  try {
+    const body = JSON.parse(await req.clone().text());
+    return Array.isArray(body) ? body : [body];
+  } catch {
+    return [];
+  }
+}
+
+const NOISE = /^notifications\//; // initialized/cancelled pings: not worth a row
+
 async function handle(req: Request) {
+  const msgs = await rpcMessages(req);
   const customer = await authCustomer(req);
+  const ip = requestIp(req);
+  const init = msgs.find((m) => m.method === "initialize")?.params?.clientInfo;
+  const client = init ? `${init.name ?? "client"}${init.version ? ` ${init.version}` : ""}` : userAgent(req);
+  if (!customer) {
+    const first = msgs.find((m) => m.method && !NOISE.test(m.method));
+    if (first || req.method === "POST")
+      logCall({ channel: "mcp", method: first?.method ?? req.method, tool: first?.params?.name ?? null, outcome: "unauthorized", http_status: 401,
+                summary: "called without an API key (sent sign-up / OAuth instructions)", client, ip });
+  } else {
+    // tools/call rows come from serveMcp's onCall below; log the other methods here.
+    for (const m of msgs) {
+      if (!m.method || m.method === "tools/call" || NOISE.test(m.method)) continue;
+      logCall({ customer, channel: "mcp", method: m.method, outcome: "ok", http_status: 200, client, ip,
+                summary: m.method === "initialize" ? `connected${init ? ` from ${client}` : ""}` : m.method === "tools/list" ? "listed the tools" : m.method });
+    }
+  }
   if (!customer)
     return Response.json({
       error: "unauthorized: send Authorization: Bearer <your Operis key>",
@@ -43,6 +74,10 @@ async function handle(req: Request) {
     },
     cancel_job: (a) => cancelJob(a, ctx, customer.id),
     setup_payment: () => setupPayment(customer.id, createPaymentSetupLink),
-  }, INSTRUCTIONS);
+  }, INSTRUCTIONS, (e) => {
+    const s = e.ok ? summarize(e.tool, e.args, e.out) : { summary: `${e.tool} failed: ${e.error?.message ?? ""}`, job_id: e.args?.job_id ?? null, outcome: "error" as const };
+    logCall({ customer, channel: "mcp", method: "tools/call", tool: e.tool, outcome: s.outcome, http_status: 200, duration_ms: e.ms,
+              job_id: s.job_id, summary: s.summary, client, ip });
+  });
 }
 export { handle as GET, handle as POST, handle as DELETE };
