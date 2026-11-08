@@ -4,7 +4,7 @@ Run top to bottom before the demo. Each test says **how**, **expected**, and **w
 Production: website `https://operis.live`, API `https://api.operis.live`. Secrets live in `apps/api/.env.local` (never in chat).
 
 **Setup for checking:** `export ADMIN_KEY=…` (from `.env.local`). Keep open: the backoffice
-(`https://operis.live/backoffice`), the founder console (`https://api.operis.live/admin?key=$ADMIN_KEY`), and Stripe test mode.
+(`https://admin.operis.live`, founder email + password), the founder console (`https://api.operis.live/admin?key=$ADMIN_KEY`), and Stripe test mode.
 To run the smoke test against production you need the production `DATABASE_URL`:
 `npx vercel env pull /tmp/prod.env --environment production --yes`.
 

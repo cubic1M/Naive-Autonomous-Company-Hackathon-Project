@@ -12,7 +12,7 @@
 |---|---|
 | https://operis.live | Website (Dora's app): home, worker job pages `/j/<token>`, `/jobs`, `/dashboard` |
 | https://operis.live/developers | **Agent companies**: self-serve API key, connect instructions, copy-paste agent prompt, key test |
-| https://operis.live/backoffice | **Founders**: live requests by company, agent activity, proofs (admin key) |
+| https://admin.operis.live | **Founders**: live requests by company, agent activity, proofs (sign in with your founder email) |
 | https://operis.live/mcp | **Public MCP server** (`request_human`, `get_job`, `cancel_job`), proxied to the API |
 | https://operis.live/llms.txt | Guide for agents |
 | https://api.operis.live | API directly (MCP, REST, webhooks); founder console at `/admin` |

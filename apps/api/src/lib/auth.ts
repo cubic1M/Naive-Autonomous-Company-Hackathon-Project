@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { sql } from "./db";
 import { optional } from "./env";
+import { verifySession } from "./adminSession";
 
 export const hashKey = (k: string) => createHash("sha256").update(k).digest("hex");
 export const newCustomerKey = () => "opk_" + randomBytes(24).toString("base64url");
@@ -41,5 +42,6 @@ export function authAdmin(req: Request): boolean {
   if (!expected) return false;
   const cookie = (req.headers.get("cookie") ?? "").match(/(?:^|;\s*)operis_admin=([^;]+)/)?.[1];
   const got = bearer(req) ?? new URL(req.url).searchParams.get("key") ?? (cookie ? decodeURIComponent(cookie) : null);
-  return got === expected;
+  if (got === expected) return true;
+  return verifySession(got) !== null; // founder login session (POST /v1/admin/login)
 }
