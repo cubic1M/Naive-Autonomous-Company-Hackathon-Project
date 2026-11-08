@@ -135,6 +135,7 @@ p { margin: 0; }
   box-shadow: var(--shadow);
 }
 .stack { display: flex; flex-direction: column; gap: 12px; }
+.stack > * { min-width: 0; }
 .row { display: flex; align-items: center; gap: 10px; }
 .between { justify-content: space-between; }
 .wrap { flex-wrap: wrap; }

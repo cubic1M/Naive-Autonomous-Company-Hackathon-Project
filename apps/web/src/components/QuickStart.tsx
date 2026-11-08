@@ -19,7 +19,7 @@ export default function QuickStart({ compact = false, dark = false }: { compact?
       </p>
       <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: "#17211A", border: "1px solid #2F3D33", borderRadius: 14, padding: compact ? "14px 14px 14px 20px" : "18px 18px 18px 24px", boxShadow: "0 18px 40px rgba(23,33,26,0.22)" }}>
         <span style={{ fontFamily: "var(--font-mono)", color: "#7A8178", fontSize: 15 }}>$</span>
-        <code style={{ flex: 1, textAlign: "left", fontFamily: "var(--font-mono)", color: "#E9E5DC", fontSize: compact ? 15 : 17, overflowX: "auto", whiteSpace: "nowrap" }}>{SHOWN_COMMAND}</code>
+        <code style={{ flex: 1, minWidth: 0, wordBreak: "break-all", textAlign: "left", fontFamily: "var(--font-mono)", color: "#E9E5DC", fontSize: compact ? 15 : 17, overflowX: "auto", whiteSpace: "pre-wrap" }}>{SHOWN_COMMAND}</code>
         <button type="button" onClick={copy} aria-label="Copy instruction for your agent"
           style={{ flexShrink: 0, border: 0, borderRadius: 10, padding: "10px 14px", background: copied ? "#A9C0A2" : "#46664F", color: copied ? "#17211A" : "#F7F4EE", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
           {copied ? "Copied" : "Copy"}

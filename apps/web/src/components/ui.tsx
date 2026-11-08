@@ -64,6 +64,10 @@ export const Expired = () => (
     <p className="muted">
       Job links only work for a limited time. If we have another job near you, we&apos;ll send you a new link.
     </p>
+    <div className="row wrap" style={{ gap: 10, justifyContent: "center" }}>
+      <a className="btn" href="/signup?next=/jobs">Sign up to get jobs</a>
+      <a className="btn outline" href="/jobs">Browse open requests</a>
+    </div>
   </Message>
 );
 
