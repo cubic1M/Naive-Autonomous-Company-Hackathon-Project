@@ -17,7 +17,7 @@ Two kinds of jobs:
 |---|---|---|
 | `operis.get_job` | Read the job before anything else | free |
 | `operis.find_people({ job_id, limit, hints })` | Ranked candidates: `candidate_id, name, channel, source, distance_km (null for remote), score` | ~$0.01-$0.25 per call (Monid scraping, capped server-side) |
-| `operis.send_blast({ job_id, candidate_ids })` | Emails candidates with a signed link; DMs for `*_manual` candidates are drafted and queued. Returns `sent, skipped_opted_out, queued_manual, outreach_ids` | email free; SMS a few cents |
+| `operis.send_blast({ job_id, candidate_ids })` | Emails candidates with a short personal accept link. Runs automatically, no approval needed. Returns `sent, skipped_opted_out, queued_manual, outreach_ids` | email ~free; SMS a few cents |
 | `operis.manual_queue({ job_id?, status? })` | Lists queued DMs: `id, platform, profile_url, message` | free |
 | `operis.mark_manual_sent({ id, status })` | A teammate sent (`sent`) or dropped (`skipped`) a queued DM | free |
 
@@ -47,7 +47,8 @@ If a credential is required, candidates without it are ranked far lower: still c
 
 - `email`: public work email found for the person. `send_blast` sends it automatically.
 - `sms`: only consenting regulars. Automatic.
-- `linkedin_manual`, `x_manual`, `reddit_manual`, `instagram_manual`: no email found, only a public profile. These platforms ban automated DMs, so `send_blast` only **drafts and queues** the DM. A teammate sends it from a real Operis account.
+- Operis is **fully autonomous**: by default `find_people` only returns people we can email (or consenting regulars by SMS). Nobody needs to approve or send anything.
+- (Only if the manual queue is switched on: `linkedin_manual`, `x_manual`, `reddit_manual`, `instagram_manual` mean no email was found, so `send_blast` drafts and queues a DM for a teammate. Platforms ban automated DMs.)
   - After the blast, if `queued_manual > 0`, comment on the board card: "N DMs queued for a teammate to send" (list the platforms).
   - **Never claim a manual DM was sent.** Only `mark_manual_sent` (a teammate) changes that. Check `manual_queue` if asked.
 

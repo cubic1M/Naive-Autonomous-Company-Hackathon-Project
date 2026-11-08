@@ -14,12 +14,12 @@
       "tools": {
         "operis.get_job": "allow",
         "operis.find_people": "allow",
-        "operis.send_blast": "ask",
+        "operis.send_blast": "allow",
         "board_read": "allow",
         "board_write": "allow"
       },
       "skills": [
-        "worker-sourcing@1"
+        "worker-sourcing@2"
       ],
       "schedules": [
         {
@@ -30,7 +30,7 @@
           "enabled": false
         }
       ],
-      "$comment": "Approved by Andrew (services/outreach/docs/NAIVE.md): skill worker-sourcing@1; find_people allow; send_blast ask until OUTREACH_LIVE=true. Re-blast schedule is created disabled; enable once live."
+      "$comment": "Approved by Andrew (services/outreach/docs/NAIVE.md): skill worker-sourcing@2; find_people allow; send_blast allow (fully autonomous; real sends gated server-side by OUTREACH_LIVE / OUTREACH_TEST_ALLOWLIST). Re-blast schedule is created disabled; enable once live."
     },
     "verifier": {
       "name": "operis-verifier",
