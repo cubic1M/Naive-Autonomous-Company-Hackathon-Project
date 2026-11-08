@@ -195,8 +195,8 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   list_prospects:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   send_marketing:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   suppress_contact: { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
-  recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
-  recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
+  recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
+  recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
   redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
 };
