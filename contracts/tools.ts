@@ -78,6 +78,8 @@ export interface Tools {
       reason?: string;
       /** Set when a passed or saved card could not be charged and escrow_url is the fallback: card_declined, authentication_required, invalid_payment_method, ... */
       fallback_reason?: string;
+      /** Set when x402 USDC payments are on: an agent wallet funds the job itself by paying url (GET). */
+      x402?: { url: string; method: string; network: string; asset: string; amount_usd: number; how: string };
       next_step?: string;
     }
   >;

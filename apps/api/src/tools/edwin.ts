@@ -7,6 +7,7 @@ import { flag } from "@/lib/env";
 import { unknownPaymentMethodText } from "@/lib/stripe-mode";
 import * as compliance from "@services/compliance/index";
 import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
+import { networkLabel, x402Enabled, x402Offer } from "@/lib/x402";
 
 /** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
 export const STATUS_MEANING: Record<string, string> = {
@@ -88,7 +89,7 @@ function paymentNeeded(fallbackReason?: string): string {
  * the webhook. payment_intent.amount_capturable_updated can reach the webhook first and move it there itself; then the
  * job is already held and that is not an error.
  */
-async function markFunded(ctx: ToolContext, jobId: string): Promise<void> {
+export async function markFunded(ctx: ToolContext, jobId: string): Promise<void> {
   try {
     await ctx.transition(jobId, "held");
   } catch (e) {
@@ -160,9 +161,14 @@ export async function requestHuman(
       return { job_id: job.id, status: "held", quote_usd: chargeUsd, escrow_url: null,
         next_step: `Funded: your card is held, charged only when proof passes. ${FINDING} ${liabilityNote}` };
     }
+    // x402 (when on): an agent with a USDC wallet funds the job itself, no human (Naïve wallet.pay, Coinbase agent wallets).
+    const x402 = x402Enabled() ? x402Offer(job.id, chargeUsd) : undefined;
     return { job_id: job.id, status: "requested", quote_usd: chargeUsd, escrow_url: hold.escrow_url,
       ...(hold.fallback_reason ? { fallback_reason: hold.fallback_reason } : {}),
-      next_step: `${paymentNeeded(hold.fallback_reason)} ${liabilityNote}` };
+      ...(x402 ? { x402 } : {}),
+      next_step: x402
+        ? `If you have an x402 wallet, fund it yourself now: pay x402.url ($${chargeUsd} USDC on ${networkLabel(x402.network)}; on Naïve call wallet.pay with that url), then the job is held. Otherwise: ${paymentNeeded(hold.fallback_reason)} ${liabilityNote}`
+        : `${paymentNeeded(hold.fallback_reason)} ${liabilityNote}` };
   }
   await ctx.ledger(job.id, "hold", chargeUsd, "mock");
   await ctx.transition(job.id, "held");
