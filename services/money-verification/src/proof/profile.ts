@@ -14,6 +14,7 @@
  * minimum by max, and only for a photo proof (a video- or files-only requirement has no tier photo minimum).
  * `required_tier` is not read here: it is the minimum worker tier (eligibility.ts).
  */
+import type { IdentityGate } from '../env.js';
 import type { Job } from '../types.js';
 
 export type VerificationTier = 0 | 1 | 2;
@@ -32,6 +33,8 @@ export interface TierRules {
 
 export interface VerificationProfile extends TierRules {
   tier: VerificationTier;
+  /** identityRequired under IDENTITY_GATE=enforce. Under 'log' the identity check is recorded but never blocks. */
+  identityEnforced: boolean;
   /** The customer requires a certification (a notary commission, or anything in jobs.certification_required). */
   certificationRequired: boolean;
   /** How the tier was derived, one line per rule that applied; shown in check_proof evidence. */
@@ -70,7 +73,8 @@ export function requiredCertification(written: string | null | undefined): strin
   return NO_CERTIFICATION.has(value.toLowerCase().replace(/\s+/g, ' ')) ? null : value;
 }
 
-export function verificationProfile(job: Job): VerificationProfile {
+/** `identityGate` is IDENTITY_GATE (env.ts); omitted, the identity rule is enforced. */
+export function verificationProfile(job: Job, opts: { identityGate?: IdentityGate } = {}): VerificationProfile {
   const notes: string[] = [];
   let tier = budgetTier(job.budget_cents);
   notes.push(`budget ${usd(job.budget_cents)}: tier ${tier}`);
@@ -107,7 +111,10 @@ export function verificationProfile(job: Job): VerificationProfile {
     notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
   }
 
-  return { tier, ...rules, minPhotos, certificationRequired, notes };
+  const identityEnforced = rules.identityRequired && (opts.identityGate ?? 'enforce') === 'enforce';
+  if (rules.identityRequired && !identityEnforced) notes.push('IDENTITY_GATE=log: the identity check is recorded, not enforced');
+
+  return { tier, ...rules, minPhotos, identityEnforced, certificationRequired, notes };
 }
 
 /** One line for the evidence an agent reads, e.g. "tier 2: confidence >= 0.9, >= 2 photos, EXIF capture time required, verified identity required". */
@@ -116,7 +123,7 @@ export function describeProfile(p: VerificationProfile): string {
     `confidence >= ${p.confidenceThreshold}`,
     `>= ${p.minPhotos} photo${p.minPhotos === 1 ? '' : 's'}`,
     p.exifTimePolicy === 'require' ? 'EXIF capture time required' : 'device capture time accepted when EXIF has none',
-    p.identityRequired ? 'verified identity required' : 'no identity check',
+    p.identityEnforced ? 'verified identity required' : p.identityRequired ? 'identity recorded, not enforced (IDENTITY_GATE=log)' : 'no identity check',
   ];
   if (p.certificationRequired) parts.push('certification required');
   return `tier ${p.tier}: ${parts.join(', ')}`;
@@ -130,6 +137,7 @@ export function profileData(p: VerificationProfile): Record<string, unknown> {
     min_photos: p.minPhotos,
     exif_time_policy: p.exifTimePolicy,
     identity_required: p.identityRequired,
+    identity_enforced: p.identityEnforced,
     certification_required: p.certificationRequired,
     notes: p.notes,
   };

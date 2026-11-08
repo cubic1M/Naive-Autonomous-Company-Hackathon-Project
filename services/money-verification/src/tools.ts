@@ -98,6 +98,7 @@ export function createTools(deps: ToolDeps): Tools {
     readMedia: deps.readMedia,
     frameExtractor: deps.frameExtractor,
     now: deps.now,
+    env: deps.env,
   };
   const parse = <N extends ToolName>(name: N, input: unknown) => toolSchemas[name].input.parse(input) as ToolInput<N>;
 
@@ -190,7 +191,7 @@ export function createTools(deps: ToolDeps): Tools {
     },
     async check_eligibility(raw) {
       const { worker_id, job_id } = parse('check_eligibility', raw);
-      return checkEligibility({ repo: deps.repo }, { workerId: worker_id, jobId: job_id });
+      return checkEligibility({ repo: deps.repo, env: deps.env }, { workerId: worker_id, jobId: job_id });
     },
     async get_dispute(raw) {
       const { dispute_id } = parse('get_dispute', raw);

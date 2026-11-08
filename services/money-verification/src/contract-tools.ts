@@ -107,6 +107,7 @@ export function createContractTools(deps: ToolDeps): ContractTools {
     readMedia: deps.readMedia,
     frameExtractor: deps.frameExtractor,
     now: deps.now,
+    env: deps.env,
   };
 
   return {

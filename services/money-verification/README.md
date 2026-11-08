@@ -100,7 +100,7 @@ Strictness scales with what is at stake, so the agents close cheap jobs on their
 |---|---|---|---|---|---|
 | 0 | budget under $50, no certification | ≥ 1 | EXIF when present; otherwise the proof's device `captured_at` counts (the device GPS still has to be inside the fence) | ≥ 0.80 | not required |
 | 1 | $50 to $150 | ≥ 1 | EXIF required; a missing EXIF time is a review flag (the rule before tiers) | ≥ 0.85 | not required |
-| 2 | over $150, or any `certification_required` / `task_type: notarization` | ≥ 2 | EXIF required | ≥ 0.90 | verified Stripe Identity required; a proof from a worker without one escalates, never approves |
+| 2 | over $150, or any `certification_required` / `task_type: notarization` | ≥ 2 | EXIF required | ≥ 0.90 | verified Stripe Identity required under `IDENTITY_GATE=enforce`: a proof from a worker without one escalates, never approves. The default `log` records the check without blocking |
 
 How the tier composes:
 
@@ -170,6 +170,7 @@ Hooks are awaited. A throwing hook does not roll back the money write that prece
 | `PUBLIC_BASE_URL` | No trailing slash. Checkout success/cancel, Connect return and Stripe Identity return URLs (`/join/<workerId>/identity/done`). |
 | `DAILY_ESCROW_CAP_CENTS` | Rolling 24h cap on new holds. Default `200000`. Alias `DAILY_HOLD_CAP_CENTS`. |
 | `PAYOUT_CAP_CENTS` | Per-job payout or refund above this needs CEO agent approval. Default `15000`. |
+| `IDENTITY_GATE` | `enforce` or `log`, default `log`. Under `log` the tier-2 identity check is recorded in the review (`data.enforced: false`, `data.verified` true or false) and `check_eligibility` lists `identity_not_verified … not enforced` without making the worker ineligible, but it blocks neither `check_proof` nor `approve_proof`; tier 2 keeps 2 photos, EXIF and 0.90. Set `enforce` once the job page sends tier-2 workers through Stripe Identity before proof upload: Edwin's `POST /v1/worker/identity` exists, but nothing calls it yet (that is Dora's job-page step). Any other value fails at startup. |
 | `VERIFIER_BASE_URL`, `VERIFIER_API_KEY`, `VERIFIER_MODEL` | OpenAI-compatible vision endpoint via Naïve's model router. When any is missing, `scorerFromEnv` returns `null` and every proof escalates. |
 | `DATABASE_URL` | Used only by `scripts/import-notaries.ts`. |
 

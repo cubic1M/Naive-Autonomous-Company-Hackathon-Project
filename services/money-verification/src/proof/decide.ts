@@ -1,3 +1,4 @@
+import type { Env } from '../env.js';
 import { fire, type Hooks } from '../hooks.js';
 import { InvalidStateError, NotFoundError } from '../errors.js';
 import type { Repo } from '../repo.js';
@@ -20,7 +21,11 @@ export interface DecideDeps extends ChecksDeps {
   now?: () => Date;
   /** Replaces the tier's confidence threshold for every job (tests, an emergency). Normally unset. */
   confidenceThreshold?: number;
+  /** IDENTITY_GATE; without env the tier-2 identity rule is enforced. */
+  env?: Pick<Env, 'IDENTITY_GATE'>;
 }
+
+const profileFor = (deps: DecideDeps, job: Job): VerificationProfile => verificationProfile(job, { identityGate: deps.env?.IDENTITY_GATE });
 
 function note(name: string, status: ProofCheck['status'], detail: string, data?: Record<string, unknown>): ProofCheck {
   return { name, status, pass: status === 'pass', detail, ...(data ? { data } : {}) };
@@ -35,17 +40,19 @@ const profileCheck = (profile: VerificationProfile): ProofCheck => note('profile
 
 /**
  * Tier 2: the worker must hold a verified Stripe Identity. Only the status goes into the review; the
- * verified name stays in worker_verifications.
+ * verified name stays in worker_verifications. Under IDENTITY_GATE=log the check is recorded (enforced
+ * false, verified true or false) and passes, so it never blocks a review or an approval.
  */
-async function identityCheck(repo: Pick<Repo, 'getWorkerVerification'>, workerId: string, tier: number): Promise<ProofCheck> {
+async function identityCheck(repo: Pick<Repo, 'getWorkerVerification'>, workerId: string, profile: VerificationProfile): Promise<ProofCheck> {
   const v = await repo.getWorkerVerification(workerId, 'identity');
-  if (v?.status === 'verified') {
-    return note('identity', 'pass', 'verified identity on file', { status: 'verified', verified_at: v.verified_at?.toISOString() ?? null });
-  }
+  const verified = v?.status === 'verified';
+  const data = { status: v?.status ?? null, enforced: profile.identityEnforced, verified, ...(verified ? { verified_at: v.verified_at?.toISOString() ?? null } : {}) };
+  if (verified) return note('identity', 'pass', 'verified identity on file', data);
   const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-  return note('identity', 'needs_review', `tier ${tier} requires a verified identity; ${has} (the worker starts one with verify_identity)`, {
-    status: v?.status ?? null,
-  });
+  if (!profile.identityEnforced) {
+    return note('identity', 'pass', `${has}; not enforced (IDENTITY_GATE=log), so it does not block approval`, data);
+  }
+  return note('identity', 'needs_review', `tier ${profile.tier} requires a verified identity; ${has} (the worker starts one with verify_identity)`, data);
 }
 
 async function loadProofAndJob(repo: Repo, proofId: string): Promise<{ proof: Proof; job: Job }> {
@@ -122,7 +129,7 @@ interface Assessment {
 /** The automated review's checks and verdict, computed but not recorded (reviewProof records them). */
 async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessment> {
   const { proof, job } = await loadProofAndJob(deps.repo, proofId);
-  const profile = verificationProfile(job);
+  const profile = profileFor(deps, job);
   const { checks: deterministic } = await runChecks(deps, job, proof, profile);
   const checks: ProofCheck[] = [profileCheck(profile), ...deterministic];
 
@@ -131,7 +138,7 @@ async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessmen
   if (checks.some(isHardFail)) {
     decision = 'rejected';
   } else {
-    if (profile.identityRequired) checks.push(await identityCheck(deps.repo, proof.worker_id, profile.tier));
+    if (profile.identityRequired) checks.push(await identityCheck(deps.repo, proof.worker_id, profile));
     const imageUrls = await gatherImageUrls(deps, proof, checks);
     confidence = await runVision(deps, job, imageUrls, checks, thresholdFor(deps, profile));
     decision = checks.every((c) => c.status === 'pass') ? 'approved' : 'escalated';
@@ -186,7 +193,7 @@ async function reviewOnRecord(deps: DecideDeps, proofId: string): Promise<ProofR
 
 /**
  * Human or agent approval. Out-of-fence and reused media can never be overridden (fraud signals, not
- * judgment calls), nor can a missing identity on a tier-2 job; low confidence can, but only on an
+ * judgment calls), nor can a missing identity on a tier-2 job under IDENTITY_GATE=enforce; low confidence can, but only on an
  * explicit override. The identity is checked live rather than read from the stored review, so a worker
  * who verified after the automated review is not blocked by a stale check.
  */
@@ -196,13 +203,13 @@ export async function approveProof(
 ): Promise<ProofReview> {
   const { proof, job } = await loadProofAndJob(deps.repo, input.proofId);
   const review = await reviewOnRecord(deps, input.proofId);
-  const profile = verificationProfile(job);
+  const profile = profileFor(deps, job);
   const failed = (name: string) => review.checks.some((c) => c.name === name && c.status === 'fail');
   if (failed('geofence')) throw new InvalidStateError('outside_geofence: proof was captured outside the job geofence');
   if (failed('reuse')) throw new InvalidStateError('reused_media: proof media was already used on another job');
   const extra: ProofCheck[] = [];
   if (profile.identityRequired) {
-    const identity = await identityCheck(deps.repo, proof.worker_id, profile.tier);
+    const identity = await identityCheck(deps.repo, proof.worker_id, profile);
     if (identity.status !== 'pass') throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
     if (!review.checks.some((c) => c.name === 'identity' && c.status === 'pass')) extra.push(identity);
   }

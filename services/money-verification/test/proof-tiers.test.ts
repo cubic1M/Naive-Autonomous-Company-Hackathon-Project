@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createContractTools } from '../src/contract-tools.js';
 import { checkEligibility } from '../src/eligibility.js';
 import { approveProof, reviewProof, type DecideDeps } from '../src/proof/decide.js';
+import type { IdentityGate } from '../src/env.js';
 import type { ExifData } from '../src/proof/exif.js';
 import type { VisionInput, VisionScorer } from '../src/proof/vision.js';
 import type { Job, Proof, ProofCheck } from '../src/types.js';
@@ -23,7 +24,7 @@ const img = (n: number) => ({ url: `https://blob.test/${n}.jpg`, sha256: String(
 const twoPhotos = { media: [img(1), img(2)] };
 const check = (r: { checks: ProofCheck[] }, name: string) => r.checks.find((c) => c.name === name);
 
-function setup(opts: { job?: Partial<Job>; proof?: Partial<Proof>; exif?: ExifData; confidence?: number } = {}) {
+function setup(opts: { job?: Partial<Job>; proof?: Partial<Proof>; exif?: ExifData; confidence?: number; gate?: IdentityGate } = {}) {
   const world = makeWorld();
   world.repo.seedJob(makeJob(opts.job));
   world.repo.seedWorker(makeWorker());
@@ -35,6 +36,7 @@ function setup(opts: { job?: Partial<Job>; proof?: Partial<Proof>; exif?: ExifDa
     vision,
     readMedia: async () => new Uint8Array([0]),
     readExif: async () => opts.exif ?? FULL_EXIF,
+    ...(opts.gate ? { env: { IDENTITY_GATE: opts.gate } } : {}),
   };
   return { world, deps, vision };
 }
@@ -237,5 +239,46 @@ describe('contract adapters and the identity gate', () => {
     expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'identity_unverified' });
     await seedVerifiedIdentity(world);
     expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: 'id on file' })).toEqual({ job_id: JOB_ID, status: 'approved' });
+  });
+});
+
+describe('IDENTITY_GATE=log: tier 2 keeps its bar, the identity is recorded but never blocks', () => {
+  it('a tier-2 proof without a verified identity is approved; the identity check says enforced false, verified false', async () => {
+    const { deps } = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, confidence: 0.95, gate: 'log' });
+    const review = await reviewProof(deps, PROOF_ID);
+    expect(review.decision).toBe('approved');
+    expect(check(review, 'identity')).toMatchObject({ status: 'pass', data: { enforced: false, verified: false, status: null } });
+    expect(check(review, 'identity')?.detail).toMatch(/not enforced \(IDENTITY_GATE=log\)/);
+    expect(check(review, 'profile')?.data).toMatchObject({ tier: 2, min_photos: 2, confidence_threshold: 0.9, exif_time_policy: 'require', identity_required: true, identity_enforced: false });
+  });
+
+  it('two photos, EXIF and 0.90 still apply in log mode', async () => {
+    const one = setup({ job: { budget_cents: 24000 }, confidence: 0.95, gate: 'log' });
+    expect((await reviewProof(one.deps, PROOF_ID)).decision).toBe('escalated');
+    const noExif = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, exif: NO_EXIF, confidence: 0.95, gate: 'log' });
+    expect(check(await reviewProof(noExif.deps, PROOF_ID), 'time')?.status).toBe('needs_review');
+    const low = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, confidence: 0.87, gate: 'log' });
+    expect((await reviewProof(low.deps, PROOF_ID)).decision).toBe('escalated');
+    await expect(approveProof(low.deps, { proofId: PROOF_ID, reviewer: 'ops' })).rejects.toThrow(/^below_threshold/);
+  });
+
+  it('approveProof does not require the identity in log mode (override lifts only the confidence)', async () => {
+    const { deps } = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, confidence: 0.87, gate: 'log' });
+    const approved = await approveProof(deps, { proofId: PROOF_ID, reviewer: 'ops', override: true });
+    expect(approved.decision).toBe('approved');
+    expect(approved.checks.filter((c) => c.name === 'identity').map((c) => c.data)).toEqual([{ status: null, enforced: false, verified: false }]);
+  });
+
+  it('checkEligibility lists the identity reason as not enforced and keeps the worker eligible', async () => {
+    const world = makeWorld();
+    world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    world.repo.seedWorker(makeWorker());
+    const out = await checkEligibility({ repo: world.repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(out.eligible).toBe(true);
+    expect(out.tier).toBe(2);
+    expect(out.reasons).toHaveLength(1);
+    expect(out.reasons[0]).toMatch(/^identity_not_verified: .*not enforced \(IDENTITY_GATE=log\)$/);
+    const enforced = await checkEligibility({ repo: world.repo, env: { IDENTITY_GATE: 'enforce' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(enforced.eligible).toBe(false);
   });
 });

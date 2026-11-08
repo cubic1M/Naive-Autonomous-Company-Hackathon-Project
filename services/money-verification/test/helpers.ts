@@ -16,6 +16,7 @@ export const TEST_ENV: Env = {
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
   DAILY_ESCROW_CAP_CENTS: 200_000,
   PAYOUT_CAP_CENTS: 15_000,
+  IDENTITY_GATE: 'enforce',
   VERIFIER_BASE_URL: 'https://verifier.test/v1',
   VERIFIER_API_KEY: 'verifier-test-key',
   VERIFIER_MODEL: 'test-vision',
