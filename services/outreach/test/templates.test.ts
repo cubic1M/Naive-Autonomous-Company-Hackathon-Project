@@ -34,7 +34,7 @@ describe('templates', () => {
     expect(m.html).toContain('STOP');
     expect(m.text).toContain('Sun Nov 8, 2:00 PM');
     expect(m.text).toContain('https://operis.test/j/abc123');
-    expect(m.text).toContain('First to accept gets it');
+    expect(m.text).toContain('The first qualified person to accept gets the job');
     expect(m.text.trimEnd().endsWith('Reply STOP to never hear from us again.')).toBe(true);
     expect(m.text).not.toMatch(/<img|https?:\/\/[^\s]*pixel/i);
   });
