@@ -5,6 +5,7 @@ import { sql } from "@/lib/db";
 import { acceptJob, declineJob, openOutreachForPhone } from "@/lib/worker";
 import { outreachConfigured, classifyInbound } from "@/tools/outreach";
 import { sendSms } from "@/lib/messaging";
+import { baseUrl } from "@/lib/env";
 import { later } from "@/lib/naive";
 export const dynamic = "force-dynamic";
 
@@ -54,5 +55,15 @@ async function accept(from: string, code?: string) {
   const o = await openOutreachForPhone(from, code);
   if (!o) { await sendSms(from, code ? `We couldn't find an open job with code ${code}.` : "You have more than one open offer. Reply YES plus the 4-digit code from the message, e.g. YES 1234."); return; }
   const r = await acceptJob(o.id);
-  await sendSms(from, r.ok ? "You got it! Open your job link for details and to upload proof when done." : "Sorry, someone else already took this job.");
+  await sendSms(from, acceptReply(r, `${baseUrl()}/j/${o.token}`));
+}
+
+// A refused accept is not always "someone else took it". Every job needs a verified ID, so a new worker's YES is
+// usually refused for that; send them the job link, where the page offers the missing step.
+function acceptReply(r: { ok: boolean; reason?: string; reasons?: string[] }, link: string): string {
+  if (r.ok) return "You got it! Open your job link for details and to upload proof when done.";
+  if (r.reason !== "not_eligible") return "Sorry, someone else already took this job.";
+  return (r.reasons ?? []).some((x) => x.startsWith("identity_not_verified"))
+    ? `To take this job, verify your ID first (it takes a few minutes): ${link}`
+    : `You can't take this job yet. Open your job link to see what's missing: ${link}`;
 }

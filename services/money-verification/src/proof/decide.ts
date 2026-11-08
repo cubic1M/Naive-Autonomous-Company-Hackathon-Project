@@ -21,7 +21,7 @@ export interface DecideDeps extends ChecksDeps {
   now?: () => Date;
   /** Replaces the tier's confidence threshold for every job (tests, an emergency). Normally unset. */
   confidenceThreshold?: number;
-  /** IDENTITY_GATE; without env the tier-2 identity rule is enforced. */
+  /** IDENTITY_GATE; without env the identity rule (every job) is enforced. */
   env?: Pick<Env, 'IDENTITY_GATE'>;
 }
 
@@ -39,7 +39,7 @@ const thresholdFor = (deps: DecideDeps, profile: VerificationProfile): number =>
 const profileCheck = (profile: VerificationProfile): ProofCheck => note('profile', 'pass', describeProfile(profile), profileData(profile));
 
 /**
- * Tier 2: the worker must hold a verified Stripe Identity. Only the status goes into the review; the
+ * Every job: the worker must hold a verified Stripe Identity. Only the status goes into the review; the
  * verified name stays in worker_verifications. Under IDENTITY_GATE=log the check is recorded (enforced
  * false, verified true or false) and passes, so it never blocks a review or an approval.
  */
@@ -52,7 +52,7 @@ async function identityCheck(repo: Pick<Repo, 'getWorkerVerification'>, workerId
   if (!profile.identityEnforced) {
     return note('identity', 'pass', `${has}; not enforced (IDENTITY_GATE=log), so it does not block approval`, data);
   }
-  return note('identity', 'needs_review', `tier ${profile.tier} requires a verified identity; ${has} (the worker starts one with verify_identity)`, data);
+  return note('identity', 'needs_review', `every job requires a verified identity; ${has} (the worker starts one with verify_identity)`, data);
 }
 
 async function loadProofAndJob(repo: Repo, proofId: string): Promise<{ proof: Proof; job: Job }> {
@@ -138,7 +138,7 @@ async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessmen
   if (checks.some(isHardFail)) {
     decision = 'rejected';
   } else {
-    if (profile.identityRequired) checks.push(await identityCheck(deps.repo, proof.worker_id, profile));
+    checks.push(await identityCheck(deps.repo, proof.worker_id, profile));
     const imageUrls = await gatherImageUrls(deps, proof, checks);
     confidence = await runVision(deps, job, imageUrls, checks, thresholdFor(deps, profile));
     decision = checks.every((c) => c.status === 'pass') ? 'approved' : 'escalated';
@@ -149,8 +149,8 @@ async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessmen
 
 /**
  * Automated review under the job's verification profile: deterministic checks first, then (unless a fraud
- * signal already rejected it) the tier-2 identity gate and the vision scorer. Approved only when every check
- * passes, so a tier-2 proof from a worker without a verified identity always escalates.
+ * signal already rejected it) the identity gate and the vision scorer. Approved only when every check
+ * passes, so under IDENTITY_GATE=enforce a proof from a worker without a verified identity always escalates.
  */
 export async function reviewProof(deps: DecideDeps, proofId: string): Promise<ProofReview> {
   const { proof, job, checks, decision, confidence } = await assessProof(deps, proofId);
@@ -199,7 +199,7 @@ async function reviewOnRecord(deps: DecideDeps, proofId: string): Promise<ProofR
 
 /**
  * Human or agent approval. Out-of-fence and reused media can never be overridden (fraud signals, not
- * judgment calls), nor can a missing identity on a tier-2 job under IDENTITY_GATE=enforce. A stored
+ * judgment calls), nor can a missing identity under IDENTITY_GATE=enforce (only a founder can waive it). A stored
  * completeness or time failure (too few photos or missing fields; a capture time outside the window) and a
  * confidence under the tier's threshold can, but only on an explicit override. needs_review flags are left
  * to the reviewer's judgement. The identity is checked live rather than read from the stored review, and the
@@ -229,15 +229,12 @@ async function approve(
   if (incomplete && !input.override) throw new InvalidStateError(`incomplete: ${incomplete.detail}; pass override to approve anyway`);
   const late = failure('time');
   if (late && !input.override) throw new InvalidStateError(`outside_time_window: ${late.detail}; pass override to approve anyway`);
-  const current: ProofCheck[] = [];
-  if (profile.identityRequired) {
-    let identity = await identityCheck(deps.repo, proof.worker_id, profile);
-    if (identity.status !== 'pass') {
-      if (!by.founder) throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
-      identity = note('identity', 'pass', `${identity.detail}; waived: a founder approved the escalation`, { ...identity.data, waived_by: 'founder' });
-    }
-    current.push(identity);
+  let identity = await identityCheck(deps.repo, proof.worker_id, profile);
+  if (identity.status !== 'pass') {
+    if (!by.founder) throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
+    identity = note('identity', 'pass', `${identity.detail}; waived: a founder approved the escalation`, { ...identity.data, waived_by: 'founder' });
   }
+  const current: ProofCheck[] = [identity];
   const threshold = thresholdFor(deps, profile);
   if (!input.override && (review.confidence === null || review.confidence < threshold)) {
     throw new InvalidStateError(

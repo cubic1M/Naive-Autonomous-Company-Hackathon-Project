@@ -1,13 +1,15 @@
 /**
  * Verification profile: how strictly a proof is checked, derived from the job. Strictness scales with
  * what is at stake, so the agents can close cheap jobs on their own and spend the expensive checks
- * (EXIF capture time, two photos, a verified identity, a 0.90 score) where a wrong approval costs
- * real money or a licence.
+ * (EXIF capture time, two photos, a 0.90 score) where a wrong approval costs real money or a licence.
  *
  *   tier 0  budget under $50, no certification   1 photo, device GPS and device capture time accepted
  *                                                when EXIF has none, confidence >= 0.80
  *   tier 1  $50 to $150                          EXIF capture time required (missing -> review), >= 0.85
- *   tier 2  above $150, or any certification     2 photos, EXIF required, verified identity, >= 0.90
+ *   tier 2  above $150, or any certification     2 photos, EXIF required, >= 0.90
+ *
+ * The identity does not scale: every job, at every tier, needs a worker with a verified Stripe Identity (the
+ * "verified human" Operis promises). IDENTITY_GATE (env.ts) only decides whether a missing one blocks.
  *
  * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2; the
  * customer's own proof requirement (photos.min, must_show, geofence_m, fields) always applies on top, the photo
@@ -27,13 +29,14 @@ export interface TierRules {
   minPhotos: number;
   /** 'require': no EXIF capture time is a review flag. 'device_fallback': the proof's device captured_at stands in. */
   exifTimePolicy: ExifTimePolicy;
-  /** The worker must hold a verified Stripe Identity (worker_verifications kind 'identity'). */
-  identityRequired: boolean;
 }
 
 export interface VerificationProfile extends TierRules {
   tier: VerificationTier;
-  /** identityRequired under IDENTITY_GATE=enforce. Under 'log' the identity check is recorded but never blocks. */
+  /**
+   * Every job requires a verified Stripe Identity (worker_verifications kind 'identity'); this says whether a missing
+   * one blocks (IDENTITY_GATE=enforce, and any caller that passes no gate) or is only recorded (log).
+   */
   identityEnforced: boolean;
   /** The customer requires a certification (a notary commission, or anything in jobs.certification_required). */
   certificationRequired: boolean;
@@ -46,9 +49,9 @@ export const TIER_1_FROM_CENTS = 5_000;
 export const TIER_2_ABOVE_CENTS = 15_000;
 
 export const TIER_RULES: Record<VerificationTier, TierRules> = {
-  0: { confidenceThreshold: 0.8, minPhotos: 1, exifTimePolicy: 'device_fallback', identityRequired: false },
-  1: { confidenceThreshold: 0.85, minPhotos: 1, exifTimePolicy: 'require', identityRequired: false },
-  2: { confidenceThreshold: 0.9, minPhotos: 2, exifTimePolicy: 'require', identityRequired: true },
+  0: { confidenceThreshold: 0.8, minPhotos: 1, exifTimePolicy: 'device_fallback' },
+  1: { confidenceThreshold: 0.85, minPhotos: 1, exifTimePolicy: 'require' },
+  2: { confidenceThreshold: 0.9, minPhotos: 2, exifTimePolicy: 'require' },
 };
 
 const RISK_CLASS_TIER: Record<string, VerificationTier> = { low: 0, standard: 1, high: 2 };
@@ -111,8 +114,8 @@ export function verificationProfile(job: Job, opts: { identityGate?: IdentityGat
     notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
   }
 
-  const identityEnforced = rules.identityRequired && (opts.identityGate ?? 'enforce') === 'enforce';
-  if (rules.identityRequired && !identityEnforced) notes.push('IDENTITY_GATE=log: the identity check is recorded, not enforced');
+  const identityEnforced = (opts.identityGate ?? 'enforce') === 'enforce';
+  if (!identityEnforced) notes.push('IDENTITY_GATE=log: the identity check is recorded, not enforced');
 
   return { tier, ...rules, minPhotos, identityEnforced, certificationRequired, notes };
 }
@@ -123,7 +126,7 @@ export function describeProfile(p: VerificationProfile): string {
     `confidence >= ${p.confidenceThreshold}`,
     `>= ${p.minPhotos} photo${p.minPhotos === 1 ? '' : 's'}`,
     p.exifTimePolicy === 'require' ? 'EXIF capture time required' : 'device capture time accepted when EXIF has none',
-    p.identityEnforced ? 'verified identity required' : p.identityRequired ? 'identity recorded, not enforced (IDENTITY_GATE=log)' : 'no identity check',
+    p.identityEnforced ? 'verified identity required' : 'identity recorded, not enforced (IDENTITY_GATE=log)',
   ];
   if (p.certificationRequired) parts.push('certification required');
   return `tier ${p.tier}: ${parts.join(', ')}`;
@@ -136,7 +139,7 @@ export function profileData(p: VerificationProfile): Record<string, unknown> {
     confidence_threshold: p.confidenceThreshold,
     min_photos: p.minPhotos,
     exif_time_policy: p.exifTimePolicy,
-    identity_required: p.identityRequired,
+    identity_required: true, // every job; kept so readers of identity_required need no change
     identity_enforced: p.identityEnforced,
     certification_required: p.certificationRequired,
     notes: p.notes,

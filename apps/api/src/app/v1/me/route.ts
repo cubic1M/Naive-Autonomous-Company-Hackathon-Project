@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 async function syncIdentity(a: any) {
   if (!a.worker_id || a.identity_status === "verified") return a;
   try {
-    const [v] = await sql`select status from worker_verifications where worker_id = ${a.worker_id} and kind = 'identity'
-                          order by created_at desc limit 1`;
+    // (worker_id, kind) is the primary key, so there is at most one row; the table has no created_at to order by.
+    const [v] = await sql`select status from worker_verifications where worker_id = ${a.worker_id} and kind = 'identity'`;
     const map: Record<string, string> = { verified: "verified", pending: "processing", needs_review: "requires_input", failed: "requires_input" };
     const s = v ? map[v.status] : null;
     if (s && s !== a.identity_status) {

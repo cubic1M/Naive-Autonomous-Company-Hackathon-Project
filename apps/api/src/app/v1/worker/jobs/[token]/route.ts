@@ -10,9 +10,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!o) return Response.json({ error: "not_found" }, { status: 404 });
   if (["sent", "dry_run", "queued"].includes(o.outreach_status)) await sql`update outreach set status = 'opened' where id = ${o.outreach_id}`;
   const youAreAssigned = o.assigned_worker_id === o.worker_id;
-  // Verification tier (Cameron, PR #17): tier 2 jobs need a verified Stripe Identity before proof.
+  // Every job needs a verified Stripe Identity (services/money-verification eligibility.ts), whatever its tier (PR #17).
   let verification: { verification_tier: number | null; identity_required: boolean; identity_verified: boolean | null } =
-    { verification_tier: null, identity_required: false, identity_verified: null };
+    { verification_tier: null, identity_required: true, identity_verified: null };
   // Cameron's liability model (services/compliance): the licence this worker still has to prove through
   // POST /v1/worker/license before accepting (L1 notary commission, L2 State Bar), and who provides the work.
   let licence_needed: "notary" | "attorney" | null = null;
@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const r: any = await (mv as any).checkEligibility((mv as any).depsFromProcessEnv(), { workerId: o.worker_id, jobId: o.job_id });
     verification = {
       verification_tier: r.tier ?? null,
-      identity_required: r.tier === 2,
+      identity_required: true,
       identity_verified: !(r.reasons ?? []).some((x: string) => x.startsWith("identity_not_verified")),
     };
     const licence = (r.reasons ?? []).find((x: string) => /^(notary|attorney)_/.test(x));

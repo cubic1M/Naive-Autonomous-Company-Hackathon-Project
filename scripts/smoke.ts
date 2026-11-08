@@ -1,6 +1,7 @@
 // Calls every MCP tool once against the API and checks the response shape.
 // Usage: npm run smoke            (API defaults to API_BASE_URL or http://localhost:3001)
 // Tip: run with the Naïve agents NOT configured on the server, or they'll act on the smoke job too.
+// The worker it plays has no Stripe Identity and every job needs one, so run the API with IDENTITY_GATE=log for smoke.
 import postgres from "postgres";
 import { createHash, randomBytes } from "node:crypto";
 import { API } from "./env";
@@ -63,7 +64,8 @@ await check("send_blast", () => internal.call("send_blast", { job_id: jobId, can
 // play the worker over REST (what Dora's pages call)
 const [o] = await sql`select token from outreach where job_id = ${jobId} order by created_at limit 1`;
 await check("worker GET job page", () => fetch(`${API}/v1/worker/jobs/${o?.token}`).then((r) => r.json()), (r) => r.can_accept === true || JSON.stringify(r));
-await check("worker accept", () => fetch(`${API}/v1/worker/jobs/${o?.token}/accept`, { method: "POST" }).then((r) => r.json()), (r) => r.ok === true || JSON.stringify(r));
+await check("worker accept", () => fetch(`${API}/v1/worker/jobs/${o?.token}/accept`, { method: "POST" }).then((r) => r.json()), (r) =>
+  r.ok === true || (JSON.stringify(r).includes("identity_not_verified") ? "identity_not_verified: run the API with IDENTITY_GATE=log for smoke (its worker has no Stripe Identity)" : JSON.stringify(r)));
 await check("worker proof", () => fetch(`${API}/v1/worker/jobs/${o?.token}/proof`, {
   method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ media: [{ url: "https://picsum.photos/seed/a/800", kind: "image/jpeg" }, { url: "https://picsum.photos/seed/b/800", kind: "image/jpeg" }],

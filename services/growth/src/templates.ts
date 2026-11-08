@@ -92,7 +92,7 @@ export function renderInvite(c: InviteCopy): EmailMessage {
     'Want job offers? Join with one click (no account, no fee):',
     c.joinUrl,
     '',
-    'After joining you can verify your ID once with Stripe (about 2 minutes). Larger jobs and jobs that need a license require a verified ID.',
+    'After joining, verify your ID once with Stripe (about 2 minutes). Every job requires a verified ID.',
     '',
     'Every job shows its pay before you accept, and you are paid when the work is approved. Take only the jobs you want.',
     '',
