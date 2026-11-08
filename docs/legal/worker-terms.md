@@ -1,7 +1,9 @@
 # Operis Worker Terms
 
 **Draft for counsel review, not legal advice.** No lawyer has reviewed this, and it is not in effect. It takes
-effect only once the job page shows this version next to the Accept button and the API records it.
+effect only once the job page names this version and the job's terms next to the Accept button and the API records
+them. The two liability models are a design the founders chose on 8 Nov 2026; the code that picks a job's model
+isn't built yet.
 
 **Version:** `2026-11-08`
 
@@ -10,13 +12,24 @@ founders set the limits, review proof the agents can't decide, and handle anythi
 _[Founders: add Operis's legal name and mailing address here.]_ The Privacy page (operis.live/privacy) covers the
 rest of what we store about you and what you control.
 
-## You're independent
+## How these terms are organised
+
+Every job has one of two liability models, which say who is responsible to the company for the work. Operis picks
+the model for each job after the company has paid for it and before the job is offered to anyone. The job page shows
+which one applies, and the line under the Accept button names it. The shared terms apply to every job, and then
+exactly one set of job terms applies: [Operis jobs](#operis-jobs-operis) or
+[connector jobs](#connector-jobs-connector).
+
+## Shared terms (every job)
+
+### You're independent
 
 You work as an independent contractor, not an Operis employee. You choose which jobs to accept, and you can stop
 at any time. You decide whether to take a job and when to do it before its deadline, using your own phone and
-tools. There's no minimum number of jobs and no schedule, and you're free to work for anyone else.
+tools. There's no minimum number of jobs and no schedule, and you're free to work for anyone else. Who your client
+is depends on the job: see the job terms below.
 
-## Choosing jobs
+### Choosing jobs
 
 - We tell you about jobs by email, by text (only if you agreed to get texts), or by a direct message on a
   professional or social site.
@@ -27,15 +40,15 @@ tools. There's no minimum number of jobs and no schedule, and you're free to wor
 - You never have to accept. You can decline, tell us why, or ignore the message.
 - To accept, tap Accept on the job page. Replying YES to a text doesn't accept a job: we text you the link instead.
 
-## Doing the job
+### Doing the job
 
 - Do the job as described, before the deadline.
 - Upload honest proof: taken by you, on site, at the time.
-- Licensed work is done under your own license, in your own name.
+- Licensed work is done under your own license, in your own name (see connector jobs).
 - Never sign contracts, pass CAPTCHAs, receive one-time codes or pretend to be the company's agent.
 - If the deadline passes before you upload proof, the job ends and isn't paid. There's no penalty fee.
 
-## Your proof
+### Your proof
 
 - Upload the photos, video or files the job asks for. For on-site jobs, upload them from the job location: the
   proof page needs your phone's location before it can send proof.
@@ -48,7 +61,7 @@ tools. There's no minimum number of jobs and no schedule, and you're free to wor
   them to the company that posted the job to use for what the job was for, and use them as evidence if a payment
   is disputed.
 
-## Getting paid
+### Getting paid
 
 - The company that posts a job sets its price. You get 75% of the posted price, and Operis keeps 25% as its fee.
   A $60 job pays you $45, and Operis keeps $15. The smallest job is $20.
@@ -61,7 +74,7 @@ tools. There's no minimum number of jobs and no schedule, and you're free to wor
 - If your share of one job is over $150, the payout needs an extra approval inside Operis before it's sent.
 - Pay is in US dollars.
 
-## If proof is rejected, a job expires, or a charge is disputed
+### If proof is rejected, a job expires, or a charge is disputed
 
 - If your proof is rejected (faked, taken somewhere else, reused, or doesn't match the job), you're not paid, and
   the company's card isn't charged or the company is refunded. Repeat issues can close your account.
@@ -70,7 +83,7 @@ tools. There's no minimum number of jobs and no schedule, and you're free to wor
   keep your pay. We handle the dispute and may use your proof as evidence.
 - If we find your proof was faked, we may ask you to pay it back, and we may close your account.
 
-## Your location, device and ID data
+### Your location, device and ID data
 
 What we collect, and why:
 
@@ -100,12 +113,13 @@ Who sees it:
 How long we keep it: we don't delete this data on a schedule yet. You can ask us to delete yours at
 ops@operis.live. We may need to keep some records, for example for payments, taxes or disputes.
 
-## What we record when you accept
+### What we record when you accept
 
-When you tap Accept, we record which version of these terms was next to the button, the time, and the internet
-(IP) address the request came from. That's our record of what you agreed to for that job.
+When you tap Accept, we record which version of these terms was next to the button, which job terms it named (an
+Operis job or a connector job), the time, and the internet (IP) address the request came from. That's our record of
+what you agreed to for that job.
 
-## Safety and your right to say no
+### Safety and your right to say no
 
 - You can turn down any job, and you can stop a job that feels unsafe. Your safety comes first.
 - Don't break the law, go onto private property without permission, or put yourself or anyone else at risk to
@@ -114,7 +128,7 @@ When you tap Accept, we record which version of these terms was next to the butt
 - If you stop a job, it isn't paid, and there's no penalty fee.
 - Operis doesn't provide insurance for you.
 
-## Jobs we don't allow
+### Jobs we don't allow
 
 We screen job requests for these, but our filter can miss things. If a job looks wrong, decline it and tell us.
 
@@ -129,27 +143,51 @@ We screen job requests for these, but our filter can miss things. If a job looks
   driving passengers, weapons and drugs.
 - Signing contracts, leases or filings on anyone's behalf.
 
-## Taxes
+### Taxes
 
 You're responsible for your own taxes. We don't withhold any tax from your pay. If US tax rules require it, we'll
 send you a tax form, such as a Form 1099-NEC, through Stripe.
 
-## Changes to these terms
+### Changes to these terms
 
-These terms have a version id (this one is `2026-11-08`). Each job is covered by the version shown next to the
-Accept button when you accepted it. If we change the terms, the new version applies only to jobs you accept after
-that.
+These terms have a version id (this one is `2026-11-08`). Each job is covered by the version and the job terms
+named next to the Accept button when you accepted it. If we change the terms, the new version applies only to jobs
+you accept after that.
 
-## Contact us
+### Contact us
 
 Email ops@operis.live about a job, proof or payout, or to opt out. _[Founders: add the legal name and mailing
 address.]_
 
+## Job terms (one set per job)
+
+### Operis jobs (`operis`)
+
+- Operis is your client. You do the work for Operis as an independent contractor.
+- Operis provides the service to the company that posted the job and is responsible to that company for the job.
+- Operis jobs never need a professional license, because Operis holds none. If an Operis job looks like it needs
+  one, decline it and tell us.
+- Pay works as described in "Getting paid".
+
+### Connector jobs (`connector`)
+
+- Connector jobs are for work Operis can't be responsible for, because it holds no professional licenses and no
+  insurance: for example, notarial acts or legal review.
+- You provide the service to the company that posted the job, under your own license and in your own name. The
+  company is your client.
+- You're responsible for the work and for following the rules of your license.
+- Operis is the marketplace. It connects you with the company, checks your proof and handles payment as your
+  payment agent: it collects the price from the company for you and pays you your share.
+- Operis isn't responsible for the work itself and doesn't give professional advice.
+- Pay works as described in "Getting paid": the same card hold, 75% to you after your proof is approved, and 25% to
+  Operis as its fee.
+
 ## Questions for counsel
 
-1. **Contractor classification (California).** Operis sets the fee and the proof rules, and the posting
-   company, not the worker, sets the price. Does the ABC test (Labor Code §2775) apply, can we meet prong B
-   (work outside our usual course of business), and does any exemption, such as referral agency (§2777), fit?
+1. **Contractor classification (California).** In Operis jobs, Operis is the worker's client; in connector jobs,
+   the posting company is. Operis sets the fee and the proof rules, and the posting company, not the worker, sets
+   the price. Does the ABC test (Labor Code §2775) apply in each model, can we meet prong B (work outside our usual
+   course of business) for Operis jobs, and does the referral-agency exemption (§2777) fit connector jobs?
 2. **Photo licence scope.** What may the posting company do with proof files: keep them, publish them, train
    models on them? The files reach it with their embedded location and device data, and they may show
    bystanders, faces or licence plates.
@@ -158,8 +196,16 @@ address.]_
    Identity takes a selfie?
 4. **Clawback after payout.** Today a worker keeps pay after a later refund or chargeback. Can we recover pay for
    faked proof after it reaches their Stripe account, and what must these terms say for that?
-5. **Insurance.** Occupational accident or liability cover for workers, and our exposure to third parties for a
-   worker's conduct on a job.
+5. **Insurance.** Operis jobs make Operis responsible to the company, and Operis has no insurance today: what
+   cover do we need first (liability, occupational accident)? For connector jobs, should we require the worker's
+   own bond or insurance?
 6. **How acceptance is shown.** Is "By accepting you agree to the Worker Terms" under the Accept button, with a
    link, enough for a person who has no account, or do we need a checkbox? Would a YES text reply that links the
    terms ever be enough?
+7. **How the liability model is decided.** A Compliance agent will pick `operis` or `connector` for each job after
+   funding. What criteria and records does that decision need, is an AI agent's decision enough, and what happens
+   if a job lands in the wrong model (for example, licensed work run as an Operis job)?
+8. **What each model means in practice.** In Operis jobs, what does the worker still answer for (their own
+   negligence, damage they cause)? In connector jobs, should the terms say that the company's payment to Operis
+   counts as payment to the worker (the usual payment-agent clause), and what must the posting company's own terms
+   say in each model?
