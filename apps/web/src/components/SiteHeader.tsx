@@ -13,10 +13,11 @@ const ACCENT = "#46664F";
 const MENU = [
   { href: "/jobs", label: "Browse requests" },
   { href: "/#for-people", label: "How it works for people" },
-  { href: "/", label: "For agent companies" },
+  { href: "/developers", label: "For agent companies: get an API key" },
   { href: "/verification", label: "How verification works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/dashboard", label: "Live dashboard" },
+  { href: "/backoffice", label: "Backoffice (founders)" },
 ];
 
 export function Logo() {

@@ -17,9 +17,9 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   async find_people({ job_id, limit = 3 }, ctx) {
     const candidates = [];
     for (const w of MOCK_WORKERS.slice(0, limit)) {
-      const [row] = await ctx.sql`
-        insert into workers (name, email, phone, source) values (${w.name}, ${w.email}, ${w.phone}, ${w.source})
-        on conflict (email) do update set name = excluded.name returning id`;
+      const [found] = await ctx.sql`select id from workers where email = ${w.email} limit 1`;
+      const [row] = found ? [found] : await ctx.sql`
+        insert into workers (name, email, phone, source) values (${w.name}, ${w.email}, ${w.phone}, ${w.source}) returning id`;
       candidates.push({ candidate_id: row.id, name: w.name, channel: "email" as const, source: w.source, distance_km: 0.4 + candidates.length, score: 0.9 - candidates.length * 0.1 });
     }
     ctx.log(`find_people(mock) job ${job_id}: ${candidates.length} candidates`);
@@ -41,7 +41,7 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     }
     const [j] = await ctx.sql`select status from jobs where id = ${job_id}`;
     if (j?.status === "held") await ctx.transition(job_id, "outreach");
-    return { sent: ids.length, skipped_opted_out: candidate_ids.length - ids.length, outreach_ids: ids };
+    return { sent: ids.length, skipped_opted_out: candidate_ids.length - ids.length, queued_manual: 0, outreach_ids: ids };
   },
 
   // ---- Cameron: verify ----
@@ -118,6 +118,17 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     const [{ n }] = await ctx.sql`select count(*)::int as n from jobs where status = 'paid' and updated_at >= ${s}`;
     const costs = (t.stripe_cost ?? 0) + (t.sms_cost ?? 0) + (t.scrape_cost ?? 0);
     return { revenue_usd: t.capture ?? 0, payouts_usd: t.payout ?? 0, fees_usd: t.fee ?? 0, costs_usd: costs, jobs_paid: n };
+  },
+
+  async refund_large({ job_id, reason }, ctx) {
+    return mocks.refund({ job_id, reason: `large: ${reason}` }, ctx);
+  },
+  async release_payout_large({ job_id }, ctx) {
+    const [j] = await ctx.sql`select worker_id, worker_pay_usd, fee_usd from jobs where id = ${job_id}`;
+    await ctx.ledger(job_id, "payout", Number(j.worker_pay_usd), "mock-large");
+    await ctx.ledger(job_id, "fee", Number(j.fee_usd), "mock-large");
+    await ctx.transition(job_id, "paid");
+    return { job_id, status: "paid" as const, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) };
   },
 
   // public tools are implemented in edwin.ts, not mocked

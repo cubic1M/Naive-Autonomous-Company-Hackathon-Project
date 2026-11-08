@@ -1,0 +1,65 @@
+{
+ "search_parameters": {
+  "q": "site:x.com \"freelance photographer\" \"San Francisco\"",
+  "fast_mode": "false",
+  "google_domain": "google.com",
+  "hl": "en",
+  "start": "0",
+  "num": "5",
+  "device": "desktop"
+ },
+ "organic_results": [
+  {
+   "title": "Kate Hua (@katehua24) / X",
+   "link": "https://x.com/katehua24",
+   "position": 1,
+   "position_absolute": 1,
+   "displayed_link": "110+ followers",
+   "snippet": "Kate Hua. @katehua24. Freelance Photographer | formerly @nationals @michigandaily @orangebowl. San Francisco, CA. Joined January 2015 · 156. Following · 115."
+  },
+  {
+   "title": "Edin (@edinchavez) / X",
+   "link": "https://x.com/edinchavez",
+   "position": 2,
+   "position_absolute": 2,
+   "displayed_link": "9,5K+ followers",
+   "snippet": "... San Francisco and Chicago. Paid ongoing work. #photographers #nyc #chicago ... Looking for a freelance photographer in Boston for steady gigs. Please ..."
+  },
+  {
+   "title": "Vic Sharp (@vicsharpphoto) / X",
+   "link": "https://x.com/vicsharpphoto",
+   "position": 3,
+   "position_absolute": 3,
+   "displayed_link": "50+ followers",
+   "snippet": "Freelance Photographer based in the Scottish Borders. https ... Pier 33, Fisherman's Wharf, San Francisco #photography flickr.com/photos/sharpy7…"
+  },
+  {
+   "title": "rawkbeez - Robert Suguitan",
+   "link": "https://x.com/rawkbeez",
+   "position": 4,
+   "position_absolute": 4,
+   "displayed_link": "https://x.com › rawkbeez",
+   "snippet": "Freelance photographer SF, CA . ( ... Robert Suguitan. @rawkbeez. Freelance photographer ... Digging through my photo archives. San Francisco, 2013 #49ers # ..."
+  },
+  {
+   "title": "Eric Wittman (@ewittman) / X",
+   "link": "https://x.com/ewittman",
+   "position": 5,
+   "position_absolute": 5,
+   "displayed_link": "930+ followers",
+   "snippet": "Still beaming from the outstanding photo walk in San Francisco over the weekend led by @filmfromtiff. ... Big news: We're acquiring The Freelance Photographer ..."
+  }
+ ],
+ "pagination": {
+  "next_page_token": "gs1.eyJ2IjoxLCJwYXJhbWV0ZXJzIjp7InEiOiJzaXRlOnguY29tIFwiZnJlZWxhbmNlIHBob3RvZ3JhcGhlclwiIFwiU2FuIEZyYW5jaXNjb1wiIiwiZmFzdF9tb2RlIjpmYWxzZSwiZ29vZ2xlX2RvbWFpbiI6Imdvb2dsZS5jb20iLCJobCI6ImVuIiwic3RhcnQiOjUsIm51bSI6NSwiZGV2aWNlIjoiZGVza3RvcCJ9LCJ1cmwiOiJodHRwczovL3d3dy5nb29nbGUuY29tL3NlYXJjaD9xPXNpdGU6eC5jb20rJTIyZnJlZWxhbmNlK3Bob3RvZ3JhcGhlciUyMislMjJTYW4rRnJhbmNpc2NvJTIyJm51bT01JnNjYV9lc3Y9YTRmNDcwYjE5MjVhNjJhYyZ1ZG09MTQmaGw9ZW4mc3hzcmY9QUtMNXlEaVE4S25yVXJNVFg3SGpTdmtNbjFORFRKWGFLUToxNzk0MDk2MzQwNDE2JmVpPTFMenZhcC1BR2Z1V3hjOFAtOWFwNEFRJnN0YXJ0PTUmc2E9TiZzc3RrPUFZbDJ5azhtaGN3WklmTkg3cEE2ZGpkbm1JSWZ0M0d6ZXdmOHJPcC1TZHB5RDJ1YUx2MGJ0ZWF2MWVweDdra2VfVE1HNUp4a01rQ2pSY1lfQW1ESGxKTEpHZHZOYlZuaVFFME9WdyZ2ZWQ9MmFoVUtFd2lmdXNEWWlmZVhBeFY3U19FREhYdHJDa3dROE5NRGVnUUlLeEFXIn0",
+  "current": 1,
+  "next": "https://www.google.com/search?q=site:x.com+%22freelance+photographer%22+%22San+Francisco%22&num=5&sca_esv=a4f470b1925a62ac&udm=14&hl=en&sxsrf=AKL5yDiQ8KnrUrMTX7HjSvkMn1NDTJXaKQ:1794096340416&ei=1Lzvap-AGfuWxc8P-9ap4AQ&start=10&sa=N&sstk=AYl2yk8mhcwZIfNH7pA6djdnmIIft3Gzewf8rOp-SdpyD2uaLv0bteav1epx7kke_TMG5JxkMkCjRcY_AmDHlJLJGdvNbVniQE0OVw&ved=2ahUKEwifusDYifeXAxV7S_EDHXtrCkwQ8tMDegQIKxAG",
+  "other_pages": {
+   "2": "https://www.google.com/search?q=site:x.com+%22freelance+photographer%22+%22San+Francisco%22&num=5&sca_esv=a4f470b1925a62ac&udm=14&hl=en&sxsrf=AKL5yDiQ8KnrUrMTX7HjSvkMn1NDTJXaKQ:1794096340416&ei=1Lzvap-AGfuWxc8P-9ap4AQ&start=10&sa=N&sstk=AYl2yk8mhcwZIfNH7pA6djdnmIIft3Gzewf8rOp-SdpyD2uaLv0bteav1epx7kke_TMG5JxkMkCjRcY_AmDHlJLJGdvNbVniQE0OVw&ved=2ahUKEwifusDYifeXAxV7S_EDHXtrCkwQ8tMDegQIKxAG",
+   "3": "https://www.google.com/search?q=site:x.com+%22freelance+photographer%22+%22San+Francisco%22&num=5&sca_esv=a4f470b1925a62ac&udm=14&hl=en&sxsrf=AKL5yDiQ8KnrUrMTX7HjSvkMn1NDTJXaKQ:1794096340416&ei=1Lzvap-AGfuWxc8P-9ap4AQ&start=20&sa=N&sstk=AYl2yk8mhcwZIfNH7pA6djdnmIIft3Gzewf8rOp-SdpyD2uaLv0bteav1epx7kke_TMG5JxkMkCjRcY_AmDHlJLJGdvNbVniQE0OVw&ved=2ahUKEwifusDYifeXAxV7S_EDHXtrCkwQ8tMDegQIKxAK",
+   "4": "https://www.google.com/search?q=site:x.com+%22freelance+photographer%22+%22San+Francisco%22&num=5&sca_esv=a4f470b1925a62ac&udm=14&hl=en&sxsrf=AKL5yDiQ8KnrUrMTX7HjSvkMn1NDTJXaKQ:1794096340416&ei=1Lzvap-AGfuWxc8P-9ap4AQ&start=30&sa=N&sstk=AYl2yk8mhcwZIfNH7pA6djdnmIIft3Gzewf8rOp-SdpyD2uaLv0bteav1epx7kke_TMG5JxkMkCjRcY_AmDHlJLJGdvNbVniQE0OVw&ved=2ahUKEwifusDYifeXAxV7S_EDHXtrCkwQ8tMDegQIKxAO",
+   "5": "https://www.google.com/search?q=site:x.com+%22freelance+photographer%22+%22San+Francisco%22&num=5&sca_esv=a4f470b1925a62ac&udm=14&hl=en&sxsrf=AKL5yDiQ8KnrUrMTX7HjSvkMn1NDTJXaKQ:1794096340416&ei=1Lzvap-AGfuWxc8P-9ap4AQ&start=40&sa=N&sstk=AYl2yk8mhcwZIfNH7pA6djdnmIIft3Gzewf8rOp-SdpyD2uaLv0bteav1epx7kke_TMG5JxkMkCjRcY_AmDHlJLJGdvNbVniQE0OVw&ved=2ahUKEwifusDYifeXAxV7S_EDHXtrCkwQ8tMDegQIKxAS"
+  }
+ },
+ "billed": true
+}

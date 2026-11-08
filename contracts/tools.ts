@@ -19,7 +19,8 @@ export interface ProofRequirement {
   photos?: { min: number; must_show: string[] };
   video?: { min_seconds: number };
   files?: { kinds: string[] };
-  geofence_m: number;
+  /** Meters from location the proof must be taken within. Optional (default 150); ignored for remote jobs. */
+  geofence_m?: number;
   fields?: { name: string; type: "string" | "number" }[];
 }
 
@@ -40,14 +41,17 @@ export interface Tools {
     {
       title: string;
       instructions: string;
-      location: Location;
+      /** On-site jobs: where. Remote jobs (remote: true) may pass null. */
+      location: Location | null;
+      /** Online work (legal, software, design...): no distance limit. Default false. [proposed by Andrew] */
+      remote?: boolean;
       deadline: string; // ISO 8601
       budget_usd: number; // >= 20
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;
     },
-    { job_id: string; status: "requested" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string }
+    { job_id: string; status: "requested" | "held" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string; next_step?: string }
   >;
 
   get_job: ToolSpec<
@@ -59,13 +63,28 @@ export interface Tools {
 
   // INTERNAL: Ops → services/outreach (Andrew)
   find_people: ToolSpec<
-    { job_id: string; limit?: number },
-    { candidates: { candidate_id: string; name: string | null; channel: "email" | "sms"; source: string; distance_km: number | null; score: number }[] }
+    {
+      job_id: string;
+      limit?: number;
+      /** Ops agent's understanding of the job. [proposed by Andrew] */
+      hints?: { roles?: string[]; skills?: string[]; credential?: string | null; remote?: boolean };
+    },
+    {
+      candidates: {
+        candidate_id: string;
+        name: string | null;
+        /** *_manual = drafted DM a teammate sends from a real Operis account (platforms ban automated DMs). */
+        channel: "email" | "sms" | "linkedin_manual" | "x_manual" | "reddit_manual" | "instagram_manual";
+        source: string;
+        distance_km: number | null;
+        score: number;
+      }[];
+    }
   >;
 
   send_blast: ToolSpec<
     { job_id: string; candidate_ids: string[] },
-    { sent: number; skipped_opted_out: number; outreach_ids: string[] }
+    { sent: number; skipped_opted_out: number; queued_manual: number; outreach_ids: string[] }
   >;
 
   // INTERNAL: Verifier → services/verify (Cameron)
@@ -97,7 +116,19 @@ export interface Tools {
     { job_id: string },
     { job_id: string; status: "paid"; worker_pay_usd: number; fee_usd: number } | { error: "needs_bank_setup" | "over_limit" }
   >;
-  refund: ToolSpec<{ job_id: string; reason: string }, { job_id: string; status: "refunded"; amount_usd: number }>;
+  refund: ToolSpec<
+    { job_id: string; reason: string; amount_cents?: number; request_id?: string },
+    { job_id: string; status: "refunded"; amount_usd: number; refunded_total_usd?: number; partial?: true; released_hold?: true }
+  >;
+  /** Over the $150 cap: the CEO agent runs these with approved_by (Cameron, PR #11). */
+  refund_large: ToolSpec<
+    { job_id: string; reason: string; amount_cents?: number; request_id: string; approved_by: string; approval_note?: string },
+    { job_id: string; status: "refunded"; amount_usd: number; refunded_total_usd?: number; partial?: true; released_hold?: true }
+  >;
+  release_payout_large: ToolSpec<
+    { job_id: string; approved_by: string; approval_note?: string },
+    { job_id: string; status: "paid"; worker_pay_usd: number; fee_usd: number }
+  >;
   ledger: ToolSpec<
     { since?: string },
     { revenue_usd: number; payouts_usd: number; fees_usd: number; costs_usd: number; jobs_paid: number }
@@ -117,5 +148,7 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   capture_payment: { owner: "cameron", folder: "services/payments",          calledBy: ["finance"] },
   payout:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance"] },
   refund:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance", "ceo"] },
+  refund_large:    { owner: "cameron", folder: "services/payments",          calledBy: ["ceo"] },
+  release_payout_large: { owner: "cameron", folder: "services/payments",     calledBy: ["ceo"] },
   ledger:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance", "ceo"] },
 };

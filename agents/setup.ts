@@ -80,8 +80,8 @@ if (AUTH === "vault") {
   const vault = vaults.find((v) => v.display_name === "operis") ?? (await api("POST", "/vaults", { display_name: "operis" }));
   const creds = (await api("GET", `/vaults/${vault.id}/credentials`)).data ?? [];
   for (const c of creds) if (c.key === "operis-internal") await api("DELETE", `/vaults/${vault.id}/credentials/${c.id}`);
-  await api("POST", `/vaults/${vault.id}/credentials`, { kind: "static_bearer", key: "operis-internal", host, value: INTERNAL });
-  console.log(`✓ vault ${vault.id}: static_bearer for ${host}`);
+  await api("POST", `/vaults/${vault.id}/credentials`, { kind: "static_bearer", key: "operis-internal", mcp_server_url: `${BASE}/mcp/internal`, value: INTERNAL });
+  console.log(`✓ vault ${vault.id}: static_bearer for ${host}/mcp/internal`);
 }
 
 // 2. members
@@ -94,6 +94,7 @@ for (const [role, m] of Object.entries<any>(cfg.members)) {
   };
   if (m.output_schema) Object.assign(body, { output_schema: m.output_schema, structured_output_required: true });
   if (m.skills) body.skills = m.skills;
+  if (process.env.FOUNDER_EMAIL) body.notifications = { email: process.env.FOUNDER_EMAIL, approvals: true, questions: true, updates: false };
   const a = await upsert(m, body);
   ids[role] = a.id;
   versions[role] = a.current_version ?? 1;

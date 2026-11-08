@@ -35,3 +35,25 @@ describe('job tokens', () => {
     expect(jobLink('https://x.test/', 'T')).toBe('https://x.test/j/T');
   });
 });
+
+describe('short link tokens', () => {
+  it('are short, verify, and reject tampering', async () => {
+    const { signShortToken, verifyShortToken } = await import('../src/tokens.js');
+    const t = signShortToken('sek');
+    expect(t.length).toBeLessThanOrEqual(19);
+    expect(verifyShortToken(t, 'sek')).toBe(true);
+    expect(verifyShortToken(t, 'other')).toBe(false);
+    expect(verifyShortToken(`${t.slice(0, -1)}${t.endsWith('A') ? 'B' : 'A'}`, 'sek')).toBe(false);
+    expect(verifyShortToken('garbage', 'sek')).toBe(false);
+  });
+
+  it('resolveJobToken looks up the outreach row and enforces 7-day expiry', async () => {
+    const { signShortToken, resolveJobToken } = await import('../src/tokens.js');
+    const t = signShortToken('sek');
+    const row = { id: 'o1', job_id: 'j1', worker_id: 'w1', created_at: '2026-11-01T00:00:00Z' };
+    const lookup = async (tok: string) => (tok === t ? row : null);
+    expect(await resolveJobToken(t, 'sek', lookup, new Date('2026-11-02T00:00:00Z'))).toEqual({ job_id: 'j1', worker_id: 'w1', outreach_id: 'o1' });
+    expect(await resolveJobToken(t, 'sek', lookup, new Date('2026-11-09T00:00:01Z'))).toBeNull();
+    expect(await resolveJobToken(t, 'wrong', lookup, new Date('2026-11-02T00:00:00Z'))).toBeNull();
+  });
+});

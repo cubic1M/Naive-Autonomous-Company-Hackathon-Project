@@ -32,7 +32,15 @@ npm run smoke                                    # 20 checks: every tool, worker
 | `POST /v1/worker/jobs/:token/accept` · `/decline` | Dora's job page | First yes wins (409 if taken) |
 | `POST /v1/worker/jobs/:token/proof` | Dora's proof page | JSON `{media, gps_lat, gps_lng, captured_at}` or multipart `files[]` (needs Blob) |
 | `POST /v1/worker/payout-setup` | Dora's payout page | `{token}` → Stripe Connect link (Cameron's `createPayoutLink`) |
-| `GET /v1/dashboard` | Dora's dashboard | Active job, jobs, wake timeline, agent feed, money |
+| `POST /v1/customers` | Agent companies (self-serve) | `{name, contact_email}` → `opk_…` key (5 per IP per hour) |
+| `GET /v1/dashboard` | Dora's dashboard (admin key) | Active job, jobs, wake timeline, agent feed, money |
+| `GET /v1/admin/requests` | Backoffice (admin key) | Every request with company, agent activity, wake-ups, proof |
+| `GET/POST /v1/admin/escalations[/:jobId]` | Founder console (admin key) | Proofs waiting for a founder; approve → pay, reject → refund |
+| `GET/POST /v1/admin/approvals` | Founder console (admin key) | Naïve tool approvals waiting; allow once / for the session / deny |
+| `POST /v1/worker/identity` | Job page (tier-2 jobs) | `{token}` → Stripe Identity link |
+| `GET /v1/files/:id` | Anyone with the URL | Proof files stored in Postgres when Blob isn't used |
+| `GET /api/cron/sweep`, `/api/cron/approvals` | Vercel cron (`CRON_SECRET`) | Expiry + no-taker nudges; agent feed + auto-approve |
+| `GET /admin` | Founders (`?key=ADMIN_KEY` once) | Founder console: agent approvals, escalated proofs, numbers |
 | `POST /webhooks/stripe` | Stripe | `checkout.session.completed` → job `held` → CEO wakes |
 | `POST /webhooks/mobilerun` | Mobilerun | `sms.received`: `YES 1234` / `NO 1234` / `STOP` |
 | `POST /webhooks/naive?k=…` | Naïve | Agent events → `agent_events` (dashboard feed) |

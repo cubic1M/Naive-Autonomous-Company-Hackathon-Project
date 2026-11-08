@@ -23,6 +23,10 @@ describe.skipIf(!url)('PostgresRepo', () => {
     await sql.unsafe(`drop schema if exists ${schemaName} cascade; create schema ${schemaName}; set search_path to ${schemaName}, public`);
     await sql.unsafe(readFileSync(resolve(__dirname, '../../../contracts/schema.sql'), 'utf8'));
     await sql.unsafe(readFileSync(resolve(__dirname, '../migrations/0001_outreach.sql'), 'utf8'));
+    await sql.unsafe(readFileSync(resolve(__dirname, '../migrations/0002_people.sql'), 'utf8'));
+    await sql.unsafe(readFileSync(resolve(__dirname, '../migrations/0002_people.sql'), 'utf8')); // idempotent
+    await sql.unsafe(readFileSync(resolve(__dirname, '../migrations/0003_pool.sql'), 'utf8'));
+    await sql.unsafe(readFileSync(resolve(__dirname, '../migrations/0003_pool.sql'), 'utf8')); // idempotent
     repo = new PostgresRepo(sql);
     const j = await sql`insert into jobs (title, instructions, budget_usd, proof_requirement, status, lat, lng)
       values ('J', 'do', 40, '{}', 'held', 37.77, -122.42) returning id`;
@@ -37,6 +41,7 @@ describe.skipIf(!url)('PostgresRepo', () => {
     const job = await repo.getJob(jobId);
     expect(job?.budget_usd).toBe(40);
     expect(job?.worker_pay_usd).toBeNull();
+    expect(job?.remote).toBe(false);
     expect(await repo.getJob('00000000-0000-0000-0000-000000000000')).toBeNull();
   });
 
@@ -82,5 +87,93 @@ describe.skipIf(!url)('PostgresRepo', () => {
     expect(p.opted_out).toBe(true);
     expect(p.regular).toBe(false);
     expect((await repo.listRegularsNear(37.77, -122.42, 20, 10)).map((x) => x.email)).toEqual(['far@x.com']);
+  });
+
+  it('person fields default, merge profiles/credentials, OR open_to_work, newest last_active, never null-overwrite', async () => {
+    const li = { platform: 'linkedin' as const, url: 'https://www.linkedin.com/in/jane', handle: 'jane' };
+    const gh = { platform: 'github' as const, url: 'https://github.com/jane', handle: 'jane' };
+    const plain = await repo.upsertLead(lead({ email: 'plain@x.com' }), 'email:plain@x.com');
+    expect(plain).toMatchObject({ profiles: [], headline: null, location_text: null, credentials: [], open_to_work: false, last_active_at: null });
+
+    const a = await repo.upsertLead(
+      lead({ kind: 'person', name: 'Jane', email: null, profiles: [li], headline: 'Attorney', location_text: 'SF', credentials: ['CA Bar'], open_to_work: false, last_active_at: '2026-10-01T00:00:00Z' }),
+      'li:jane',
+    );
+    expect(a.profiles).toEqual([li]);
+    expect(a.last_active_at).toBe('2026-10-01T00:00:00.000Z');
+    const b = await repo.upsertLead(
+      lead({ kind: 'person', name: null, email: null, profiles: [li, gh], headline: 'Other', location_text: null, credentials: ['CA Bar', 'Notary'], open_to_work: true, last_active_at: '2026-09-01T00:00:00Z' }),
+      'li:jane',
+    );
+    expect(b.id).toBe(a.id);
+    expect(b.profiles).toEqual([li, gh]);
+    expect([...b.credentials].sort()).toEqual(['CA Bar', 'Notary']);
+    expect(b.open_to_work).toBe(true);
+    expect(b.headline).toBe('Attorney');
+    expect(b.location_text).toBe('SF');
+    expect(b.last_active_at).toBe('2026-10-01T00:00:00.000Z'); // older one doesn't win
+    const c = await repo.upsertLead(lead({ kind: 'person', email: null, open_to_work: false, last_active_at: null }), 'li:jane');
+    expect(c.open_to_work).toBe(true);
+    expect(c.last_active_at).toBe('2026-10-01T00:00:00.000Z');
+    const d = await repo.upsertLead(lead({ kind: 'person', email: null, last_active_at: '2026-11-01T00:00:00Z' }), 'li:jane');
+    expect(d.last_active_at).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('remote jobs are read as remote', async () => {
+    const j = await sql`insert into jobs (title, instructions, budget_usd, proof_requirement, status, remote)
+      values ('R', 'do', 40, '{}', 'held', true) returning id`;
+    expect((await repo.getJob(j[0]!.id))?.remote).toBe(true);
+  });
+
+  it('manual queue: idempotent insert, list filters, mark, count since', async () => {
+    const p = await repo.upsertLead(lead({ kind: 'person', email: null }), 'li:jane');
+    const q = await repo.upsertLead(lead({ kind: 'person', email: null }), 'x:other');
+    const t = { job_id: jobId, worker_id: p.id, platform: 'linkedin' as const, profile_url: 'https://www.linkedin.com/in/jane', message: 'Hi' };
+    const t1 = await repo.insertManualTask(t);
+    const t1b = await repo.insertManualTask({ ...t, message: 'changed' });
+    expect(t1b.id).toBe(t1.id);
+    expect(t1b.message).toBe('Hi');
+    expect(t1).toMatchObject({ status: 'queued', sent_at: null, platform: 'linkedin', job_id: jobId, worker_id: p.id });
+    const t2 = await repo.insertManualTask({ ...t, worker_id: q.id, platform: 'x', profile_url: 'https://x.com/o' });
+    // same person, other platform is a separate task
+    await repo.insertManualTask({ ...t, platform: 'x', profile_url: 'https://x.com/jane' });
+
+    expect(await repo.listManualTasks({ job_id: jobId })).toHaveLength(3);
+    expect(await repo.listManualTasks({ status: 'queued' })).toHaveLength(3);
+    expect(await repo.listManualTasks({ job_id: '00000000-0000-0000-0000-000000000000' })).toHaveLength(0);
+
+    const now = new Date();
+    expect(await repo.countManualTasksSince('x', new Date(now.getTime() - 3600_000))).toBe(2);
+    expect(await repo.countManualTasksSince('linkedin', new Date(now.getTime() + 3600_000))).toBe(0);
+    expect(await repo.countManualTasksSince('reddit', new Date(0))).toBe(0);
+
+    await repo.markManualTask(t1.id, 'sent', now);
+    await repo.markManualTask(t2.id, 'skipped', now);
+    const sent = await repo.listManualTasks({ status: 'sent' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.sent_at).not.toBeNull();
+    expect(await repo.listManualTasks({ status: 'queued' })).toHaveLength(1);
+  });
+
+  it('searchPool: any-term match, contactable only, ordered, radius / city for on-site', async () => {
+    const mk = (o: Partial<Lead>, key: string) => repo.upsertLead(lead({ kind: 'person', source_ref: key, categories: [], ...o }), key);
+    await mk({ name: 'Pool Two', email: 'p2@x.example', headline: 'Zorbing TypeScript developer', lat: null, lng: null }, 'pool:2');
+    await mk({ name: 'Pool Three', email: 'p3@x.example', headline: 'Zorbing coach', open_to_work: true, lat: null, lng: null }, 'pool:3');
+    await mk({ name: 'Pool One', email: 'p1@x.example', snippet: 'ZORBING', last_active_at: '2026-01-01T00:00:00Z', lat: null, lng: null }, 'pool:1');
+    await mk({ name: 'Pool NoEmail', email: null, headline: 'zorbing', lat: null, lng: null }, 'pool:4');
+    const out = await mk({ name: 'Pool Out', email: 'out@x.example', headline: 'zorbing', lat: null, lng: null }, 'pool:5');
+    await repo.optOut({ email: 'out@x.example' });
+    expect(out.id).toBeTruthy();
+    const names = (await repo.searchPool({ terms: ['ZORBING', 'typescript'], remote: true, limit: 10 })).map((p) => p.name);
+    expect(names).toEqual(['Pool Two', 'Pool Three', 'Pool One']);
+    expect(await repo.searchPool({ terms: ['zorbing'], remote: true, limit: 1 })).toHaveLength(1);
+    expect(await repo.searchPool({ terms: [], remote: true, limit: 5 })).toEqual([]);
+
+    await mk({ name: 'Geo Near', email: 'gn@x.example', headline: 'quokka wrangler', lat: 37.78, lng: -122.41 }, 'pool:6');
+    await mk({ name: 'Geo Far', email: 'gf@x.example', headline: 'quokka wrangler', lat: 34.05, lng: -118.24 }, 'pool:7');
+    await mk({ name: 'Geo City', email: 'gc@x.example', headline: 'quokka wrangler', location_text: 'San Francisco Bay Area', lat: null, lng: null }, 'pool:8');
+    await mk({ name: 'Geo Elsewhere', email: 'ge@x.example', headline: 'quokka wrangler', location_text: 'Austin', lat: null, lng: null }, 'pool:9');
+    const geo = await repo.searchPool({ terms: ['quokka'], remote: false, lat: 37.7749, lng: -122.4194, radiusKm: 10, locationText: 'San Francisco, CA', limit: 10 });
+    expect(geo.map((p) => p.name).sort()).toEqual(['Geo City', 'Geo Near']);
   });
 });

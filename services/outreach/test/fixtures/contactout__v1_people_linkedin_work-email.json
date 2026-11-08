@@ -1,0 +1,10 @@
+{
+  "status_code": 200,
+  "profile": {
+    "url": "https://www.linkedin.com/in/example-person",
+    "email": ["jane@acmelaw.com"],
+    "work_email": ["jane@acmelaw.com"],
+    "personal_email": [],
+    "phone": []
+  }
+}

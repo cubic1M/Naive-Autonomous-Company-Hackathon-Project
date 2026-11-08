@@ -1,7 +1,8 @@
 import type postgres from 'postgres';
 import { normEmail, toE164 } from '../geo.js';
-import type { Repo } from '../repo.js';
-import type { Channel, JobForOutreach, Lead, OutreachRow, OutreachStatus, Person } from '../types.js';
+import { cityOf, poolTerms, type PoolQuery, type Repo } from '../repo.js';
+import { mergeProfiles } from '../profiles.js';
+import type { Channel, JobForOutreach, Lead, ManualPlatform, ManualTask, ManualTaskStatus, OutreachRow, OutreachStatus, Person } from '../types.js';
 
 type Sql = postgres.Sql;
 type Row = Record<string, any>;
@@ -11,7 +12,8 @@ const iso = (v: unknown): string | null => (v === null || v === undefined ? null
 
 const PERSON_COLS = `w.id, w.name, w.email, w.phone, w.source, coalesce(w.opted_out, false) as opted_out,
   p.kind, p.website, p.profile_url, p.address, p.lat, p.lng, p.categories, p.rating, p.snippet,
-  p.regular, p.sms_consent, p.last_contacted_at, p.dedupe_key`;
+  p.regular, p.sms_consent, p.last_contacted_at, p.dedupe_key,
+  p.profiles, p.headline, p.location_text, p.credentials, p.open_to_work, p.last_active_at`;
 
 function toPerson(r: Row): Person {
   return {
@@ -34,6 +36,26 @@ function toPerson(r: Row): Person {
     sms_consent: r.sms_consent,
     last_contacted_at: iso(r.last_contacted_at),
     dedupe_key: r.dedupe_key,
+    profiles: Array.isArray(r.profiles) ? r.profiles : [],
+    headline: r.headline ?? null,
+    location_text: r.location_text ?? null,
+    credentials: Array.isArray(r.credentials) ? r.credentials : [],
+    open_to_work: Boolean(r.open_to_work),
+    last_active_at: iso(r.last_active_at),
+  };
+}
+
+function toManual(r: Row): ManualTask {
+  return {
+    id: r.id,
+    job_id: r.job_id,
+    worker_id: r.worker_id,
+    platform: r.platform,
+    profile_url: r.profile_url,
+    message: r.message,
+    status: r.status,
+    created_at: iso(r.created_at)!,
+    sent_at: iso(r.sent_at),
   };
 }
 
@@ -54,7 +76,7 @@ export class PostgresRepo implements Repo {
 
   async getJob(id: string): Promise<JobForOutreach | null> {
     const rows = await this.sql<Row[]>`
-      select id, title, instructions, address, lat, lng, deadline, budget_usd, worker_pay_usd, certification_required, status
+      select id, title, instructions, address, lat, lng, deadline, budget_usd, worker_pay_usd, certification_required, remote, status
       from jobs where id = ${id}`;
     const r = rows[0];
     if (!r) return null;
@@ -69,6 +91,7 @@ export class PostgresRepo implements Repo {
       budget_usd: Number(r.budget_usd),
       worker_pay_usd: num(r.worker_pay_usd),
       certification_required: r.certification_required,
+      remote: Boolean(r.remote),
       status: r.status,
     };
   }
@@ -90,14 +113,53 @@ export class PostgresRepo implements Repo {
     return rows.map(toPerson);
   }
 
+  async searchPool(q: PoolQuery): Promise<Person[]> {
+    const terms = poolTerms(q).map((t) => t.replace(/[%_\\]/g, ' ').trim()).filter(Boolean);
+    if (terms.length === 0) return [];
+    const radius = q.radiusKm ?? 25;
+    const city = cityOf(q.locationText);
+    const cityPat = city ? `%${city.replace(/[%_\\]/g, ' ')}%` : null;
+    const lat = q.lat ?? null;
+    const lng = q.lng ?? null;
+    const rows = await this.sql<Row[]>`
+      select * from (
+        select ${this.sql.unsafe(PERSON_COLS)},
+          (select count(*) from unnest(${terms}::text[]) as t(term) where hay.txt like '%' || t.term || '%')::int as hits,
+          case when ${lat}::float8 is not null and ${lng}::float8 is not null and p.lat is not null and p.lng is not null then
+            2 * 6371 * asin(least(1, sqrt(
+              power(sin(radians(p.lat - ${lat}::float8) / 2), 2) +
+              cos(radians(${lat}::float8)) * cos(radians(p.lat)) * power(sin(radians(p.lng - ${lng}::float8) / 2), 2)
+            ))) end as dist_km,
+          p.lat is not null and p.lng is not null as has_coords,
+          lower(coalesce(p.location_text, '') || ' ' || coalesce(p.address, '')) as loc,
+          coalesce(p.last_active_at, p.updated_at) as recent
+        from worker_profiles p
+        join workers w on w.id = p.worker_id
+        cross join lateral (select lower(concat_ws(' ', w.name, p.headline, p.snippet, p.categories::text, p.credentials::text)) as txt) hay
+        where not coalesce(w.opted_out, false)
+          and (w.email is not null or (p.regular and p.sms_consent and w.phone is not null))
+      ) t
+      where hits > 0
+        and (${q.remote}::boolean
+          or (dist_km is not null and dist_km <= ${radius}::float8)
+          or (dist_km is null and not has_coords and ${cityPat}::text is not null and loc like ${cityPat}::text))
+      order by hits desc, open_to_work desc, recent desc nulls last
+      limit ${q.limit}`;
+    return rows.map(toPerson);
+  }
+
   async upsertLead(lead: Lead, dedupeKey: string): Promise<Person> {
     const email = normEmail(lead.email);
     const phone = toE164(lead.phone);
     return this.sql.begin(async (tx) => {
-      const existing = await tx<Row[]>`select worker_id from worker_profiles where dedupe_key = ${dedupeKey} for update`;
+      const existing = await tx<Row[]>`
+        select worker_id, profiles, credentials, last_active_at from worker_profiles where dedupe_key = ${dedupeKey} for update`;
       let workerId: string;
       if (existing[0]) {
         workerId = existing[0].worker_id;
+        const profiles = mergeProfiles(Array.isArray(existing[0].profiles) ? existing[0].profiles : [], lead.profiles);
+        const credentials = [...new Set([...(Array.isArray(existing[0].credentials) ? existing[0].credentials : []), ...(lead.credentials ?? [])])];
+        const lastActive = lead.last_active_at ?? null;
         await tx`update workers set
             name = coalesce(name, ${lead.name}),
             email = coalesce(email, ${email}),
@@ -114,6 +176,12 @@ export class PostgresRepo implements Repo {
             rating = coalesce(rating, ${lead.rating}),
             snippet = coalesce(snippet, ${lead.snippet}),
             source_ref = coalesce(source_ref, ${lead.source_ref}),
+            profiles = ${tx.json(profiles as any)}::jsonb,
+            headline = coalesce(headline, ${lead.headline ?? null}),
+            location_text = coalesce(location_text, ${lead.location_text ?? null}),
+            credentials = ${tx.json(credentials)}::jsonb,
+            open_to_work = open_to_work or ${lead.open_to_work ?? false},
+            last_active_at = greatest(last_active_at, ${lastActive}::timestamptz),
             updated_at = now()
           where worker_id = ${workerId}`;
       } else {
@@ -122,9 +190,12 @@ export class PostgresRepo implements Repo {
           values (${lead.name}, ${email}, ${phone}, ${lead.source}) returning id`;
         workerId = w[0]!.id;
         await tx`
-          insert into worker_profiles (worker_id, dedupe_key, kind, website, profile_url, address, lat, lng, categories, rating, snippet, source_ref)
+          insert into worker_profiles (worker_id, dedupe_key, kind, website, profile_url, address, lat, lng, categories, rating, snippet, source_ref,
+                                     profiles, headline, location_text, credentials, open_to_work, last_active_at)
           values (${workerId}, ${dedupeKey}, ${lead.kind}, ${lead.website}, ${lead.profile_url}, ${lead.address}, ${lead.lat}, ${lead.lng},
-                  ${tx.json(lead.categories)}, ${lead.rating}, ${lead.snippet}, ${lead.source_ref})`;
+                  ${tx.json(lead.categories)}, ${lead.rating}, ${lead.snippet}, ${lead.source_ref},
+                  ${tx.json(mergeProfiles(lead.profiles, []) as any)}::jsonb, ${lead.headline ?? null}, ${lead.location_text ?? null},
+                  ${tx.json([...new Set(lead.credentials ?? [])])}::jsonb, ${lead.open_to_work ?? false}, ${lead.last_active_at ?? null}::timestamptz)`;
       }
       const rows = await tx<Row[]>`
         select ${tx.unsafe(PERSON_COLS)} from workers w join worker_profiles p on p.worker_id = w.id where w.id = ${workerId}`;
@@ -200,8 +271,41 @@ export class PostgresRepo implements Repo {
     return rows.map(toOutreach);
   }
 
-  async touchContacted(personId: string, at: Date): Promise<void> {
+  async getOutreachByToken(token: string): Promise<OutreachRow | null> {
+    const rows = await this.sql<Row[]>`select * from outreach where token = ${token} limit 1`;
+    return rows[0] ? toOutreach(rows[0]) : null;
+  }
+
+    async touchContacted(personId: string, at: Date): Promise<void> {
     await this.sql`update worker_profiles set last_contacted_at = ${at}, updated_at = now() where worker_id = ${personId}`;
+  }
+
+  async insertManualTask(t: { job_id: string; worker_id: string; platform: ManualPlatform; profile_url: string; message: string }): Promise<ManualTask> {
+    await this.sql`
+      insert into manual_outreach (job_id, worker_id, platform, profile_url, message)
+      values (${t.job_id}, ${t.worker_id}, ${t.platform}, ${t.profile_url}, ${t.message})
+      on conflict (job_id, worker_id, platform) do nothing`;
+    const rows = await this.sql<Row[]>`
+      select * from manual_outreach where job_id = ${t.job_id} and worker_id = ${t.worker_id} and platform = ${t.platform}`;
+    return toManual(rows[0]!);
+  }
+
+  async listManualTasks(filter: { job_id?: string; status?: ManualTaskStatus }): Promise<ManualTask[]> {
+    const rows = await this.sql<Row[]>`
+      select * from manual_outreach
+      where (${filter.job_id ?? null}::uuid is null or job_id = ${filter.job_id ?? null})
+        and (${filter.status ?? null}::text is null or status = ${filter.status ?? null})
+      order by created_at, id`;
+    return rows.map(toManual);
+  }
+
+  async markManualTask(id: string, status: 'sent' | 'skipped', at: Date): Promise<void> {
+    await this.sql`update manual_outreach set status = ${status}, sent_at = ${status === 'sent' ? at : null} where id = ${id}`;
+  }
+
+  async countManualTasksSince(platform: ManualPlatform, since: Date): Promise<number> {
+    const rows = await this.sql<Row[]>`select count(*)::int as n from manual_outreach where platform = ${platform} and created_at >= ${since}`;
+    return Number(rows[0]?.n ?? 0);
   }
 
   async recordCost(jobId: string, kind: 'scrape_cost' | 'sms_cost', amountUsd: number, ref: string): Promise<void> {

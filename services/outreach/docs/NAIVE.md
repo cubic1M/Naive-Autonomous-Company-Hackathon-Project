@@ -1,6 +1,6 @@
 # Outreach × Naïve: integration plan
 
-**Approved by Andrew (2026-11-07):** skill + tools on Ops, `send_blast` = **ask** until `OUTREACH_LIVE=true`, re-blast schedule on.
+**Approved by Andrew (2026-11-08):** fully autonomous. Skill `worker-sourcing@2` + tools on Ops, `find_people` = allow, `send_blast` = **allow** (no human approval). Real sends are gated in code: `OUTREACH_LIVE=true` emails everyone; otherwise only `OUTREACH_TEST_ALLOWLIST` (demo mode). Manual DM queue off (`OUTREACH_MANUAL_QUEUE=false`).
 
 ## 1. Skill: teach the Ops agent how to source workers
 
@@ -20,7 +20,7 @@ Tools come from our internal MCP server (`name: "operis"`), so the agent sees th
 // agents/agents.json → ops.tools.configs (Edwin's file; default_config is deny)
 "operis.get_job":     { "enabled": true, "permission": "allow" },
 "operis.find_people": { "enabled": true, "permission": "allow" },  // spend capped server-side (OUTREACH_MAX_SPEND_USD)
-"operis.send_blast":  { "enabled": true, "permission": "ask" }     // approved: ask until OUTREACH_LIVE=true, then allow
+"operis.send_blast":  { "enabled": true, "permission": "allow" }   // approved: fully autonomous
 ```
 
 Why these are safe: the limits are enforced in code, not in the prompt.
@@ -53,10 +53,12 @@ Edwin's API must also:
 
 ## 4. Re-blast schedule (optional)
 
+Ops agent (Operis org): `agt_zzy6h6r9pnrad5aqnvkdhsyjhp`. On Vercel this is `NAIVE_AGENT_OPS`.
+
 A Naïve deployment on Ops every 10 minutes: "Any job in `outreach` for 15+ minutes with no accept? Follow the worker-sourcing skill's 'If nobody accepts' steps."
 
 ```bash
-naive deploy create --agent <ops_id> --cron "*/10 * * * *" --budget-usd 0.5 --prompt "Check jobs stuck in outreach and follow the worker-sourcing skill."
+naive deploy create --agent agt_zzy6h6r9pnrad5aqnvkdhsyjhp --cron "*/10 * * * *" --budget-usd 0.5 --prompt "Check jobs stuck in outreach and follow the worker-sourcing skill."
 ```
 
 ## 5. Env vars (Vercel)

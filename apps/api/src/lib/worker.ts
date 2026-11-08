@@ -3,7 +3,7 @@ import { transition } from "./jobs";
 
 import { verifyLinkToken } from "@/tools/outreach";
 
-const OPEN = ["sent", "dry_run", "opened"];
+const OPEN = ["sent", "dry_run", "opened", "queued"];
 
 export async function outreachByToken(token: string) {
   if (verifyLinkToken(token) === null) return undefined; // signed but tampered or expired

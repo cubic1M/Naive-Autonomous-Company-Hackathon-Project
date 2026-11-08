@@ -4,6 +4,8 @@
  * - SMS: injected by apps/api (Edwin's lib/messaging.ts sendSms: Mobilerun, fallback Monid AgentLine).
  */
 
+import { succeeded, type Monid } from './monid.js';
+
 export interface SendResult {
   ok: boolean;
   /** Provider message id, if any. */
@@ -13,7 +15,8 @@ export interface SendResult {
 }
 
 export interface EmailSender {
-  send(to: string, subject: string, text: string): Promise<SendResult>;
+  /** `html` is optional: senders that support it send both (text stays the fallback part). */
+  send(to: string, subject: string, text: string, html?: string): Promise<SendResult>;
 }
 
 export interface SmsSender {
@@ -48,14 +51,38 @@ export class NaiveEmailSender implements EmailSender {
   }
 }
 
+/**
+ * Email via AgentMail through Monid (agentmail /send-messages, $0.001 per recipient).
+ * Used until the Naïve ops@ inbox is set up; the inbox must be one we own (e.g. operis-ops@agentmail.to).
+ */
+export class MonidEmailSender implements EmailSender {
+  constructor(
+    private readonly monid: Monid,
+    private readonly inboxId: string,
+  ) {}
+
+  async send(to: string, subject: string, text: string, html?: string): Promise<SendResult> {
+    try {
+      const body: Record<string, unknown> = { inboxId: this.inboxId, to, subject, text };
+      if (html) body.html = html;
+      const r = await this.monid.run('agentmail', '/send-messages', { body }, { timeoutMs: 30_000 });
+      if (!succeeded(r)) return { ok: false, error: `agentmail send: ${r.status} (http ${r.httpStatus ?? 'n/a'})`, cost_usd: r.cost_usd };
+      const out = (r.output ?? {}) as { message_id?: string; messageId?: string };
+      return { ok: true, ref: out.message_id ?? out.messageId ?? r.runId, cost_usd: r.cost_usd };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+}
+
 /** Records messages instead of sending them. Used for dry runs and tests. */
 export class RecordingSender implements EmailSender, SmsSender {
-  readonly sent: { to: string; subject?: string; body: string }[] = [];
+  readonly sent: { to: string; subject?: string; body: string; html?: string }[] = [];
   constructor(private readonly fail: (to: string) => boolean = () => false) {}
-  async send(to: string, a: string, b?: string): Promise<SendResult> {
+  async send(to: string, a: string, b?: string, html?: string): Promise<SendResult> {
     if (this.fail(to)) return { ok: false, error: 'forced failure' };
     if (b === undefined) this.sent.push({ to, body: a });
-    else this.sent.push({ to, subject: a, body: b });
+    else this.sent.push({ to, subject: a, body: b, ...(html ? { html } : {}) });
     return { ok: true, ref: `rec_${this.sent.length}` };
   }
 }

@@ -62,6 +62,8 @@ export function makeEnv(over: Partial<Env> = {}): Env {
     OUTREACH_LIVE: false,
     OUTREACH_TEST_ALLOWLIST: [],
     PAUSE_OUTREACH: false,
+    OUTREACH_MANUAL_DAILY_CAP: 20,
+    OUTREACH_MANUAL_QUEUE: true,
     ...over,
   };
 }
@@ -78,7 +80,20 @@ export function makeJob(over: Partial<JobForOutreach> = {}): JobForOutreach {
     budget_usd: 60,
     worker_pay_usd: null,
     certification_required: null,
+    remote: false,
     status: 'requested',
+    ...over,
+  };
+}
+
+/** SourceContext for adapter tests. */
+export function makeCtx(over: Partial<import('../../src/sources/types.js').SourceContext> & { monid: import('../../src/monid.js').Monid }) {
+  return {
+    job: makeJob(),
+    radiusKm: 8,
+    queries: [] as string[],
+    hints: { roles: [] as string[], skills: [] as string[], credential: null as string | null },
+    remote: false,
     ...over,
   };
 }

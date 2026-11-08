@@ -21,6 +21,8 @@ const env: Env = {
   OUTREACH_LIVE: false,
   OUTREACH_TEST_ALLOWLIST: [],
   PAUSE_OUTREACH: true,
+  OUTREACH_MANUAL_DAILY_CAP: 20,
+  OUTREACH_MANUAL_QUEUE: false,
 };
 
 const repo = new InMemoryRepo();
@@ -35,6 +37,7 @@ repo.addJob({
   budget_usd: 60,
   worker_pay_usd: null,
   certification_required: null,
+  remote: false,
   status: 'requested',
 });
 

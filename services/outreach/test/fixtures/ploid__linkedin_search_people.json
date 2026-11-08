@@ -1,0 +1,44 @@
+{
+ "data": {
+  "items": [
+   {
+    "socialId": "saas-saas-335247175",
+    "publicIdentifier": "saas-saas-335247175",
+    "profileUrl": "https://www.linkedin.com/in/saas-saas-335247175",
+    "fullName": "Saas Saas",
+    "headline": "Saas at IOT Valley — IOT Valley",
+    "location": "Greater Toulouse Metropolitan Area, FR",
+    "industry": null,
+    "profilePictureUrl": null,
+    "connectionDegree": null
+   },
+   {
+    "socialId": "saas-saas-5a7791326",
+    "publicIdentifier": "saas-saas-5a7791326",
+    "profileUrl": "https://www.linkedin.com/in/saas-saas-5a7791326",
+    "fullName": "SAAS SAas",
+    "headline": "Assistant Dean at stc — stc",
+    "location": "Arnold, Missouri, United States, US",
+    "industry": null,
+    "profilePictureUrl": null,
+    "connectionDegree": null
+   },
+   {
+    "socialId": "c1492345183",
+    "publicIdentifier": "saas-saas-05287868",
+    "profileUrl": "https://linkedin.com/in/saas-saas-05287868",
+    "fullName": "Saas Saas",
+    "headline": "f.publico — prefeitura de bzios",
+    "location": "São Pedro da Aldeia, Rio de Janeiro, Brazil",
+    "industry": null,
+    "profilePictureUrl": null,
+    "connectionDegree": null
+   }
+  ],
+  "cursor": null,
+  "total": 3
+ },
+ "meta": {
+  "cursor": null
+ }
+}

@@ -5,7 +5,16 @@ const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, 
 
 const config: NextConfig = {
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_URL}/:path*` }];
+    return [
+      { source: "/api/:path*", destination: `${API_URL}/:path*` },
+      // Public API paths stay reachable on the web domain, so https://operis.live/mcp works whichever
+      // project serves the apex: agents' MCP, the agent guide, self-serve keys, worker/vendor endpoints.
+      { source: "/mcp", destination: `${API_URL}/mcp` },
+      { source: "/mcp/:path*", destination: `${API_URL}/mcp/:path*` },
+      { source: "/llms.txt", destination: `${API_URL}/llms.txt` },
+      { source: "/v1/:path*", destination: `${API_URL}/v1/:path*` },
+      { source: "/webhooks/:path*", destination: `${API_URL}/webhooks/:path*` },
+    ];
   },
   async headers() {
     // Job links carry the worker's token in the path: never leak it via Referer, never cache it.

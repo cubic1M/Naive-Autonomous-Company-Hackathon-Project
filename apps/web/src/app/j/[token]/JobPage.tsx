@@ -118,7 +118,10 @@ export default function JobPage({ token }: { token: string }) {
 
   const { job, can_accept, reply_code, viewer } = load.data;
   const s = load.data.state;
-  const loggedIn = !!user;
+  // Worker accounts (docs/ACCOUNTS_API.md) aren't in the API yet; until they are, the job link itself is the
+  // credential (as the API enforces). NEXT_PUBLIC_WORKER_LOGIN=required turns the login gate back on.
+  const loginRequired = process.env.NEXT_PUBLIC_WORKER_LOGIN === "required";
+  const loggedIn = !!user || !loginRequired;
   const deadline = deadlineText(job.deadline);
   const proofPath = `${jobPath}/proof`;
   const payoutPath = `${jobPath}/payout`;

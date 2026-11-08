@@ -227,8 +227,9 @@ All wake-ups go through **one helper**, `apps/api/src/lib/naive.ts → wake(agen
 | `approve_proof` | Verifier | Cameron | `services/verify` | allow (API enforces confidence ≥ 0.85 + geofence) |
 | `escalate` | Verifier | Cameron | `services/verify` | allow |
 | `capture_payment` | Finance | Cameron | `services/payments` | allow |
-| `payout` | Finance | Cameron | `services/payments` | allow ≤ $150, **ask** above |
-| `refund` | Finance, CEO | Cameron | `services/payments` | **ask** |
+| `payout` | Finance | Cameron | `services/payments` | allow (≤ $150; above → Finance asks the CEO) |
+| `refund` | Finance, CEO | Cameron | `services/payments` | allow (≤ $150 cumulative; above → `refund_large`) |
+| `refund_large`, `release_payout_large` | CEO | Cameron | `services/payments` | allow (CEO approves over-cap; founder only > $1,000, legal or safety) |
 | `ledger` | Finance, CEO | Cameron | `services/payments` | allow |
 
 Numeric limits (geofence, $150 cap, confidence) are enforced **in the service code**, not just in prompts. Naïve permissions apply per tool, not per amount.

@@ -25,10 +25,10 @@ export const TRANSITIONS: Record<JobState, JobState[]> = {
   accepted: ["proof_submitted", "expired"],
   proof_submitted: ["approved", "escalated", "rejected"],
   escalated: ["approved", "rejected"],
-  approved: ["paid"],
+  approved: ["paid", "refunded"],
   rejected: ["refunded"],
   expired: ["refunded"],
-  paid: [],
+  paid: ["refunded"], // full refund after capture (partial refunds leave the job paid)
   refunded: [],
   cancelled: [],
 };

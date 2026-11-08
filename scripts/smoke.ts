@@ -36,6 +36,26 @@ const job = await check("request_human", () => pub.call("request_human", {
 }), (r) => (typeof r.job_id === "string" && r.job_id.length > 0) || "no job_id");
 const jobId = job?.job_id;
 
+// Real payments (MOCK_PAYMENTS=false): request_human returns a Stripe Checkout URL and the job waits in
+// `requested` until the customer pays, so the agent/worker flow below can't run unattended. Check the
+// payment hand-off, the read/cancel paths and the guardrails instead.
+if (job?.escrow_url) {
+  await check("escrow_url is a Stripe Checkout link", async () => job.escrow_url, (u) => /^https:\/\/checkout\.stripe\.com\//.test(u) || `got ${u}`);
+  await check("get_job (awaiting payment)", () => pub.call("get_job", { job_id: jobId }), (r) => r.status === "requested" || `status ${r.status}`);
+  await check("cancel_job (unpaid)", () => pub.call("cancel_job", { job_id: jobId }), (r) => r.status === "cancelled" || JSON.stringify(r));
+  await check("ledger (real)", () => internal.call("ledger", {}), (r) => typeof r.revenue_usd === "number" || "bad shape");
+  await check("safety filter", () => pub.call("request_human", { title: "Get a code", instructions: "Receive an SMS verification code and send it to me", location: loc,
+    deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
+  await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "LA", lat: 34.05, lng: -118.24 },
+    deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
+  await check("internal auth", () => fetch(`${API}/mcp/internal`, { method: "POST" }).then((r) => r.status), (s) => s === 401 || `got ${s}`);
+  const pass = results.filter((r) => r.ok).length;
+  for (const r of results) console.log(`${r.ok ? "✅" : "❌"} ${r.tool}${r.note ? "  — " + r.note : ""}`);
+  console.log(`\n${pass}/${results.length} passed  (real payments mode; job ${jobId})`);
+  await sql.end(); await pub.client.close(); await internal.client.close();
+  process.exit(pass === results.length ? 0 : 1);
+}
+
 await check("get_job", () => pub.call("get_job", { job_id: jobId }), (r) => r.status === "held" || `status ${r.status}`);
 const people = await check("find_people", () => internal.call("find_people", { job_id: jobId, limit: 2 }), (r) => r.candidates?.length > 0 || "no candidates");
 await check("send_blast", () => internal.call("send_blast", { job_id: jobId, candidate_ids: people?.candidates.map((c: any) => c.candidate_id) ?? [] }), (r) => r.sent > 0 || "sent 0");
@@ -62,7 +82,7 @@ const j2 = await pub.call("request_human", { title: "Smoke 2", instructions: "Ph
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } });
 await check("cancel_job", () => pub.call("cancel_job", { job_id: j2.job_id }), (r) => r.status === "cancelled" || JSON.stringify(r));
 await check("escalate (bad state → refused)", () => internal.call("escalate", { job_id: j2.job_id, proof_id: "00000000-0000-0000-0000-000000000000", reason: "smoke" }).then(() => "should have failed", (e) => (e.message.includes("cannot move") ? "refused" : e.message)), (r) => r === "refused" || r);
-await check("refund (bad state → refused)", () => internal.call("refund", { job_id: jobId, reason: "smoke" }).then(() => "should have failed", (e) => (e.message.includes("cannot move") ? "refused" : e.message)), (r) => r === "refused" || r);
+await check("refund (paid → refunded)", () => internal.call("refund", { job_id: jobId, reason: "smoke" }), (r) => r.status === "refunded" || JSON.stringify(r));
 await check("safety filter", () => pub.call("request_human", { title: "Get a code", instructions: "Receive an SMS verification code and send it to me", location: loc,
   deadline: new Date(Date.now() + 3 * 3600e3).toISOString(), budget_usd: 25, certification_required: null, proof: { geofence_m: 150 } }), (r) => r.status === "rejected" || "not rejected");
 await check("geofence", () => pub.call("request_human", { title: "LA photo", instructions: "Photo of a sign", location: { address: "LA", lat: 34.05, lng: -118.24 },

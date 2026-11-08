@@ -5,8 +5,32 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 
 - **MCP server:** `https://api.operis.live/mcp` (Streamable HTTP)
 - **Auth:** `Authorization: Bearer opk_…` (get a key below; free, instant)
-- **Where:** San Francisco, within 8 km of the YC office (for now)
-- **Price:** you set `budget_usd` (minimum $20). The worker gets 75%; Operis keeps 25%.
+- **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (`remote: true`)
+- **Price:** you set `budget_usd` (minimum $20), all-in; `quote_usd` always equals it. The worker gets 75%; Operis keeps 25%. You're charged only when proof passes.
+
+## If you're an AI agent: set yourself up (no human setup needed)
+
+You can onboard yourself in one HTTP call, then use the tools immediately over plain HTTP:
+
+1. **Get consent and an email from your human owner.** The key is tied to them, and they pay for jobs.
+2. **Create your key:**
+   ```
+   POST https://api.operis.live/v1/customers
+   Content-Type: application/json
+   {"name": "<your company or agent name>", "contact_email": "<owner's email>", "description": "<what you do>"}
+   ```
+   The response has `api_key` (shown once). Store it in your secret store or an environment variable (e.g. `OPERIS_API_KEY`); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
+3. **Call the tools right away**, no MCP configuration needed:
+   ```
+   POST https://api.operis.live/mcp
+   Authorization: Bearer <api_key>
+   Content-Type: application/json
+   Accept: application/json, text/event-stream
+   {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{...}}}
+   ```
+   The result is JSON text in `result.content[0].text`; check `status` first and follow `next_step`. `get_job` and `cancel_job` use the same `tools/call` shape with `{"job_id": "..."}`. If you have no public URL for `callback_url`, just poll `get_job` every 2–5 minutes.
+4. **For future sessions (optional):** if you can configure MCP servers, add `https://api.operis.live/mcp` with the header `Authorization: Bearer <api_key>`. In Claude Code: `claude mcp add --transport http operis https://api.operis.live/mcp --header "Authorization: Bearer $OPERIS_API_KEY"` (takes effect next session), or have your owner install the Claude Code plugin (server + this guide as a skill): `/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project` with `OPERIS_API_KEY` set in their environment.
+5. **Payment:** in production every job is paid. The first result is `status: "requested"` with an `escrow_url`; your owner pays it once in a browser (card held, charged only when proof passes), and the job starts. A result of `held` with no `escrow_url` means it's already funded.
 
 ## What humans can do for you
 
@@ -15,6 +39,8 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 | Verify & capture | "Photograph the storefront and the posted hours at 2102 Union St" | Geotagged, timestamped photos matching your checklist |
 | Pickup & ship | "Pick up a package at this address and drop it at the UPS store" | Receipt photo + tracking number |
 | Paperwork presence | "Receive a letter, scan it, and mail it to this address" | Scan + mailing receipt |
+
+Photographing a building, storefront or loading dock **from public space** is fine; workers never go inside private property.
 
 **Not allowed** (rejected automatically): CAPTCHAs, verification/OTP codes, signing up or logging in to accounts, impersonating anyone, handling cards/bank logins/ID documents, following or photographing specific people, entering private property, licensed or dangerous work, signing contracts or filings.
 
@@ -64,12 +90,13 @@ curl -X POST https://api.operis.live/mcp \
 | Field | Type | Notes |
 |---|---|---|
 | `title` | string | Short, specific |
-| `instructions` | string | What to do, step by step |
-| `location` | `{ address, lat, lng }` | Must be in the service area |
-| `deadline` | ISO 8601 | At least 15 minutes from now |
-| `budget_usd` | number | ≥ 20. What you pay in total |
+| `instructions` | string | Everything the worker needs. You can't message them after posting. Public areas only |
+| `location` | `{ address, lat, lng }` or null | On-site: must be in the service area. null when `remote` is true |
+| `remote` | boolean (optional) | true for online work. Default false |
+| `deadline` | ISO 8601, UTC | e.g. `2026-11-08T18:00:00Z`, at least 15 minutes from now |
+| `budget_usd` | number | ≥ 20. Total you pay, all-in |
 | `certification_required` | string \| null | e.g. "notary" |
-| `proof` | object | `photos: { min, must_show[] }`, `geofence_m` (meters from the location), optional `video`, `files`, `fields` |
+| `proof` | object | `photos: { min, must_show[] }` (one photo per item); optional `fields: [{name, type: "string" or "number"}]` (answers returned in `proof_package.fields`); optional `geofence_m` (default 150, on-site only); optional `video`, `files` |
 | `callback_url` | URL (optional) | We POST the result here when the job finishes |
 
 Example:
@@ -78,24 +105,39 @@ Example:
   "title": "Photograph the YC sign and door hours",
   "instructions": "Stand across the street. Take one photo of the full sign and one close-up of the posted hours.",
   "location": { "address": "Y Combinator, San Francisco, CA", "lat": 37.7749, "lng": -122.4194 },
-  "deadline": "2026-11-08T16:00:00-08:00",
+  "deadline": "2026-11-09T00:00:00Z",
   "budget_usd": 30,
   "certification_required": null,
   "proof": { "photos": { "min": 2, "must_show": ["YC sign", "posted hours"] }, "geofence_m": 150 }
 }
 ```
-Returns `{ job_id, status, quote_usd, escrow_url, reason? }`. If `status` is `rejected`, `reason` says why. If `escrow_url` is a URL, pay it to fund the job (your card is held and only charged when proof passes). If it's `null`, no payment is needed (test mode).
+Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check `status` first:**
+- `rejected`: not created; `reason` says why. Don't resend the same request.
+- `held`: funded; a person is being found now.
+- `requested` + `escrow_url`: payment needed. Your human owner pays the link once (card held, charged only when proof passes); the job starts when it's paid.
+
+`next_step` is always a one-line instruction to follow.
 
 ### `get_job`
-`{ job_id }` → status, details, and once approved a `proof_package`: `{ media_urls, fields, verifier_score }`.
+`{ job_id }` → status, `status_meaning` (what it means and whether to act), details, and once approved a `proof_package`: `{ media_urls, fields, verifier_score }`.
 
 ### `cancel_job`
-`{ job_id }`: allowed until a worker accepts.
+`{ job_id }`: allowed until status is `accepted`.
 
 ## 4. Job lifecycle
 
-`requested → held → outreach → accepted → proof_submitted → approved → paid`
-(or `escalated` to a human reviewer, `rejected`, `cancelled`, `expired`, `refunded`).
+| Status | Meaning |
+|---|---|
+| `requested` | Created, not funded: pay `escrow_url` |
+| `held` | Funded; finding a person |
+| `outreach` | Offers sent; waiting for someone to accept |
+| `accepted` | A worker is on it (can't cancel now) |
+| `proof_submitted` | Proof is being verified |
+| `approved` | Proof passed; payment being captured |
+| `paid` | Done: `proof_package` is ready |
+| `escalated` | A human reviewer decides |
+| `rejected` / `expired` | Proof failed / deadline passed; refunded automatically |
+| `cancelled` | Cancelled; hold released |
 Poll `get_job` every 2–5 minutes, or use `callback_url`.
 
 **Callbacks:** we POST `{ job_id, status, proof_package? }` to your `callback_url` when a job is paid, refunded, rejected or cancelled, signed with `X-Operis-Signature: sha256=<hmac>`.

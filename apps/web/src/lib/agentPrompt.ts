@@ -1,0 +1,65 @@
+// The prompt a company pastes into its agent (system prompt, CLAUDE.md, skill...). Kept here so the
+// /developers page and our tests use the exact same text. Revised after two blind agent tests.
+// includeKey=false (default): the key lives in the MCP config or the OPERIS_API_KEY env var, never in the prompt
+// text (prompts end up in CLAUDE.md files and repos). includeKey=true is for agents that can only make HTTP calls.
+export function agentPrompt(mcpUrl: string, key = "<YOUR_OPERIS_KEY>", includeKey = false) {
+  const auth = includeKey
+    ? `Authorization: Bearer ${key}`
+    : "Authorization: Bearer <your Operis key> (already set if Operis is in your MCP config; for direct HTTP calls read it from the OPERIS_API_KEY environment variable, never hard-code it)";
+  return `You can hire a verified human for real-world tasks through Operis.
+
+## Connection
+- Operis is an MCP server at ${mcpUrl} (Streamable HTTP). Tools: request_human, get_job, cancel_job.
+- Send this header on every request: ${auth}
+- If you can't add MCP servers, call it as JSON-RPC (no initialize or session needed):
+  POST ${mcpUrl}
+  Headers: Content-Type: application/json, Accept: application/json, text/event-stream, Authorization as above
+  Body: {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}
+  The tool's answer is JSON text in result.content[0].text. If result.isError is true, that text is the error.
+
+## When to use it
+When a task needs a person: photograph or verify a place, pick up and ship an item, receive/scan/mail paperwork,
+or a short expert check done online. On-site work: San Francisco, within 8 km of 37.7749, -122.4194 (check the
+distance before sending; outside it is rejected). Online work: set "remote": true and "location": null.
+
+## request_human: arguments
+- title (string): short and specific.
+- instructions (string): everything the worker needs, step by step. You can't message the worker after posting,
+  so include all details here. Workers stay in public areas; ask for nothing that needs entering private property.
+- location ({"address", "lat", "lng"}) for on-site work, or null when remote is true.
+- remote (boolean, optional): true for online work. Default false.
+- deadline (string): ISO 8601 in UTC, e.g. "2026-11-08T18:00:00Z", at least 15 minutes from now.
+- budget_usd (number): the total you pay, all-in, at least 20. quote_usd always equals it. The worker gets 75%,
+  Operis keeps 25%. You're charged only if the proof passes.
+- certification_required (string or null): e.g. "notary"; null if no license is needed.
+- proof (object), what the worker must hand in:
+  - photos: {"min": N, "must_show": ["item 1", "item 2"]}. Ask for at least one photo per must_show item. If an item
+    may not exist (e.g. a sign), phrase it as "the sign, or the spot where it would be". Remote jobs can ask for screenshots.
+  - fields (optional): answers the worker fills in, e.g. [{"name": "keypad_lights_up", "type": "string"}]
+    (types: "string" or "number"). They come back in proof_package.fields.
+  - geofence_m (optional, on-site only): how close to the location the photos must be taken. Default 150.
+- callback_url (optional): we POST {job_id, status, proof_package} there when the job ends.
+
+## Reading the result. Check status first:
+- "rejected": not created. reason says why. Fix it or tell your owner; don't resend the same request.
+- "held": funded, and we're finding a person now. Nothing to do.
+- "requested" with an escrow_url: payment needed first. Give escrow_url to your human owner to pay once (the
+  card is held, charged only when proof passes). The job starts as soon as it's paid.
+Every result has next_step, a one-line instruction. Follow it.
+
+## Following a job
+Call get_job {"job_id"} every 2-5 minutes, or wait for your callback. Each response includes status_meaning.
+Statuses: requested (unpaid) → held (funded) → outreach (offers sent) → accepted (a worker took it; can no longer
+be cancelled) → proof_submitted (being verified) → approved → paid (done: proof_package has photo URLs, fields and
+the verifier score). Other endings: escalated (a human reviewer decides), rejected or expired (deadline passed;
+both refunded automatically), cancelled.
+cancel_job {"job_id"} works until status is accepted.
+
+## Never request
+CAPTCHAs, verification/OTP codes, signing up or logging in to accounts, impersonating anyone, handling cards, bank
+logins or ID documents, following or photographing specific people, entering private property, licensed or
+dangerous work, or signing contracts. These are rejected automatically.
+
+## Limits
+3 open jobs and 10 jobs per day per key.`;
+}

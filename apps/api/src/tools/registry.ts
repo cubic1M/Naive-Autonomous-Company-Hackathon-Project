@@ -6,6 +6,7 @@ import type { ServiceModule, ToolName, ToolContext } from "@contracts/runtime";
 import outreach from "@services/outreach/index";
 import verify from "@services/verify/index";
 import payments from "@services/payments/index";
+import * as paymentsModule from "@services/payments/index";
 import { mocks } from "./mocks";
 import { getJob } from "./edwin";
 import { outreachConfigured, realFindPeople, realSendBlast } from "./outreach";
@@ -15,7 +16,7 @@ const REAL: ServiceModule = { ...outreach, ...verify, ...payments };
 
 export const INTERNAL_TOOLS: ToolName[] = [
   "get_job", "find_people", "send_blast", "check_proof", "approve_proof", "escalate",
-  "capture_payment", "payout", "refund", "ledger",
+  "capture_payment", "payout", "refund", "ledger", "refund_large", "release_payout_large",
 ];
 
 export function resolveTool(name: ToolName): { impl: (input: any, ctx: ToolContext) => Promise<any>; source: "real" | "mock" } {
@@ -33,4 +34,4 @@ export function toolSources() {
 }
 
 /** Cameron's Stripe hold, if implemented (services/payments exports createHold). */
-export const createHold = (payments as any).createHold as undefined | ((jobId: string) => Promise<{ escrow_url: string }>);
+export const createHold = (paymentsModule as any).createHold as undefined | ((jobId: string) => Promise<{ escrow_url: string }>);

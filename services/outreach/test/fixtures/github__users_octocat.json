@@ -1,0 +1,16 @@
+{
+  "login": "octocat",
+  "id": 583231,
+  "html_url": "https://github.com/octocat",
+  "name": "The Octocat",
+  "company": "@github",
+  "blog": "https://github.blog",
+  "location": "San Francisco",
+  "email": "octocat@github.com",
+  "hireable": true,
+  "bio": "Mascot. Writes a lot of open source TypeScript.",
+  "twitter_username": "github",
+  "public_repos": 8,
+  "followers": 18000,
+  "updated_at": "2026-10-01T00:00:00Z"
+}
