@@ -175,7 +175,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
   const serif = "Georgia,'Times New Roman',Times,serif";
   const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
   const pill = (label: string, wide = false) =>
-    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};color:#ffffff;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
+    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};background-image:linear-gradient(180deg,#34453a 0%,#19211a 100%);border:1px solid #0e130f;color:#f4f1e8;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
   const detail = (label: string, value: string) =>
     `<tr><td style="padding:4px 12px 4px 0;font-family:${sans};font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-family:${sans};font-size:14px;color:${C.ink}">${esc(value)}</td></tr>`;
   const details = [
@@ -194,7 +194,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
 
   <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
 
-  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:linear-gradient(135deg,#2e3d30 0%,#19211a 100%);border-radius:16px;padding:56px 28px">
+  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,0.16) 0%,rgba(214,226,206,0) 55%),linear-gradient(135deg,#3b4f3f 0%,#243026 45%,#19211a 75%,#0e130f 100%);border-radius:16px;padding:56px 28px">
     <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">A job that<br>fits you</div>
   </td></tr>
 
