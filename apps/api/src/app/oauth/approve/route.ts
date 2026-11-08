@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     if (name.length < 2 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter a company name and a valid email." }, 400);
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
     const [{ n }] = await sql`select count(*)::int as n from customers where signup_ip = ${ip} and created_at > now() - interval '1 hour'`;
-    if (n >= 5) return json({ error: "Too many sign-ups from this address; try again later." }, 429);
+    if (n >= Number(process.env.SIGNUPS_PER_IP_PER_HOUR ?? 60)) return json({ error: "Too many sign-ups from this address; try again in a few minutes, or paste an existing key." }, 429, { "Retry-After": "600" });
     // The company's first key is never shown here; the connected app gets its own key via /oauth/token.
     const [row] = await sql`insert into customers (name, contact_email, description, api_key_hash, signup_ip)
       values (${name}, ${email}, ${String(b.description ?? "").slice(0, 500) || null}, ${hashKey(token("opk_", 24))}, ${ip}) returning id`;
