@@ -10,6 +10,8 @@
 
 **Spec:** `docs/specs/2026-11-08-sales-recruiter-design.md` (approved by Cameron in session sales-growth-ff6d5d). Read it first.
 
+> **Update 2026-11-08 (after PR #42 merged):** the changes this document planned as PR-body snippets for frozen files (`agents/agents.json`, `agents/prompts/ceo.md`, the RECRUITER role lists in `apps/api/src/lib/approvals.ts`, `apps/api/src/lib/agentFeed.ts`, `scripts/approvals.ts`, and the `scripts/migrate.ts` entry) were applied directly in this PR, on Cameron's call in the session. Only Dora's `apps/web` copy change remains a snippet.
+
 ## Global Constraints
 
 - Email only. No SMS, DMs or public posts. No real email outside `OUTREACH_TEST_ALLOWLIST` unless `GROWTH_LIVE` names the kind **and** `GROWTH_POSTAL_ADDRESS` is set; this PR sets neither anywhere.

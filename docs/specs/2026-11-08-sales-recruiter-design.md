@@ -4,6 +4,8 @@
 **Plan:** `docs/plans/2026-11-08-sales-recruiter.md` (written after this spec is approved).
 **Labels:** VERIFIED = file:line opened in this session; INFERRED = reasoned, not checked.
 
+> **Update 2026-11-08 (after PR #42 merged):** the changes this document planned as PR-body snippets for frozen files (`agents/agents.json`, `agents/prompts/ceo.md`, the RECRUITER role lists in `apps/api/src/lib/approvals.ts`, `apps/api/src/lib/agentFeed.ts`, `scripts/approvals.ts`, and the `scripts/migrate.ts` entry) were applied directly in this PR, on Cameron's call in the session. Only Dora's `apps/web` copy change remains a snippet.
+
 ## 1. Goal
 
 Two agents run Operis's growth without the founders:
