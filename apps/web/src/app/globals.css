@@ -315,8 +315,10 @@ p { margin: 0; }
 /* Above the beige/green line: the halftone grey, multiplied into the beige (white paper vanishes). */
 .hands-bg__layer--grey { clip-path: inset(0 0 calc(100% - var(--line, 100%)) 0); mix-blend-mode: multiply; opacity: 0.15; }
 /* Below it: neon green dots, screened onto the dark green (black paper vanishes). */
-.hands-bg__layer--neon { clip-path: inset(var(--line, 100%) 0 0 0); mix-blend-mode: screen; opacity: 0.17; }
-.hands-bg__layer--neon .hands-bg__img { filter: url(#hands-neon); }
+.hands-bg__layer--neon { clip-path: inset(var(--line, 100%) 0 calc(100% - var(--foot, 100%)) 0); mix-blend-mode: screen; opacity: 0.17; }
+/* Behind the footer the hands show at a fifth of their strength, so the footer reads as a near-solid block. */
+.hands-bg__layer--dim { clip-path: inset(var(--foot, 100%) 0 0 0); mix-blend-mode: screen; opacity: 0.034; } /* 20% of the neon: the footer reads ~80% opaque */
+.hands-bg__layer--neon .hands-bg__img, .hands-bg__layer--dim .hands-bg__img { filter: url(#hands-neon); }
 
 /* The image is 1706×795. The fingertips meet at (956, 414) = 56.04% / 52.08%; the stage puts that
    point at the center of the window and is 115vw wide, so both arms run off the edges even while the
@@ -330,12 +332,16 @@ p { margin: 0; }
 /* Robot side: the arm plus its index finger up to the tip; the drawn spark is cut away. */
 .hands-bg__robot {
   clip-path: polygon(0 0, 49.24% 0, 49.24% 47.8%, 52.29% 50.06%, 52.29% 53.84%, 49.24% 54.72%, 49.24% 100%, 0 100%);
-  /* The reach follows the scroll: 67px of the image, from the robot fingertip (889) to the human's (956). */
-  transform: translateX(calc(var(--p, 0) * 3.93%));
+  /* The reach follows the scroll. Both hands start 7% of the image away from the center and close in
+     at the same speed; at the end the robot fingertip (889) sits on the human's (956), 3.93% to the
+     right, exactly at the center of the window. Each arm moves outward from its own window edge, so
+     both edges stay covered. */
+  transform: translateX(calc(3.93% - 7% * (1 - var(--p, 0))));
 }
 /* Human side: from the human fingertip to the right edge, again without the spark. */
 .hands-bg__human {
   clip-path: polygon(58.62% 0, 100% 0, 100% 100%, 58.62% 100%, 58.62% 55.6%, 55.8% 54.97%, 55.8% 50.31%, 58.62% 49.31%);
+  transform: translateX(calc(7% * (1 - var(--p, 0))));
 }
 
 /* The line ripple: a strip that redraws the beige/green edge as a travelling wave (JS sets its shape). */

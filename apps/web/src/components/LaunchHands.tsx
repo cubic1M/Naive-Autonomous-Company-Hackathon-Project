@@ -55,7 +55,7 @@ function ringMap(size = 512, rings = 4): string {
   return c.toDataURL("image/png");
 }
 
-function Layer({ variant }: { variant: "grey" | "neon" }) {
+function Layer({ variant }: { variant: "grey" | "neon" | "dim" }) {
   return (
     <div className={`hands-bg__layer hands-bg__layer--${variant}`}>
       <div className="hands-bg__stage">
@@ -95,6 +95,7 @@ export default function LaunchHands() {
     const svg = strip.current;
     const hero = document.querySelector<HTMLElement>(BOUNDARY);
     const page = document.querySelector<HTMLElement>(PAGE);
+    const footer = document.querySelector<HTMLElement>("[data-hands-footer]");
     if (!el || !svg || !hero || !page || !defs.current) return;
     const beige = svg.querySelector<SVGPathElement>("[data-beige]")!;
     const green = svg.querySelector<SVGPathElement>("[data-green]")!;
@@ -186,7 +187,11 @@ export default function LaunchHands() {
       // Reach progress: 0 at the top of the page, 1 when the line reaches the middle of the screen.
       const travel = Math.max(1, window.scrollY + line - vh / 2);
       const p = Math.min(1, Math.max(0, window.scrollY / travel));
-      el.style.setProperty("--line", `${Math.min(vh, Math.max(0, line))}px`);
+      const clampedLine = Math.min(vh, Math.max(0, line));
+      el.style.setProperty("--line", `${clampedLine}px`);
+      // Top of the footer, never above the beige/green line.
+      const footTop = footer ? footer.getBoundingClientRect().top : vh;
+      el.style.setProperty("--foot", `${Math.min(vh, Math.max(clampedLine, footTop))}px`);
       el.style.setProperty("--p", p.toFixed(4));
       const nowTouched = p >= 1;
       if (nowTouched && !touched && window.scrollY > 0) {
@@ -234,6 +239,7 @@ export default function LaunchHands() {
       </svg>
       <Layer variant="grey" />
       <Layer variant="neon" />
+      <Layer variant="dim" />
       <svg ref={strip} className="hands-bg__ripple" preserveAspectRatio="none" height={BAND}>
         <path data-beige="" fill={BEIGE} />
         <path data-green="" fill={GREEN} />
