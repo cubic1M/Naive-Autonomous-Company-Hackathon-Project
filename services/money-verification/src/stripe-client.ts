@@ -44,6 +44,12 @@ export interface StripeClient {
         params: Stripe.Identity.VerificationSessionCreateParams,
         options?: Stripe.RequestOptions,
       ): Promise<Stripe.Identity.VerificationSession>;
+      /** verified_outputs is expandable and absent from webhook payloads: retrieve(id, { expand: ['verified_outputs'] }). */
+      retrieve(
+        id: string,
+        params?: Stripe.Identity.VerificationSessionRetrieveParams,
+        options?: Stripe.RequestOptions,
+      ): Promise<Stripe.Identity.VerificationSession>;
     };
   };
   disputes: {

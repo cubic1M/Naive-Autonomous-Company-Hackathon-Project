@@ -99,9 +99,28 @@ describe('identity webhooks', () => {
     expect(row?.details.last_verification_report).toMatch(/^vr_test_/);
     expect(verifiedHooks(world)).toEqual([{ name: 'onWorkerVerified', args: [WORKER_ID, 'verified'] }]);
     expect(verifiedIdentityName(row)).toBe('Pat Example');
+    // the payload carries no verified_outputs (observed against the sandbox); the names come from one expanded retrieve
+    expect((event.data.object as { verified_outputs?: unknown }).verified_outputs).toBeUndefined();
+    const retrieves = world.stripe.callsTo('identity.verificationSessions.retrieve');
+    expect(retrieves).toHaveLength(1);
+    expect(retrieves[0]?.params).toMatchObject({ id: sessionId, params: { expand: ['verified_outputs'] } });
 
     const again = await handleStripeWebhook(world.deps, webhookRequest(world, event));
     expect(await again.json()).toMatchObject({ duplicate: true, handled: false });
+    expect(verifiedHooks(world)).toHaveLength(1);
+  });
+
+  it('a failed verified_outputs fetch keeps the verification (names null, error recorded) and still fires the hook', async () => {
+    const { world, sessionId } = await started();
+    world.stripe.identity.verificationSessions.retrieve = async () => {
+      throw new Error('stripe unreachable');
+    };
+    const res = await handleStripeWebhook(world.deps, webhookRequest(world, world.stripe.identityVerifiedEvent(sessionId, { first_name: 'Pat', last_name: 'Example' })));
+    expect(await res.json()).toMatchObject({ handled: true });
+    const row = await world.repo.getWorkerVerification(WORKER_ID, 'identity');
+    expect(row).toMatchObject({ status: 'verified', provider_ref: sessionId });
+    expect(row?.details).toMatchObject({ first_name: null, last_name: null, verified_outputs_error: 'stripe unreachable' });
+    expect(verifiedIdentityName(row)).toBeNull();
     expect(verifiedHooks(world)).toHaveLength(1);
   });
 

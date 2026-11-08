@@ -34,6 +34,8 @@ export interface IdentityDetails {
   /** VerificationReport id (vr_...), where the document type and checks live in the Stripe dashboard. */
   last_verification_report?: string | null;
   last_error?: { code: string | null; reason: string | null } | null;
+  /** Set when the verified session's outputs could not be fetched; the identity is still verified, the names are null. */
+  verified_outputs_error?: string;
   [key: string]: unknown;
 }
 
@@ -54,7 +56,7 @@ export interface IdentityOutcome {
 }
 
 type Session = Stripe.Identity.VerificationSession;
-type RecordDeps = Pick<IdentityDeps, 'repo' | 'hooks' | 'now'>;
+type RecordDeps = Pick<IdentityDeps, 'stripe' | 'repo' | 'hooks' | 'now'>;
 
 export const identityReturnUrl = (publicBaseUrl: string, workerId: string): string => `${publicBaseUrl}/join/${workerId}/identity/done`;
 
@@ -130,21 +132,40 @@ async function write(deps: RecordDeps, workerId: string, existing: WorkerVerific
   await fire(deps.hooks, 'onWorkerVerified', workerId, status);
 }
 
+/**
+ * The verified name. The webhook payload never carries verified_outputs (observed against the sandbox on API
+ * 2026-10-28: the key is absent, and it is expandable), so it is fetched with one expanded retrieve. A failed
+ * fetch must not lose the verification: the names stay null and the error is recorded for a later refetch.
+ */
+async function verifiedOutputsOf(
+  deps: Pick<IdentityDeps, 'stripe'>,
+  session: Session,
+): Promise<{ outputs: Stripe.Identity.VerificationSession.VerifiedOutputs | null; error: string | null }> {
+  if (session.verified_outputs) return { outputs: session.verified_outputs, error: null };
+  try {
+    const full = await deps.stripe.identity.verificationSessions.retrieve(session.id, { expand: ['verified_outputs'] });
+    return { outputs: full.verified_outputs ?? null, error: null };
+  } catch (err) {
+    return { outputs: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /** identity.verification_session.verified: store the verified name and the report id, fire onWorkerVerified once. */
 export async function recordIdentityVerified(deps: RecordDeps, session: Session): Promise<IdentityOutcome> {
   const workerId = workerIdOf(session);
   if (!workerId) return { workerId: null, changed: false, status: null, detail: `session ${session.id} has no worker_id` };
   const existing = await deps.repo.getWorkerVerification(workerId, 'identity');
   if (existing?.status === 'verified') return { workerId, changed: false, status: 'verified', detail: `worker ${workerId} already verified` };
-  const outputs = session.verified_outputs ?? null;
+  const { outputs, error } = await verifiedOutputsOf(deps, session);
   await write(deps, workerId, existing, session, 'verified', {
     type: session.type,
     first_name: outputs?.first_name ?? null,
     last_name: outputs?.last_name ?? null,
     last_verification_report: refId(session.last_verification_report),
     last_error: null,
+    ...(error ? { verified_outputs_error: error } : {}),
   });
-  return { workerId, changed: true, status: 'verified', detail: `worker ${workerId} verified` };
+  return { workerId, changed: true, status: 'verified', detail: `worker ${workerId} verified${error ? ' (verified_outputs not fetched)' : ''}` };
 }
 
 const lastErrorOf = (session: Session): IdentityDetails['last_error'] =>

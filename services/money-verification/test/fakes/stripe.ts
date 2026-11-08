@@ -304,7 +304,11 @@ export class FakeStripe implements StripeClient {
     return vs;
   }
 
-  /** The worker passed the document and selfie checks: identity.verification_session.verified carries verified_outputs. */
+  /**
+   * The worker passed the document and selfie checks. As observed against the real sandbox (API 2026-10-28), the
+   * identity.verification_session.verified payload does NOT carry verified_outputs: it is expandable and only
+   * comes back from retrieve(id, { expand: ['verified_outputs'] }). The fake mirrors that.
+   */
   identityVerifiedEvent(sessionId: string, outputs: { first_name: string; last_name: string }): Stripe.Event {
     const vs = this.verificationSession(sessionId);
     vs.status = 'verified';
@@ -319,7 +323,13 @@ export class FakeStripe implements StripeClient {
       id_number_type: null,
       phone: null,
     };
-    return this.event('identity.verification_session.verified', vs);
+    return this.event('identity.verification_session.verified', this.wireSession(vs, false));
+  }
+
+  /** The session as the API serialises it: verified_outputs only when expanded. */
+  private wireSession(vs: FakeVS, expandOutputs: boolean): Record<string, unknown> {
+    const { verified_outputs, ...rest } = vs;
+    return expandOutputs ? { ...rest, verified_outputs } : rest;
   }
 
   /** A check failed and the worker must try again: requires_input with last_error set. */
@@ -549,6 +559,16 @@ export class FakeStripe implements StripeClient {
           this.vsStore.set(id, vs);
           return vs as unknown as Stripe.Identity.VerificationSession;
         });
+      },
+      retrieve: async (
+        id: string,
+        params?: Stripe.Identity.VerificationSessionRetrieveParams,
+        options?: Stripe.RequestOptions,
+      ): Promise<Stripe.Identity.VerificationSession> => {
+        this.record('identity.verificationSessions.retrieve', { id, params }, options);
+        const vs = this.verificationSession(id);
+        const expand = params?.expand ?? [];
+        return this.wireSession(vs, expand.includes('verified_outputs')) as unknown as Stripe.Identity.VerificationSession;
       },
     },
   };
