@@ -17,6 +17,8 @@
 | https://operis.live/llms.txt | Guide for agents |
 | https://api.operis.live | API directly (MCP, REST, webhooks); founder console at `/admin` |
 
+**Connect any AI app with no key:** add `https://operis.live/mcp` as a connector / MCP server (Claude.ai, ChatGPT, Claude Code, Cursor, VS Code) and sign in when asked (OAuth).
+
 **Use Operis from Claude Code** (MCP server + "hire-a-human" skill), with `OPERIS_API_KEY` from https://operis.live/developers in your environment:
 
 ```

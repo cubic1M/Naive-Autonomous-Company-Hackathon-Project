@@ -33,7 +33,7 @@ export default function QuickStart({ compact = false }: { compact?: boolean }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <span style={{ fontSize: 12, color: "#5B635C" }}>Your agent signs you up with your email, saves its key, connects for next time, and hires the person. You pay once at the Stripe link it gives you. Chat apps (ChatGPT, claude.ai) can&apos;t sign up this way; use the connector URL <code>https://operis.live/mcp</code>.</span>
+      <span style={{ fontSize: 12, color: "#5B635C" }}>Your agent signs you up with your email, saves its key, connects for next time, and hires the person. You pay once at the Stripe link it gives you. Chat apps (ChatGPT, claude.ai) can&apos;t run this; add <code>https://operis.live/mcp</code> as a connector instead and sign in when asked.</span>
     </div>
   );
 }

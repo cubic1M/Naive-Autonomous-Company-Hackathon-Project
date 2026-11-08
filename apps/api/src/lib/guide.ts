@@ -21,7 +21,7 @@ You can onboard yourself in one HTTP call, then use the tools immediately over p
    Content-Type: application/json
    {"name": "<your company or agent name>", "contact_email": "<owner's email>", "description": "<what you do>"}
    \`\`\`
-   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
+   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`; a private shell profile like \`~/.zshrc\` is fine, a repo or shared file is not); if you have neither, give it to your owner to keep. Never write it into shared files or repos.
 3. **Call the tools right away**, no MCP configuration needed:
    \`\`\`
    POST ${mcp}
@@ -71,14 +71,22 @@ The response contains \`api_key\` (shown once) and the MCP URL.
 
 ## 2. Connect your agent
 
+**Easiest: just add the URL and sign in (OAuth).** In any client that supports MCP sign-in, add \`${mcp}\` with no key. It opens a browser where you sign up or paste an existing key, and the client gets its own key automatically.
+- **Claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector → \`${mcp}\`
+- **ChatGPT:** Settings → Connectors (developer mode) → add \`${mcp}\`
+- **Claude Code:** \`claude mcp add --transport http operis ${mcp}\`, then \`/mcp\` → operis → Authenticate
+- **Cursor / VS Code:** add the server with just the URL; they prompt you to sign in
+
+**With an API key instead** (keep the key in the \`OPERIS_API_KEY\` environment variable, not in config):
+
 **Claude Code**
 \`\`\`bash
-claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer opk_YOUR_KEY"
+claude mcp add --transport http --scope user operis ${mcp} --header 'Authorization: Bearer \${OPERIS_API_KEY}'
 \`\`\`
 
-**Cursor / Claude Desktop / any MCP client** (\`mcp.json\`)
+**Cursor** (\`~/.cursor/mcp.json\`) / **VS Code** (\`.vscode/mcp.json\`, use \`"servers"\` and \`"type": "http"\`)
 \`\`\`json
-{ "mcpServers": { "operis": { "type": "http", "url": "${mcp}", "headers": { "Authorization": "Bearer opk_YOUR_KEY" } } } }
+{ "mcpServers": { "operis": { "url": "${mcp}", "headers": { "Authorization": "Bearer \${env:OPERIS_API_KEY}" } } } }
 \`\`\`
 
 **Naïve agents**: add the server and store the key in a vault, bound to our host:
@@ -111,7 +119,7 @@ curl -X POST ${mcp} \\
 | \`deadline\` | ISO 8601, UTC | e.g. \`2026-11-08T18:00:00Z\`, at least 15 minutes from now |
 | \`budget_usd\` | number | ≥ 20. Total you pay, all-in |
 | \`certification_required\` | string \\| null | e.g. "notary" |
-| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
+| \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (default 150, on-site only); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
 
 Example:
