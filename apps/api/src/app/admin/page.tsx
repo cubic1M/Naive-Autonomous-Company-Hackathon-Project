@@ -12,6 +12,7 @@ export default function Admin() {
   const [dash, setDash] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
+  const [approvals, setApprovals] = useState<any[] | null>(null);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get("key");
@@ -25,6 +26,13 @@ export default function Admin() {
     const [a, b] = await Promise.all([fetch("/v1/admin/escalations", { headers: H() }), fetch("/v1/dashboard", { headers: H() })]);
     if (a.status === 401) { setErr("Wrong or missing admin key. Open /admin?key=YOUR_ADMIN_KEY"); return; }
     setErr(""); setData(await a.json()); setDash(await b.json());
+    fetch("/v1/admin/approvals", { headers: H() }).then((r) => r.json()).then((j) => setApprovals(j.items ?? [])).catch(() => {});
+  };
+  const approve = async (p: any, decision: "allow" | "deny", scope: "call" | "session") => {
+    setBusy(p.tool_call_id);
+    const r = await fetch("/v1/admin/approvals", { method: "POST", headers: H(), body: JSON.stringify({ session_id: p.session_id, tool_call_id: p.tool_call_id, decision, scope }) });
+    if (!r.ok) alert(`failed (${r.status})`);
+    setBusy(""); load();
   };
   useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [key]);
 
@@ -50,6 +58,18 @@ export default function Admin() {
               .map(([k, v]) => (<div key={k as string} style={{ ...card, flex: "1 1 120px", marginBottom: 0 }}><div style={{ fontSize: 12, color: "#666" }}>{k}</div><div style={{ fontSize: 22, fontWeight: 700 }}>{v ?? "–"}</div></div>))}
           </div>
         )}
+
+        <h2 style={{ fontSize: 18 }}>Agent approvals ({approvals?.length ?? "…"})</h2>
+        {approvals?.length === 0 && <div style={card}>No agent is waiting on you.</div>}
+        {approvals?.map((p: any) => (
+          <div key={p.tool_call_id} style={card}>
+            <div style={{ fontWeight: 700 }}>{p.agent} wants to run <code>{p.tool}</code></div>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f4f4f5", padding: 10, borderRadius: 8, maxHeight: 160, overflow: "auto" }}>{JSON.stringify(p.args, null, 2)}</pre>
+            <button disabled={busy === p.tool_call_id} style={btn("#0a7")} onClick={() => approve(p, "allow", "session")}>Approve for this session</button>
+            <button disabled={busy === p.tool_call_id} style={btn("#335")} onClick={() => approve(p, "allow", "call")}>Approve once</button>
+            <button disabled={busy === p.tool_call_id} style={btn("#b33")} onClick={() => approve(p, "deny", "call")}>Deny</button>
+          </div>
+        ))}
 
         <h2 style={{ fontSize: 18 }}>Needs your review ({data?.items?.length ?? 0})</h2>
         {data?.items?.length === 0 && <div style={card}>Nothing escalated. The Verifier is handling everything.</div>}
