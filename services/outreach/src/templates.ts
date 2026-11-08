@@ -180,14 +180,14 @@ export function renderEmailHtml(ctx: MessageContext): string {
     ink: '#2f3a33',
     body: '#4a514c',
     muted: '#8a8f8a',
-    sage: '#19211a', // brand green (buttons)
-    label: '#4b5e4f',
-    deep: '#19211a', // brand green (hero)
+    sage: '#46664f', // brand green (buttons), matches operis.live
+    label: '#46664f',
+    deep: '#2f4b38', // brand green (hero), matches operis.live
   };
   const serif = "Georgia,'Times New Roman',Times,serif";
   const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
   const pill = (label: string, wide = false) =>
-    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};background-image:linear-gradient(180deg,#34453a 0%,#19211a 100%);border:1px solid #0e130f;color:#f4f1e8;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
+    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};background-image:linear-gradient(180deg,#567760 0%,#3f5e48 100%);border:1px solid #34503d;color:#f4f1e8;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
   const detail = (label: string, value: string) =>
     `<tr><td style="padding:4px 12px 4px 0;font-family:${sans};font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-family:${sans};font-size:14px;color:${C.ink}">${esc(value)}</td></tr>`;
   const details = [
@@ -206,7 +206,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
 
   <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
 
-  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,0.16) 0%,rgba(214,226,206,0) 55%),linear-gradient(135deg,#3b4f3f 0%,#243026 45%,#19211a 75%,#0e130f 100%);border-radius:16px;padding:56px 28px">
+  <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,0.16) 0%,rgba(214,226,206,0) 55%),linear-gradient(135deg,#6a8a71 0%,#4f6f57 40%,#3a5a43 70%,#2a4433 100%);border-radius:16px;padding:56px 28px">
     <div style="font-family:${sans};font-size:12px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#cfd9cc;margin-bottom:14px">${esc(`${pay} · ${urgencyLabel(job.deadline)}`)}</div>
     <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">You've been<br>selected</div>
   </td></tr>
