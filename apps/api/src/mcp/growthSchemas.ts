@@ -28,7 +28,7 @@ export const GROWTH_SCHEMAS = {
     shape: { family, limit: z.number().int().min(1).max(20).optional().describe("Max candidates returned (default 10).") },
   },
   recruit_invite: {
-    description: "Email Operis's fixed invitation to join the worker pool (join link, optional ID check, unsubscribe link) to people from recruit_search. The code enforces opt-outs, the 30-day rule, the daily cap and live/allowlist/dry-run mode. Returns counts, used_today against daily_cap, and a status per person.",
+    description: "Email Operis's fixed invitation to join the worker pool (join link, the ID check every job needs, unsubscribe link) to people from recruit_search. The code enforces opt-outs, the 30-day rule, the daily cap and live/allowlist/dry-run mode. Returns counts, used_today against daily_cap, and a status per person.",
     shape: { family, person_ids: z.array(z.string().uuid()).min(1).max(20).describe("person_id values from recruit_search.") },
   },
   growth_report: {
