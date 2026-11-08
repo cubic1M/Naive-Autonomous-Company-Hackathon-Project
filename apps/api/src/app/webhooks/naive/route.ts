@@ -1,6 +1,7 @@
 // Naïve outbound webhooks (session.idle, tool.confirm, budget.exceeded, ...). Logged to agent_events
 // for the dashboard's agent feed. Auth: ?k=NAIVE_WEBHOOK_SECRET on the registered URL.
 import { sql } from "@/lib/db";
+import { autoApproveReason, decide, roleForAgent } from "@/lib/approvals";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -15,6 +16,17 @@ export async function POST(req: Request) {
     type === "budget.exceeded" ? "budget exceeded" : type;
   await sql`insert into agent_events (type, agent_id, session_id, summary, payload)
             values (${type}, ${data?.agent_id ?? null}, ${data?.session_id ?? evt.session_id ?? null}, ${summary}, ${sql.json(evt)})`;
-  if (type === "tool.confirm" || type === "budget.exceeded") console.warn(`[naive] ⚠️ ${summary}`);
+  // If Naïve delivers tool.confirm (today it only sends session.idle; the cron covers that), apply the
+  // founder auto-approve policy immediately.
+  if (type === "tool.confirm") {
+    const role = roleForAgent(data?.agent_id ?? evt.agent_id);
+    const tool = data?.name ?? data?.tool?.name;
+    const sessionId = data?.session_id ?? evt.session_id;
+    const callId = data?.tool_call_id;
+    const reason = role && tool ? autoApproveReason(role, tool) : null;
+    if (reason && sessionId && callId) await decide(sessionId, callId, "allow", "session", reason);
+    else console.warn(`[naive] ⚠️ ${summary} (waiting for a founder)`);
+  }
+  if (type === "budget.exceeded") console.warn(`[naive] ⚠️ ${summary}`);
   return Response.json({ ok: true });
 }
