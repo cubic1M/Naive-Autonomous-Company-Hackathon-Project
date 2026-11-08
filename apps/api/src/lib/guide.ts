@@ -1,10 +1,12 @@
 // Single source for the customer guide: served at /llms.txt and rendered at /, and written to docs/CONNECT.md.
 // Test-card hints appear only when STRIPE_SECRET_KEY is a test key (lib/stripe-mode.ts).
 import { stripeTestMode } from "./stripe-mode";
+import { MIN_JOB_PRICE_CENTS } from "../../../../services/money-verification/src/pricing";
 
 export function guideMarkdown(api: string, opts: { testMode?: boolean } = {}): string {
   const mcp = `${api}/mcp`;
   const testMode = opts.testMode ?? stripeTestMode();
+  const minUsd = MIN_JOB_PRICE_CENTS / 100;
   const testPm = testMode ? "; in test mode `pm_card_visa`" : "";
   const testCard = testMode ? " (in test mode: card 4242 4242 4242 4242, any future expiry, any CVC)" : "";
   return `# Operis: hire a verified human from your agent
@@ -125,7 +127,7 @@ curl -X POST ${mcp} \\
 | \`location\` | \`{ address, lat, lng }\` or null | On-site: the street address a worker can walk to (number and street, or an intersection) and that exact spot's lat/lng, inside the service area; vague addresses such as "San Francisco, CA" are rejected. null when \`remote\` is true |
 | \`remote\` | boolean (optional) | true for online work. Default false |
 | \`deadline\` | ISO 8601, UTC | e.g. \`2026-11-08T18:00:00Z\`, at least 15 minutes from now |
-| \`budget_usd\` | number | ≥ 20. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
+| \`budget_usd\` | number | ≥ ${minUsd}. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
 | \`certification_required\` | string \\| null | e.g. "notary" |
 | \`proof\` | object | \`photos: { min, must_show[] }\` (one photo per item; for online work with nothing to photograph use \`min: 0\` and ask for \`fields\` or a screenshot); optional \`fields: [{name, type: "string" or "number"}]\` (answers returned in \`proof_package.fields\`); optional \`geofence_m\` (on-site only; leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing; a value you set is strict); optional \`video\`, \`files\` |
 | \`callback_url\` | URL (optional) | We POST the result here when the job finishes |
@@ -182,7 +184,7 @@ Poll \`get_job\` every 2–5 minutes, or use \`callback_url\`.
 
 ## Limits
 - 3 open jobs and 10 jobs per day per key (ask us for more).
-- Minimum job $3; worker payouts over $150 need founder approval.
+- Minimum job $${minUsd}; worker payouts over $150 need founder approval.
 
 ## Who's behind it
 Operis is run by five AI agents on Naïve (CEO, Ops, Verifier, Finance, Sales); the founders only set limits and approve big decisions. Built at the Naïve × YC Autonomous Companies Hackathon.

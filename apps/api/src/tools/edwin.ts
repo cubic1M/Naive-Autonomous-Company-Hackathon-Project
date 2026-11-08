@@ -8,6 +8,7 @@ import { unknownPaymentMethodText } from "@/lib/stripe-mode";
 import * as compliance from "@services/compliance/index";
 import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
 import { networkLabel, x402Enabled, x402Offer } from "@/lib/x402";
+import { MIN_JOB_PRICE_CENTS } from "@services/money-verification/src/pricing";
 
 /** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
 export const STATUS_MEANING: Record<string, string> = {
@@ -24,7 +25,7 @@ export const STATUS_MEANING: Record<string, string> = {
   refunded: "Refunded in full.",
   cancelled: "Cancelled; any payment hold was released.",
 };
-const MIN_JOB_USD = 20;
+const MIN_JOB_USD = MIN_JOB_PRICE_CENTS / 100;
 
 export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): Promise<Tools["get_job"]["out"]> {
   const [j] = await ctx.sql`select * from jobs where id = ${input.job_id}`;
