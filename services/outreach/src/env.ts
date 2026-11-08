@@ -38,6 +38,12 @@ export interface Env {
    * Default false = fully autonomous: only channels Operis sends itself (email, consented SMS).
    */
   OUTREACH_MANUAL_QUEUE: boolean;
+  /** Overall wall-clock budget for one find_people call, ms. Default 30000. */
+  OUTREACH_TIME_BUDGET_MS?: number;
+  /** Timeout for any single Monid call made while finding people, ms. Default 10000. */
+  OUTREACH_CALL_TIMEOUT_MS?: number;
+  /** Parallel email enrichments. Default 16. */
+  OUTREACH_ENRICH_CONCURRENCY?: number;
 }
 
 export const DEFAULTS = {
@@ -46,6 +52,9 @@ export const DEFAULTS = {
   OUTREACH_MAX_SPEND_USD: 0.5,
   OUTREACH_MANUAL_DAILY_CAP: 20,
   OUTREACH_RADIUS_KM: 8,
+  OUTREACH_TIME_BUDGET_MS: 30000,
+  OUTREACH_CALL_TIMEOUT_MS: 10000,
+  OUTREACH_ENRICH_CONCURRENCY: 16,
 } as const;
 
 function num(value: string | undefined, fallback: number): number {
@@ -85,5 +94,8 @@ export function envFromProcess(source: NodeJS.ProcessEnv = process.env): Env {
     PAUSE_OUTREACH: bool(source.PAUSE_OUTREACH),
     OUTREACH_MANUAL_DAILY_CAP: num(source.OUTREACH_MANUAL_DAILY_CAP, DEFAULTS.OUTREACH_MANUAL_DAILY_CAP),
     OUTREACH_MANUAL_QUEUE: bool(source.OUTREACH_MANUAL_QUEUE),
+    OUTREACH_TIME_BUDGET_MS: num(source.OUTREACH_TIME_BUDGET_MS, DEFAULTS.OUTREACH_TIME_BUDGET_MS),
+    OUTREACH_CALL_TIMEOUT_MS: num(source.OUTREACH_CALL_TIMEOUT_MS, DEFAULTS.OUTREACH_CALL_TIMEOUT_MS),
+    OUTREACH_ENRICH_CONCURRENCY: Math.max(1, num(source.OUTREACH_ENRICH_CONCURRENCY, DEFAULTS.OUTREACH_ENRICH_CONCURRENCY)),
   };
 }

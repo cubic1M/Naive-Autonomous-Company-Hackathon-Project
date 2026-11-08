@@ -1,3 +1,7 @@
 node_modules/
 .env
 *.local.json
+
+# talent pool snapshots (scraped contacts); keep the README
+data/*
+!data/README.md

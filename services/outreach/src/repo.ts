@@ -10,6 +10,30 @@ import type {
   Person,
 } from './types.js';
 
+export interface PoolQuery {
+  terms: string[];
+  credential?: string | null;
+  remote: boolean;
+  lat?: number | null;
+  lng?: number | null;
+  radiusKm?: number;
+  /** On-site: the job's city, matched against location_text/address of people without coordinates. */
+  locationText?: string | null;
+  limit: number;
+}
+
+/** Lowercased, trimmed, de-duplicated search terms (credential included). */
+export function poolTerms(q: Pick<PoolQuery, 'terms' | 'credential'>): string[] {
+  const all = [...q.terms, ...(q.credential ? [q.credential] : [])].map((t) => t.toLowerCase().replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 2);
+  return [...new Set(all)];
+}
+
+/** First comma-separated part of a place, lowercased ("San Francisco, CA" -> "san francisco"). */
+export function cityOf(locationText: string | null | undefined): string | null {
+  const c = (locationText ?? '').split(',')[0]?.trim().toLowerCase();
+  return c ? c : null;
+}
+
 /**
  * Persistence boundary. InMemoryRepo (tests, local dev) and PostgresRepo (prod) implement it.
  * Reads `jobs` (Edwin's table); writes `workers` (shared), `worker_profiles` (ours), `outreach` (ours),
@@ -40,6 +64,14 @@ export interface Repo {
 
   /** Mark someone as a regular who wants more jobs (and optionally consents to SMS). */
   setRegular(personId: string, regular: boolean, smsConsent?: boolean): Promise<void>;
+
+  /**
+   * Talent pool: people we can contact (email, or consenting regulars with a phone), not opted out, matching ANY term
+   * (case-insensitive) in name/headline/snippet/categories/credentials. On-site (remote false): only people within
+   * radiusKm when both have coordinates, or without coordinates whose location_text/address mentions the city.
+   * Ordered by matched terms, then open_to_work, then recency.
+   */
+  searchPool(q: PoolQuery): Promise<Person[]>;
 
   insertOutreach(row: { job_id: string; worker_id: string; channel: Channel; token: string; status: OutreachStatus }): Promise<OutreachRow>;
   listOutreachForJob(jobId: string): Promise<OutreachRow[]>;

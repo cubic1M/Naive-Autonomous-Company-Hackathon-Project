@@ -7,10 +7,15 @@
  *   TEST_EMAIL=you@x.com SEND=1 NAIVE_API_KEY=... NAIVE_OPS_IDENTITY_ID=... NAIVE_OPS_INBOX_ID=... npx tsx scripts/demo.ts
  *                                                    # really emails ONLY you (allowlist); businesses are never emailed
  *
+ * Pool: POOL_FILE=data/pool.json loads a talent pool (see scripts/warm-pool.ts), searches it first, and saves it back grown.
+ * Speed: OUTREACH_TIME_BUDGET_MS (default 30000), OUTREACH_CALL_TIMEOUT_MS (10000), OUTREACH_ENRICH_CONCURRENCY (16).
+ *
  * Job options: JOB_TITLE, JOB_ADDRESS, JOB_LAT, JOB_LNG, JOB_BUDGET, JOB_CERT, JOB_REMOTE=1 (online work, no distance limit).
  * Hints (comma lists): HINT_ROLES, HINT_SKILLS, HINT_CREDENTIAL, e.g.
  *   JOB_REMOTE=1 JOB_TITLE="Review our SaaS terms" HINT_ROLES="contract attorney,paralegal" HINT_CREDENTIAL="California bar license" npx tsx scripts/demo.ts
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { sendBlastDetailed } from '../src/blast.js';
 import { DEFAULTS, type Env } from '../src/env.js';
 import { findPeopleDetailed } from '../src/find.js';
@@ -52,6 +57,9 @@ const env: Env = {
   PAUSE_OUTREACH: false,
   OUTREACH_MANUAL_DAILY_CAP: 20,
   OUTREACH_MANUAL_QUEUE: e.MANUAL_QUEUE === '1',
+  OUTREACH_TIME_BUDGET_MS: Number(e.OUTREACH_TIME_BUDGET_MS ?? DEFAULTS.OUTREACH_TIME_BUDGET_MS),
+  OUTREACH_CALL_TIMEOUT_MS: Number(e.OUTREACH_CALL_TIMEOUT_MS ?? DEFAULTS.OUTREACH_CALL_TIMEOUT_MS),
+  OUTREACH_ENRICH_CONCURRENCY: Number(e.OUTREACH_ENRICH_CONCURRENCY ?? DEFAULTS.OUTREACH_ENRICH_CONCURRENCY),
 };
 
 const list = (v: string | undefined) => (v ? v.split(',').map((x) => x.trim()).filter(Boolean) : undefined);
@@ -64,7 +72,10 @@ const hints = {
 
 const lat = Number(e.JOB_LAT ?? 37.7749);
 const lng = Number(e.JOB_LNG ?? -122.4194);
-const repo = new InMemoryRepo();
+const poolFile = e.POOL_FILE ? resolve(e.POOL_FILE) : null;
+const poolRepo = poolFile && existsSync(poolFile) ? InMemoryRepo.fromSnapshot(JSON.parse(readFileSync(poolFile, 'utf8'))) : new InMemoryRepo();
+const repo = poolRepo;
+if (poolFile) console.log(`pool: ${repo.people.size} people (${poolFile})`);
 repo.addJob({
   id: 'demo-job',
   title: e.JOB_TITLE ?? 'Hold a sign near the YC office',
@@ -113,7 +124,17 @@ for (const c of found.output.candidates) {
   console.log(`  ${c.score.toFixed(2)}  ${String(c.distance_km ?? '-').padStart(4)} km  ${c.channel.padEnd(16)}  ${c.source.padEnd(15)}  ${c.name ?? '(no name)'}`);
 }
 if (found.output.candidates.length === 0) console.log('  (no contactable candidates found)');
+console.log(`  elapsed: ${(found.elapsed_ms / 1000).toFixed(1)}s; ${found.output.candidates.length} people: ${found.from_pool} from the pool, ${found.output.candidates.length - found.from_pool} live`);
 console.log(`  spend: $${found.spend_usd.toFixed(4)}${liveSearch ? '' : ' (simulated, nothing charged)'}`);
+
+if (poolFile) {
+  // Save the grown pool (people only, no jobs/outreach/costs; the demo's own test regular is not kept).
+  const snap = repo.toSnapshot();
+  if (testEmail) snap.people = snap.people.filter((p) => p.email !== testEmail);
+  mkdirSync(dirname(poolFile), { recursive: true });
+  writeFileSync(poolFile, JSON.stringify(snap));
+  console.log(`  pool saved: ${snap.people.length} people -> ${poolFile}`);
+}
 
 console.log(`\n== 2. send_blast (${send ? `REAL email to ${testEmail} only` : 'dry run, nothing sent'}) ==`);
 const ids = found.output.candidates.map((c) => c.candidate_id);
