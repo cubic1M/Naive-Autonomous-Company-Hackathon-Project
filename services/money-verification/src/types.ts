@@ -40,7 +40,10 @@ export interface Job {
   required_tier: number;
   status: JobStatus;
   worker_id: string | null;
+  /** low | standard | high; overrides the budget-derived verification tier (src/proof/profile.ts). */
   risk_class: string | null;
+  /** The contract column as the customer wrote it; task_type is 'notarization' when it names a notary. Any value makes the job tier 2. */
+  certification_required: string | null;
 }
 
 /** Read-only view of teammates' `workers` table (except stripe_connect_account, which payouts.ts sets). */

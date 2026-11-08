@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
 import { callTool, createTools, describeToolError, resolveToolName, TOOL_NAMES, toolSchemas } from '../src/tools.js';
 import type { VisionScorer } from '../src/proof/vision.js';
-import { JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, webhookRequest } from './helpers.js';
+import { JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
 
 const passingScorer: VisionScorer = {
   async score(input) {
@@ -132,17 +132,20 @@ describe('tool layer', () => {
     expect((out.payout as { onboarding_url: string }).onboarding_url).toMatch(/^https:\/\/connect\.stripe\.test\/onboard\//);
   });
 
-  it('check_eligibility: suspended, tier, and notary requirement', async () => {
+  it('check_eligibility: suspended, tier, notary requirement, and the tier-2 identity', async () => {
     const { world, tools } = worldWithTools();
     world.repo.seedJob(makeJob({ task_type: 'notarization', required_tier: 1 }));
     world.repo.seedWorker(makeWorker({ tier: 0, suspended: true }));
     const r = await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID });
     expect(r.eligible).toBe(false);
+    expect(r.tier).toBe(2); // a notarization job is tier 2 whatever its budget
     expect(r.reasons.join(' ')).toMatch(/worker_suspended/);
     expect(r.reasons.join(' ')).toMatch(/tier_too_low/);
     expect(r.reasons.join(' ')).toMatch(/notary_not_verified/);
+    expect(r.reasons.join(' ')).toMatch(/identity_not_verified/);
 
     world.repo.seedWorker(makeWorker({ tier: 1 }));
+    await seedVerifiedIdentity(world);
     await world.repo.upsertWorkerVerification({
       worker_id: WORKER_ID,
       kind: 'notary_commission',
@@ -152,7 +155,7 @@ describe('tool layer', () => {
       verified_at: world.clock.now(),
       expires_at: new Date('2030-01-01T00:00:00Z'),
     });
-    expect(await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID })).toEqual({ eligible: true, reasons: [] });
+    expect(await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID })).toEqual({ eligible: true, reasons: [], tier: 2 });
   });
 
   it('get_dispute and submit_dispute_evidence over a real dispute', async () => {
@@ -177,6 +180,52 @@ describe('tool layer', () => {
     expect(draft).toEqual({ dispute_id: disputeId, status: 'needs_response', submitted: false });
     const sent = await tools.submit_dispute_evidence({ dispute_id: disputeId, evidence: { uncategorized_text: 'proof attached' }, submit: true });
     expect(sent).toMatchObject({ status: 'under_review', submitted: true });
+  });
+
+  it('verify_identity starts a Stripe Identity session and reports verified after the webhook', async () => {
+    const { world, tools } = worldWithTools();
+    world.repo.seedWorker(makeWorker());
+    const start = await tools.verify_identity({ worker_id: WORKER_ID });
+    expect(start).toEqual({
+      worker_id: WORKER_ID,
+      url: expect.stringMatching(/^https:\/\/verify\.stripe\.test\//),
+      status: 'pending',
+      session_id: expect.stringMatching(/^vs_test_/),
+    });
+    const event = world.stripe.identityVerifiedEvent(start.session_id as string, { first_name: 'Pat', last_name: 'Example' });
+    expect((await handleStripeWebhook(world.deps, webhookRequest(world, event))).status).toBe(200);
+    expect(await tools.verify_identity({ worker_id: WORKER_ID })).toEqual({ worker_id: WORKER_ID, url: null, status: 'verified', session_id: start.session_id });
+    expect(world.stripe.callsTo('identity.verificationSessions.create')).toHaveLength(1);
+
+    let caught: unknown;
+    await callTool(world.deps, 'verify_identity', { worker_id: 'not-a-uuid' }).catch((e: unknown) => (caught = e));
+    expect(describeToolError(caught)).toMatchObject({ code: 'invalid_input' });
+  });
+
+  it('verify_notary reports which name it compared', async () => {
+    const { world, tools } = worldWithTools();
+    await world.repo.upsertNotary({
+      commission_number: '2301234', full_name: 'SMITH, JANE A', name_normalized: 'jane a smith',
+      county: null, city: null, business_name: null, commission_expires: new Date('2028-03-15T00:00:00Z'), raw: {},
+    });
+    const typed = await tools.verify_notary({ worker_id: WORKER_ID, commission_number: '2301234', name: 'Jane Smith', job_date: '2026-11-07T18:00:00Z' });
+    expect(typed).toMatchObject({ worker_id: WORKER_ID, status: 'verified', name_source: 'typed', reasons: [] });
+    await seedVerifiedIdentity(world, { firstName: 'Mary', lastName: 'Jones' });
+    const byId = await tools.verify_notary({ worker_id: WORKER_ID, commission_number: '2301234', name: 'Jane Smith', job_date: '2026-11-07T18:00:00Z' });
+    expect(byId).toMatchObject({ status: 'failed', name_source: 'verified_identity' });
+    expect(byId.reasons[0]).toBe('name_mismatch');
+  });
+
+  it('get_proof_review carries each check\'s data, so the tier is readable', async () => {
+    const { world, tools } = worldWithTools({ vision: passingScorer });
+    world.repo.seedJob(makeJob({ budget_cents: 3000 }));
+    world.repo.seedWorker(makeWorker());
+    world.repo.seedProof(makeProof());
+    // tier 0, no readMedia: device GPS and captured_at carry the deterministic checks, the scorer passes 0.95 >= 0.8
+    expect(await tools.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: 'tier 0 on device data' })).toMatchObject({ decision: 'approved' });
+    const review = await tools.get_proof_review({ job_id: JOB_ID });
+    expect(review?.checks.find((c) => c.name === 'profile')?.data).toMatchObject({ tier: 0, confidence_threshold: 0.8 });
+    expect(review?.checks.find((c) => c.name === 'geofence')?.data).toMatchObject({ distance_m: 0 });
   });
 
   it('validates input with zod and resolves aliases', async () => {
