@@ -308,3 +308,75 @@ p { margin: 0; }
 /* Launch page (ported from the design): links inherit their section's color, as in the artboard */
 .launch a, .launch h1, .launch h2 { color: inherit; }
 .launch :focus-visible { outline: 2px solid #c9d8c3; outline-offset: 2px; }
+
+/* ---------- hands backdrop (components/LaunchHands.tsx) ---------- */
+/* Each layer is fixed on its own (no wrapping stacking context) so its blend mode reaches the page. */
+.hands-bg__layer { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+/* Above the beige/green line: the halftone grey, multiplied into the beige (white paper vanishes). */
+.hands-bg__layer--grey { clip-path: inset(0 0 calc(100% - var(--line, 100%)) 0); mix-blend-mode: multiply; opacity: 0.15; }
+/* Below it: neon green dots, screened onto the dark green (black paper vanishes). */
+.hands-bg__layer--neon { clip-path: inset(var(--line, 100%) 0 0 0); mix-blend-mode: screen; opacity: 0.17; }
+.hands-bg__layer--neon .hands-bg__img { filter: url(#hands-neon); }
+
+/* The image is 1706×795. The fingertips meet at (956, 414) = 56.04% / 52.08%; the stage puts that
+   point at the center of the window and is 115vw wide, so both arms run off the edges even while the
+   robot arm moves. */
+.hands-bg__stage {
+  position: absolute; width: 115vw; aspect-ratio: 1706 / 795;
+  left: calc(50vw - 115vw * 0.5604);
+  top: calc(50% - 115vw * 795 / 1706 * 0.5208);
+}
+.hands-bg__img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; user-select: none; }
+/* Robot side: the arm plus its index finger up to the tip; the drawn spark is cut away. */
+.hands-bg__robot {
+  clip-path: polygon(0 0, 49.24% 0, 49.24% 47.8%, 52.29% 50.06%, 52.29% 53.84%, 49.24% 54.72%, 49.24% 100%, 0 100%);
+  /* The reach follows the scroll: 67px of the image, from the robot fingertip (889) to the human's (956). */
+  transform: translateX(calc(var(--p, 0) * 3.93%));
+}
+/* Human side: from the human fingertip to the right edge, again without the spark. */
+.hands-bg__human {
+  clip-path: polygon(58.62% 0, 100% 0, 100% 100%, 58.62% 100%, 58.62% 55.6%, 55.8% 54.97%, 55.8% 50.31%, 58.62% 49.31%);
+}
+
+/* The line ripple: a strip that redraws the beige/green edge as a travelling wave (JS sets its shape). */
+.hands-bg__ripple { position: fixed; z-index: 4; display: none; pointer-events: none; overflow: visible; }
+
+/* The spark where the fingertips touch (always the center of the screen): a hot white core, rays,
+   and a wide, bright glow that fades out with no visible edge. */
+.hands-bg__spark { position: fixed; left: 50%; top: 50%; z-index: 5; width: 0; height: 0; pointer-events: none; transform: scale(var(--k, 1)); }
+.hands-bg__spark > span { position: absolute; opacity: 0; }
+/* Far, faint wash of light */
+.hands-bg__halo {
+  left: -480px; top: -480px; width: 960px; height: 960px; border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(236, 255, 224, 0.55) 0%, rgba(190, 255, 160, 0.3) 22%, rgba(110, 255, 70, 0.14) 45%, rgba(57, 255, 20, 0.05) 70%, rgba(57, 255, 20, 0) 100%);
+  filter: blur(24px);
+  animation: hands-halo var(--spark-ms) ease-out forwards;
+}
+/* Bright, dispersed glow around the core */
+.hands-bg__flash {
+  left: -230px; top: -230px; width: 460px; height: 460px; border-radius: 50%;
+  background: radial-gradient(circle closest-side, #fff 0%, rgba(255, 255, 255, 0.95) 10%, rgba(232, 255, 220, 0.8) 22%, rgba(180, 255, 150, 0.5) 38%, rgba(100, 255, 60, 0.22) 58%, rgba(57, 255, 20, 0.07) 80%, rgba(57, 255, 20, 0) 100%);
+  filter: blur(10px);
+  animation: hands-flash var(--spark-ms) cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+.hands-bg__core {
+  left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 18px 8px #fff, 0 0 50px 22px rgba(214, 255, 196, 0.9), 0 0 110px 50px rgba(57, 255, 20, 0.45);
+  animation: hands-core var(--spark-ms) ease-out forwards;
+}
+.hands-bg__ray {
+  left: 0; top: -1.5px; width: 52px; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(214, 255, 196, 0), #fff);
+  filter: drop-shadow(0 0 4px rgba(214, 255, 196, 0.9));
+  transform-origin: 0 50%;
+  animation: hands-ray calc(var(--spark-ms) * 0.7) cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+@keyframes hands-halo { 0% { opacity: 0; transform: scale(0.3); } 18% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes hands-flash { 0% { opacity: 0; transform: scale(0.2); } 10% { opacity: 1; } 45% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1.7); } }
+@keyframes hands-core { 0% { opacity: 1; transform: scale(0.4); } 18% { transform: scale(1.6); } 100% { opacity: 0; transform: scale(0.6); } }
+@keyframes hands-ray {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(8px) scaleX(0.3); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scaleX(1.7); }
+}
+@media (prefers-reduced-motion: reduce) { .hands-bg__spark, .hands-bg__ripple { display: none !important; } }

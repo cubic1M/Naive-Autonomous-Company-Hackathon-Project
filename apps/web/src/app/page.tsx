@@ -1,4 +1,5 @@
 import { AuthButtons, LogoPill } from "@/components/SiteHeader";
+import LaunchHands from "@/components/LaunchHands";
 import HowItWorks from "./HowItWorks";
 
 // Ported 1:1 from the "Operis Homepage" design canvas, artboard "Launch page" (Launch.dc.html).
@@ -6,6 +7,7 @@ import HowItWorks from "./HowItWorks";
 export default function Home() {
   return (
     <div className="launch" style={{ borderRadius: "22px", overflow: "hidden", background: "#17211A" }}>
+      <LaunchHands />
       <section aria-labelledby="launch-title" style={{ position: "relative", background: "#ECE8DF", color: "#1F2A22", overflow: "hidden" }}>
         <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: "0", width: "100%", height: "100%" }} fill="none" stroke="#D2CCBF" strokeWidth="1.2">
           <path d="M0 90 H120 Q140 90 140 110 V250 Q140 270 160 270 H300" />
