@@ -1,15 +1,16 @@
+import type Stripe from 'stripe';
 import type { Env } from './env.js';
-import { DailyCapExceededError, InvalidStateError, NotFoundError } from './errors.js';
+import { DailyCapExceededError, InvalidStateError, NotFoundError, RequiresApprovalError } from './errors.js';
 import { fire, type Hooks } from './hooks.js';
 import * as ledger from './ledger.js';
 import type { Repo } from './repo.js';
 import type { StripeClient } from './stripe-client.js';
-import type { Escrow, Job } from './types.js';
+import type { Escrow, Job, LedgerEntry } from './types.js';
 
 export interface EscrowDeps {
   stripe: StripeClient;
   repo: Repo;
-  env: Pick<Env, 'PUBLIC_BASE_URL' | 'DAILY_ESCROW_CAP_CENTS'>;
+  env: Pick<Env, 'PUBLIC_BASE_URL' | 'DAILY_ESCROW_CAP_CENTS' | 'PAYOUT_CAP_CENTS'>;
   hooks?: Hooks;
   now?: () => Date;
 }
@@ -194,52 +195,160 @@ export async function markReleased(deps: Pick<EscrowDeps, 'repo' | 'hooks'>, job
   return updated;
 }
 
-/** Full refund of a CAPTURED escrow. Idempotent via `refund:<jobId>`. */
-export async function refund(deps: EscrowDeps, jobId: string, reason: string): Promise<Escrow> {
-  const e = await deps.repo.getEscrow(jobId);
-  if (!e) throw new NotFoundError('escrow', jobId);
-  if (e.status === 'refunded') return e;
-  if (e.status !== 'captured') throw new InvalidStateError(`cannot refund escrow in status ${e.status}; use release`);
-  if (!e.stripe_payment_intent_id) throw new InvalidStateError(`escrow ${jobId} has no payment intent`);
-  const r = await deps.stripe.refunds.create(
-    {
-      payment_intent: e.stripe_payment_intent_id,
-      reason: 'requested_by_customer',
-      metadata: { job_id: jobId, standin_reason: reason.slice(0, 500) },
-    },
-    { idempotencyKey: `refund:${jobId}` },
-  );
-  const updated = await deps.repo.updateEscrow(jobId, { status: 'refunded' });
-  await ledger.record(deps.repo, {
-    jobId,
-    kind: 'refund',
-    amountCents: r.amount,
-    idempotencyKey: `refund:${jobId}`,
-    stripeRef: r.id,
-  });
-  await fire(deps.hooks, 'onEscrowReleased', jobId, 'refunded');
+export interface RefundResult {
+  escrow: Escrow;
+  /** Cents refunded by THIS call (0 when the escrow was already fully refunded). */
+  refundCents: number;
+  /** Cents refunded on the job so far, across all refunds. */
+  refundedTotalCents: number;
+  fullyRefunded: boolean;
+  stripeRefundId: string | null;
+}
+
+/** Sum of the job's refund ledger lines: the source of truth for "how much has already gone back". */
+async function refundedSoFar(repo: Repo, jobId: string): Promise<{ total: number; lines: number }> {
+  const rows = await repo.listLedger({ jobId, kind: 'refund' });
+  return { total: rows.reduce((acc, r) => acc + r.amount_cents, 0), lines: rows.length };
+}
+
+/** Why: an agent-chosen amount must never exceed what is left, or Stripe would be the only guard. */
+function checkRefundAmount(amount: number, remaining: number): void {
+  if (!Number.isInteger(amount) || amount <= 0) throw new InvalidStateError(`refund amount must be a positive integer of cents, got ${amount}`);
+  if (amount > remaining) throw new InvalidStateError(`refund of ${amount} cents exceeds the ${remaining} cents still refundable`);
+}
+
+/**
+ * Ledger key for ONE Stripe refund, derivable by both writers: the tool (once Stripe has answered) and the
+ * refund.created webhook (from the Refund object). Tool refunds carry their request_id in Stripe metadata, so
+ * both sides compute the same key and the ledger's unique index makes the second writer a no-op, in either order.
+ * Refunds made outside the tool (dashboard, CLI) have no request_id and are keyed by Stripe's refund id.
+ */
+export function refundLedgerKey(jobId: string, refund: { id: string; metadata?: Stripe.Metadata | null }): string {
+  const requestId = refund.metadata?.request_id;
+  return requestId ? `refund:${jobId}:req:${requestId}` : `refund:${jobId}:${refund.id}`;
+}
+
+/** Why: lets a request-keyed refund recognise its own earlier, completed run before any check or Stripe call. */
+async function findRefundLine(repo: Repo, jobId: string, key: string): Promise<LedgerEntry | undefined> {
+  return (await repo.listLedger({ jobId, kind: 'refund' })).find((l) => l.idempotency_key === key);
+}
+
+/**
+ * Why: both refund paths (tool and webhook) can complete the full refund; re-reading the row lets the later one see
+ * the earlier one's flip and skip the hook. Best effort, not exactly-once: Repo has no compare-and-set, so a flip
+ * landing between the re-read and the update can still fire twice. Hooks are at-least-once and must be idempotent.
+ */
+async function finishFullRefund(deps: Pick<EscrowDeps, 'repo' | 'hooks'>, escrow: Escrow): Promise<Escrow> {
+  const current = (await deps.repo.getEscrow(escrow.job_id)) ?? escrow;
+  if (current.status === 'refunded') return current;
+  const updated = await deps.repo.updateEscrow(escrow.job_id, { status: 'refunded' });
+  await fire(deps.hooks, 'onEscrowReleased', escrow.job_id, 'refunded');
   return updated;
 }
 
-/** Called by the webhook on charge.refunded (refund issued from the Stripe dashboard, for instance). */
+/**
+ * Refund a CAPTURED escrow, in full (default) or partially (`amountCents`). Several partial refunds may add up to the
+ * charge. A job's refunds in total above PAYOUT_CAP_CENTS throw RequiresApprovalError unless `allowLarge` (the CEO
+ * agent's approval through refund_large). The job only moves to `refunded` once the whole charge is back; a partial
+ * refund leaves it `captured` and fires no hook.
+ *
+ * Idempotency. Stripe key: `refund:<jobId>:req:<requestId>`, or `refund:<jobId>:<n>` (n = refund lines so far) for
+ * direct callers without a request id. Ledger key: refundLedgerKey(), the same key the refund.created webhook derives,
+ * so the two writers never double count. With a requestId a replay returns the original refund without calling Stripe;
+ * without one an identical repeat IS a second refund. No free text goes to Stripe: a reworded `reason` on retry would
+ * otherwise turn the replay into an idempotency_error. The reason lives in the tool-call log and on the board card.
+ */
+export async function refund(
+  deps: EscrowDeps,
+  jobId: string,
+  reason: string,
+  opts: { amountCents?: number; allowLarge?: boolean; requestId?: string } = {},
+): Promise<RefundResult> {
+  void reason; // kept for callers and logs; deliberately not sent to Stripe (see above)
+  const e = await deps.repo.getEscrow(jobId);
+  if (!e) throw new NotFoundError('escrow', jobId);
+  const before = await refundedSoFar(deps.repo, jobId);
+  const requestKey = opts.requestId ? `refund:${jobId}:req:${opts.requestId}` : null;
+  // Replay of a completed request: answer from the ledger before the remaining/cap checks, which the first run changed.
+  const prior = requestKey ? await findRefundLine(deps.repo, jobId, requestKey) : undefined;
+  if (prior) {
+    const fullyRefunded = before.total >= e.amount_cents;
+    return { escrow: e, refundCents: prior.amount_cents, refundedTotalCents: before.total, fullyRefunded, stripeRefundId: prior.stripe_ref ?? null };
+  }
+
+  if (e.status === 'refunded') {
+    return { escrow: e, refundCents: 0, refundedTotalCents: before.total, fullyRefunded: true, stripeRefundId: null };
+  }
+  if (e.status !== 'captured') throw new InvalidStateError(`cannot refund escrow in status ${e.status}; use release`);
+  if (!e.stripe_payment_intent_id) throw new InvalidStateError(`escrow ${jobId} has no payment intent`);
+
+  const remaining = e.amount_cents - before.total;
+  const amount = opts.amountCents ?? remaining;
+  checkRefundAmount(amount, remaining);
+  const cap = deps.env.PAYOUT_CAP_CENTS;
+  // Cumulative per job, like the single-shot payout: a per-call test would let a job be refunded in <= cap chunks unapproved.
+  const refundedAfter = before.total + amount;
+  if (refundedAfter > cap && !opts.allowLarge) throw new RequiresApprovalError(refundedAfter, cap, 'refund');
+
+  const r = await deps.stripe.refunds.create(
+    {
+      payment_intent: e.stripe_payment_intent_id,
+      amount,
+      reason: 'requested_by_customer',
+      metadata: { job_id: jobId, ...(opts.requestId ? { request_id: opts.requestId } : {}) },
+    },
+    { idempotencyKey: requestKey ?? `refund:${jobId}:${before.lines}` },
+  );
+  await ledger.record(deps.repo, { jobId, kind: 'refund', amountCents: r.amount, idempotencyKey: refundLedgerKey(jobId, r), stripeRef: r.id });
+  // Always re-read: the webhook may have written lines during the Stripe round trip, so `before` is stale.
+  const total = (await refundedSoFar(deps.repo, jobId)).total;
+  const fullyRefunded = total >= e.amount_cents;
+  const escrow = fullyRefunded ? await finishFullRefund(deps, e) : e;
+  return { escrow, refundCents: r.amount, refundedTotalCents: total, fullyRefunded, stripeRefundId: r.id };
+}
+
+/**
+ * refund.created / refund.updated: one ledger line per Stripe refund under refundLedgerKey(), so a refund made through
+ * the tool and echoed by Stripe counts once in either order, and a dashboard or CLI refund (never seen by the tool)
+ * still reaches the ledger. Returns null when the refund belongs to no escrow of ours.
+ */
+export async function recordStripeRefund(deps: Pick<EscrowDeps, 'repo' | 'hooks'>, refund: Stripe.Refund): Promise<Escrow | null> {
+  const piId = typeof refund.payment_intent === 'string' ? refund.payment_intent : refund.payment_intent?.id ?? null;
+  const e = piId ? await deps.repo.getEscrowByPaymentIntent(piId) : null;
+  if (!e) return null;
+  if (refund.status === 'failed' || refund.status === 'canceled') return e; // no money moved
+  await ledger.record(deps.repo, {
+    jobId: e.job_id,
+    kind: 'refund',
+    amountCents: refund.amount,
+    idempotencyKey: refundLedgerKey(e.job_id, refund),
+    stripeRef: refund.id,
+  });
+  const { total } = await refundedSoFar(deps.repo, e.job_id);
+  return total >= e.amount_cents ? finishFullRefund(deps, e) : e;
+}
+
+/**
+ * charge.refunded carries the CUMULATIVE amount_refunded. Ledger lines come from refund.created (one per refund); this
+ * only reconciles the escrow status, so the webhook never writes a line the tool also writes. A ledger behind Stripe
+ * here means refund.created was not delivered (not subscribed, or not yet): logged, never patched, because a delta
+ * line would race the tool's own write for the same refund.
+ */
 export async function markRefunded(
   deps: Pick<EscrowDeps, 'repo' | 'hooks'>,
   jobId: string,
-  amountCents: number,
+  amountRefundedCumulative: number,
   stripeRef: string,
 ): Promise<Escrow> {
   const e = await deps.repo.getEscrow(jobId);
   if (!e) throw new NotFoundError('escrow', jobId);
-  const updated = e.status === 'refunded' ? e : await deps.repo.updateEscrow(jobId, { status: 'refunded' });
-  await ledger.record(deps.repo, {
-    jobId,
-    kind: 'refund',
-    amountCents,
-    idempotencyKey: `refund:${jobId}`,
-    stripeRef,
-  });
-  if (e.status !== 'refunded') await fire(deps.hooks, 'onEscrowReleased', jobId, 'refunded');
-  return updated;
+  const { total } = await refundedSoFar(deps.repo, jobId);
+  if (total < amountRefundedCumulative) {
+    console.warn(
+      `[money-verification] job ${jobId}: Stripe reports ${amountRefundedCumulative} cents refunded on ${stripeRef} but the ledger has ${total}; is the webhook endpoint subscribed to refund.created?`,
+    );
+  }
+  return amountRefundedCumulative >= e.amount_cents ? finishFullRefund(deps, e) : e;
 }
 
 /**

@@ -7,13 +7,20 @@ import {
   expireStaleEscrows,
   markAuthorized,
   markRefunded,
+  recordStripeRefund,
   markReleased,
   refund,
   releaseEscrow,
 } from '../src/escrow.js';
-import { DailyCapExceededError, InvalidStateError } from '../src/errors.js';
+import { DailyCapExceededError, InvalidStateError, RequiresApprovalError } from '../src/errors.js';
 import type { Job } from '../src/types.js';
 import { HOUR_MS, JOB_ID, MINUTE_MS, T0, fundAndCapture, makeJob, makeWorld, type World } from './helpers.js';
+
+/** The most recent refund the fake created, in the shape the refund.created webhook delivers it. */
+const lastStripeRefund = (w: World) => [...w.stripe.rfStore.values()].at(-1) as unknown as Parameters<typeof recordStripeRefund>[1];
+/** A refund made outside our code (dashboard / CLI): no idempotency key, no metadata. */
+const dashboardRefund = async (w: World, paymentIntentId: string, amount: number) =>
+  (await w.stripe.refunds.create({ payment_intent: paymentIntentId, amount })) as unknown as Parameters<typeof recordStripeRefund>[1];
 
 const DAY_MS = 24 * HOUR_MS;
 const JOB_B = '00000000-0000-4000-8000-0000000000b2';
@@ -306,47 +313,370 @@ describe('refund', () => {
     expect(world.stripe.callsTo('refunds.create')).toHaveLength(0);
   });
 
-  it('refunds a captured escrow once', async () => {
+  it('refunds a captured escrow in full once', async () => {
     const world = makeWorld();
     const job = world.repo.seedJob(makeJob());
     const { paymentIntentId } = await fundAndCapture(world, job);
 
-    const refunded = await refund(world.deps, JOB_ID, 'proof rejected');
+    const result = await refund(world.deps, JOB_ID, 'proof rejected');
     const calls = world.stripe.callsTo('refunds.create');
     expect(calls).toHaveLength(1);
     expect((calls[0]?.params as { payment_intent: string }).payment_intent).toBe(paymentIntentId);
-    expect(calls[0]?.idempotencyKey).toBe(`refund:${JOB_ID}`);
-    expect(refunded.status).toBe('refunded');
+    expect(calls[0]?.idempotencyKey).toBe(`refund:${JOB_ID}:0`);
+    expect(result).toMatchObject({ refundCents: 6000, refundedTotalCents: 6000, fullyRefunded: true });
+    expect(result.escrow.status).toBe('refunded');
 
-    const line = await world.repo.getLedgerByKey(`refund:${JOB_ID}`);
-    expect(line?.kind).toBe('refund');
-    expect(line?.amount_cents).toBe(6000);
-    expect(line?.stripe_ref).toMatch(/^re_test_/);
+    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.amount_cents).toBe(6000);
+    expect(lines[0]?.stripe_ref).toMatch(/^re_test_/);
     expect(releasedHooks(world)).toEqual([{ name: 'onEscrowReleased', args: [JOB_ID, 'refunded'] }]);
 
-    await refund(world.deps, JOB_ID, 'again');
+    const again = await refund(world.deps, JOB_ID, 'again');
+    expect(again).toMatchObject({ refundCents: 0, refundedTotalCents: 6000, fullyRefunded: true, stripeRefundId: null });
     expect(world.stripe.callsTo('refunds.create')).toHaveLength(1);
     expect(releasedHooks(world)).toHaveLength(1);
     expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(1);
   });
-});
 
-describe('markRefunded (webhook path)', () => {
-  it('is idempotent and fires the hook once', async () => {
+  it('refunds in two parts: stays captured after the first, refunded (hook once) after the second', async () => {
     const world = makeWorld();
     const job = world.repo.seedJob(makeJob());
     await fundAndCapture(world, job);
 
-    const first = await markRefunded(world.deps, JOB_ID, 6000, 're_dashboard');
-    const second = await markRefunded(world.deps, JOB_ID, 6000, 're_dashboard');
+    const first = await refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000 });
+    expect(first).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000, fullyRefunded: false });
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('captured');
+    expect(releasedHooks(world)).toHaveLength(0);
+
+    const second = await refund(world.deps, JOB_ID, 'rest', { amountCents: 4000 });
+    expect(second).toMatchObject({ refundCents: 4000, refundedTotalCents: 6000, fullyRefunded: true });
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('refunded');
+    expect(releasedHooks(world)).toEqual([{ name: 'onEscrowReleased', args: [JOB_ID, 'refunded'] }]);
+
+    const calls = world.stripe.callsTo('refunds.create');
+    expect(calls.map((c) => c.idempotencyKey)).toEqual([`refund:${JOB_ID}:0`, `refund:${JOB_ID}:1`]);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([2000, 4000]);
+  });
+
+  it('rejects a partial refund above the remainder, and a non-positive one, without calling Stripe', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    await refund(world.deps, JOB_ID, 'partial', { amountCents: 2000 });
+    await expect(refund(world.deps, JOB_ID, 'too much', { amountCents: 4001 })).rejects.toBeInstanceOf(InvalidStateError);
+    await expect(refund(world.deps, JOB_ID, 'zero', { amountCents: 0 })).rejects.toBeInstanceOf(InvalidStateError);
+    expect(world.stripe.callsTo('refunds.create')).toHaveLength(1);
+  });
+
+  it('refuses a refund above the cap unless allowLarge', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    await fundAndCapture(world, job);
+
+    await expect(refund(world.deps, JOB_ID, 'big')).rejects.toBeInstanceOf(RequiresApprovalError);
+    expect(world.stripe.callsTo('refunds.create')).toHaveLength(0);
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('captured');
+
+    const approved = await refund(world.deps, JOB_ID, 'big, CEO approved', { allowLarge: true });
+    expect(approved).toMatchObject({ refundCents: 24000, fullyRefunded: true });
+    expect(world.stripe.callsTo('refunds.create')).toHaveLength(1);
+  });
+
+  it('applies the cap to the job\'s cumulative refunds, so splitting into small partials still needs approval', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ budget_cents: 24000 }));
+    await fundAndCapture(world, job);
+
+    await expect(refund(world.deps, JOB_ID, 'first', { amountCents: 15000 })).resolves.toMatchObject({ fullyRefunded: false });
+    await expect(refund(world.deps, JOB_ID, 'second', { amountCents: 9000 })).rejects.toBeInstanceOf(RequiresApprovalError);
+    expect(world.stripe.callsTo('refunds.create')).toHaveLength(1);
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('captured');
+
+    const approved = await refund(world.deps, JOB_ID, 'second, CEO approved', { amountCents: 9000, allowLarge: true });
+    expect(approved).toMatchObject({ refundedTotalCents: 24000, fullyRefunded: true });
+  });
+
+  /** Makes the next refund ledger insert throw, i.e. a crash after Stripe accepted the refund. */
+  function crashNextRefundLedgerWrite(world: World): void {
+    const real = world.repo.insertLedger.bind(world.repo);
+    let armed = true;
+    world.repo.insertLedger = async (entry) => {
+      if (armed && entry.kind === 'refund') {
+        armed = false;
+        throw new Error('crash before ledger write');
+      }
+      return real(entry);
+    };
+  }
+
+  it('a retry of the same partial (crash before the ledger write) replays the Stripe refund, not a second one', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    crashNextRefundLedgerWrite(world);
+    await expect(refund(world.deps, JOB_ID, 'first try', { amountCents: 2000 })).rejects.toThrow('crash before ledger write');
+    expect(world.stripe.rfStore.size).toBe(1);
+
+    // Production-shaped first call, then a retry with a reworded reason: same Stripe params, so it replays.
+    const result = await refund(world.deps, JOB_ID, 'retry', { amountCents: 2000 });
+    expect(result).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000, fullyRefunded: false });
+    expect(world.stripe.rfStore.size).toBe(1);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(1);
+  });
+
+  it('a retry after a crash with a DIFFERENT amount is rejected by Stripe\'s key-reuse rule, not silently answered with the stale refund', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    crashNextRefundLedgerWrite(world);
+    await expect(refund(world.deps, JOB_ID, 'first try', { amountCents: 2000 })).rejects.toThrow('crash before ledger write');
+
+    await expect(refund(world.deps, JOB_ID, 'bigger', { amountCents: 3000 })).rejects.toMatchObject({ type: 'StripeIdempotencyError' });
+    expect(world.stripe.rfStore.size).toBe(1);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(0);
+  });
+});
+
+describe('refund with a caller request_id (replay safety)', () => {
+  it('a replay of a completed partial returns the first refund and creates no second one', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    const first = await refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000, requestId: 'req-1' });
+    const replay = await refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000, requestId: 'req-1' });
+    expect(replay).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000, stripeRefundId: first.stripeRefundId });
+    expect(world.stripe.rfStore.size).toBe(1);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(1);
+  });
+
+  it('a different request_id for the same amount is a second intended refund', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    await refund(world.deps, JOB_ID, 'credit', { amountCents: 2000, requestId: 'req-1' });
+    const second = await refund(world.deps, JOB_ID, 'credit', { amountCents: 2000, requestId: 'req-2' });
+    expect(second.refundedTotalCents).toBe(4000);
+    expect(world.stripe.rfStore.size).toBe(2);
+  });
+
+  it('a replay of the request that completed the refund returns it and does not fire the hook again', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    await refund(world.deps, JOB_ID, 'all', { requestId: 'req-full' });
+    const replay = await refund(world.deps, JOB_ID, 'all', { requestId: 'req-full' });
+    expect(replay).toMatchObject({ refundCents: 6000, fullyRefunded: true });
+    expect(world.stripe.rfStore.size).toBe(1);
+  });
+});
+
+describe('refund retry after the crash + webhook ordering', () => {
+  it('a request_id retry after the Stripe call succeeded, the ledger write failed and charge.refunded landed creates no second Stripe refund', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const realInsert = world.repo.insertLedger.bind(world.repo);
+    let blip = true;
+    world.repo.insertLedger = async (entry) => {
+      if (blip && entry.kind === 'refund') {
+        blip = false;
+        throw new Error('simulated DB outage after Stripe succeeded');
+      }
+      return realInsert(entry);
+    };
+    await expect(refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000, requestId: 'req-1' })).rejects.toThrow('simulated');
+    // Stripe's echoes of that refund land before the agent retries: refund.created writes the line under the request key.
+    await recordStripeRefund(world.deps, lastStripeRefund(world));
+    await markRefunded(world.deps, JOB_ID, 2000, paymentIntentId);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.idempotency_key)).toEqual([`refund:${JOB_ID}:req:req-1`]);
+
+    const retry = await refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000, requestId: 'req-1' });
+    expect(retry).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000, fullyRefunded: false });
+    expect(world.stripe.rfStore.size).toBe(1);
+    expect(world.stripe.callsTo('refunds.create')).toHaveLength(1); // the replay was answered from the ledger
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(1);
+  });
+});
+
+describe('refund under Stripe\'s real idempotency rule (same key => same params)', () => {
+  /** Models the documented rule the fake ignores: a reused key with different params is an idempotency_error. */
+  function enforceSameParams(world: World): void {
+    const seen = new Map<string, string>();
+    const create = world.stripe.refunds.create.bind(world.stripe.refunds);
+    world.stripe.refunds.create = (async (params, options) => {
+      const key = options?.idempotencyKey;
+      const body = JSON.stringify(params);
+      if (key !== undefined && seen.has(key) && seen.get(key) !== body) {
+        throw Object.assign(new Error(`Keys for idempotent requests can only be used with the same parameters (${key})`), { rawType: 'idempotency_error' });
+      }
+      if (key !== undefined) seen.set(key, body);
+      return create(params, options);
+    }) as typeof world.stripe.refunds.create;
+  }
+
+  it('a retry with reworded reason text replays instead of hitting idempotency_error', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    enforceSameParams(world);
+    const realInsert = world.repo.insertLedger.bind(world.repo);
+    let blip = true;
+    world.repo.insertLedger = async (entry) => {
+      if (blip && entry.kind === 'refund') {
+        blip = false;
+        throw new Error('simulated DB outage after Stripe succeeded');
+      }
+      return realInsert(entry);
+    };
+    await expect(refund(world.deps, JOB_ID, 'partial credit', { amountCents: 2000, requestId: 'req-1' })).rejects.toThrow('simulated');
+
+    const retry = await refund(world.deps, JOB_ID, 'retry after db error, customer unhappy', { amountCents: 2000, requestId: 'req-1' });
+    expect(retry).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000 });
+    expect(world.stripe.rfStore.size).toBe(1);
+  });
+});
+
+describe('webhook paths: refund.created writes lines, charge.refunded reconciles status', () => {
+  it('charge.refunded alone flips the status once and writes no ledger line', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+
+    const first = await markRefunded(world.deps, JOB_ID, 6000, 'ch_dashboard');
+    const second = await markRefunded(world.deps, JOB_ID, 6000, 'ch_dashboard');
     expect(first.status).toBe('refunded');
     expect(second.status).toBe('refunded');
-    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
-    expect(lines).toHaveLength(1);
-    expect(lines[0]?.amount_cents).toBe(6000);
-    expect(lines[0]?.stripe_ref).toBe('re_dashboard');
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(0);
     expect(releasedHooks(world)).toEqual([{ name: 'onEscrowReleased', args: [JOB_ID, 'refunded'] }]);
     expect(world.stripe.callsTo('refunds.create')).toHaveLength(0);
+  });
+
+  it('a dashboard refund reaches the ledger through refund.created, once, and the status flips once', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const rf = await dashboardRefund(world, paymentIntentId, 6000);
+
+    const e = await recordStripeRefund(world.deps, rf);
+    await recordStripeRefund(world.deps, rf); // Stripe redelivers
+    await markRefunded(world.deps, JOB_ID, 6000, 'ch_dashboard');
+    expect(e?.status).toBe('refunded');
+    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ amount_cents: 6000, stripe_ref: rf.id, idempotency_key: `refund:${JOB_ID}:${rf.id}` });
+    expect(releasedHooks(world)).toHaveLength(1);
+  });
+
+  it('a refund for a payment intent we do not know is ignored', async () => {
+    const world = makeWorld();
+    const unknown = { id: 're_other', amount: 100, status: 'succeeded', payment_intent: 'pi_other', metadata: {} } as unknown as Parameters<typeof recordStripeRefund>[1];
+    expect(await recordStripeRefund(world.deps, unknown)).toBeNull();
+    expect(world.repo.ledger).toHaveLength(0);
+  });
+
+  it('a failed refund writes nothing', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    const failed = { ...(await dashboardRefund(world, paymentIntentId, 6000)), status: 'failed' } as unknown as Parameters<typeof recordStripeRefund>[1];
+    await recordStripeRefund(world.deps, failed);
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund')).toHaveLength(0);
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('captured');
+  });
+
+  it('does not double count our own partial refund when its echoes arrive, then a dashboard refund completes it', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    const { paymentIntentId } = await fundAndCapture(world, job);
+    await refund(world.deps, JOB_ID, 'partial', { amountCents: 2000 });
+
+    await recordStripeRefund(world.deps, lastStripeRefund(world));
+    const e = await markRefunded(world.deps, JOB_ID, 2000, 'ch_echo');
+    expect(e.status).toBe('captured');
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([2000]);
+
+    const rest = await dashboardRefund(world, paymentIntentId, 4000);
+    const done = await recordStripeRefund(world.deps, rest);
+    await markRefunded(world.deps, JOB_ID, 6000, 'ch_echo');
+    expect(done?.status).toBe('refunded');
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([2000, 4000]);
+    expect(releasedHooks(world)).toHaveLength(1);
+  });
+});
+
+describe('refund racing its own webhook echo', () => {
+  it('counts a partial refund once and "refund the rest" refunds the true remainder', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+
+    // Deliver Stripe's refund.created echo after Stripe created the refund but just before our ledger write.
+    const realInsert = world.repo.insertLedger.bind(world.repo);
+    let echoed = false;
+    world.repo.insertLedger = async (entry) => {
+      if (entry.kind === 'refund' && !echoed) {
+        echoed = true;
+        await recordStripeRefund(world.deps, lastStripeRefund(world));
+        await markRefunded(world.deps, JOB_ID, 2000, 'ch_echo');
+      }
+      return realInsert(entry);
+    };
+
+    const first = await refund(world.deps, JOB_ID, 'partial', { amountCents: 2000 });
+    expect(first).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000, fullyRefunded: false });
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([2000]);
+
+    const rest = await refund(world.deps, JOB_ID, 'the rest');
+    expect(rest).toMatchObject({ refundCents: 4000, refundedTotalCents: 6000, fullyRefunded: true });
+    expect(rest.escrow.status).toBe('refunded');
+    expect(releasedHooks(world)).toHaveLength(1);
+  });
+
+  it('with a request_id (the agent path) both writers use the request key, so the race still counts once', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+    const realInsert = world.repo.insertLedger.bind(world.repo);
+    let echoed = false;
+    world.repo.insertLedger = async (entry) => {
+      if (entry.kind === 'refund' && !echoed) {
+        echoed = true;
+        await recordStripeRefund(world.deps, lastStripeRefund(world));
+      }
+      return realInsert(entry);
+    };
+    const first = await refund(world.deps, JOB_ID, 'partial', { amountCents: 2000, requestId: 'r1' });
+    expect(first).toMatchObject({ refundCents: 2000, refundedTotalCents: 2000 });
+    const lines = world.repo.ledger.filter((l) => l.kind === 'refund');
+    expect(lines.map((l) => l.idempotency_key)).toEqual([`refund:${JOB_ID}:req:r1`]);
+    expect(world.stripe.rfStore.get(first.stripeRefundId as string)?.metadata).toEqual({ job_id: JOB_ID, request_id: 'r1' });
+  });
+});
+
+describe('refund racing the webhook echo after its ledger write', () => {
+  it('fires onEscrowReleased once when the full-refund echo lands between the ledger insert and the status flip', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob());
+    await fundAndCapture(world, job);
+
+    const realInsert = world.repo.insertLedger.bind(world.repo);
+    let echoed = false;
+    world.repo.insertLedger = async (entry) => {
+      const result = await realInsert(entry);
+      if (entry.kind === 'refund' && !echoed) {
+        echoed = true;
+        await recordStripeRefund(world.deps, lastStripeRefund(world));
+        await markRefunded(world.deps, JOB_ID, 6000, 'ch_echo');
+      }
+      return result;
+    };
+
+    const res = await refund(world.deps, JOB_ID, 'proof rejected');
+    expect(res).toMatchObject({ refundedTotalCents: 6000, fullyRefunded: true });
+    expect(world.repo.ledger.filter((l) => l.kind === 'refund').map((l) => l.amount_cents)).toEqual([6000]);
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('refunded');
+    expect(releasedHooks(world)).toHaveLength(1);
   });
 });
 

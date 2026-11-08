@@ -71,7 +71,7 @@ export type PayWorkerResult =
 /**
  * Transfer worker_pay_cents to the worker's connected account.
  * Refuses unless: latest proof review for the job is `approved`, the escrow is `captured`,
- * and amount <= PAYOUT_CAP_CENTS (or `allowLarge`, used by release_payout_large after human approval in Naive).
+ * and amount <= PAYOUT_CAP_CENTS (or `allowLarge`, used by release_payout_large after the CEO agent's approval).
  * A worker whose account is missing or not yet payout-ready gets a `pending_onboarding` payouts row and an
  * onboarding link instead of a transfer; completePendingPayoutsForWorker finishes it later.
  * `accountReady` lets the account.updated webhook skip the accounts.retrieve round trip it just made.
@@ -105,7 +105,7 @@ export async function payWorker(
   const amount = job.worker_pay_cents;
   if (!Number.isInteger(amount) || amount <= 0) throw new InvalidStateError(`job ${jobId} worker_pay_cents invalid`);
   if (amount > deps.env.PAYOUT_CAP_CENTS && !opts.allowLarge) {
-    throw new RequiresApprovalError(amount, deps.env.PAYOUT_CAP_CENTS);
+    throw new RequiresApprovalError(amount, deps.env.PAYOUT_CAP_CENTS, 'payout');
   }
 
   // First payout: no account yet, so the worker connects a bank account now.
@@ -191,7 +191,7 @@ async function transferToWorker(
 /**
  * account.updated with payouts_enabled: complete every `pending_onboarding` payout for this worker.
  * Each completion goes through payWorker() so the same checks and idempotency keys apply.
- * allowLarge is correct here: the cap check already passed (or a founder approved via release_payout_large)
+ * allowLarge is correct here: the cap check already passed (or the CEO agent approved via release_payout_large)
  * when the pending row was created, so re-running it would wrongly block an approved large payout.
  * Errors propagate; the webhook layer decides about retries.
  */

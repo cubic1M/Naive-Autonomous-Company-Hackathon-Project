@@ -8,7 +8,7 @@ import { ZodError } from 'zod';
 import type { Env } from './env.js';
 import { checkEligibility } from './eligibility.js';
 import { InvalidStateError, MoneyVerificationError, NotFoundError } from './errors.js';
-import { captureEscrow, createEscrow, refund as refundEscrow, releaseEscrow, type EscrowDeps } from './escrow.js';
+import { captureEscrow, createEscrow, refund as refundEscrow, releaseEscrow, type EscrowDeps, type RefundResult } from './escrow.js';
 import { getDisputeBundle, submitDisputeEvidence, type DisputeDeps } from './disputes.js';
 import type { Hooks } from './hooks.js';
 import * as ledger from './ledger.js';
@@ -47,6 +47,16 @@ function payoutOut(jobId: string, feeCents: number, r: PayWorkerResult): ToolOut
   return r.status === 'paid'
     ? { status: 'paid', job_id: jobId, transfer_id: r.transferId, worker_pay_cents: r.amountCents, fee_cents: feeCents, transferred: r.transferred }
     : { status: 'pending_onboarding', job_id: jobId, onboarding_url: r.onboardingUrl, worker_pay_cents: r.amountCents };
+}
+
+/** Why: callers need to tell a partial refund (job stays paid) from the final one. */
+function refundOut(jobId: string, r: RefundResult): ToolOutput<'refund'> {
+  return {
+    job_id: jobId,
+    status: r.fullyRefunded ? 'refunded' : 'partially_refunded',
+    amount_cents: r.refundCents,
+    refunded_total_cents: r.refundedTotalCents,
+  };
 }
 
 function reviewOut(r: ProofReview | null): ToolOutput<'get_proof_review'> {
@@ -108,9 +118,13 @@ export function createTools(deps: ToolDeps): Tools {
       return { job_id, status: 'released' };
     },
     async refund(raw) {
-      const { job_id, reason } = parse('refund', raw);
-      const escrow = await refundEscrow(escrowDeps, job_id, reason);
-      return { job_id, status: 'refunded', amount_cents: escrow.amount_cents };
+      const { job_id, reason, amount_cents, request_id } = parse('refund', raw);
+      return refundOut(job_id, await refundEscrow(escrowDeps, job_id, reason, { amountCents: amount_cents, requestId: request_id }));
+    },
+    async refund_large(raw) {
+      // approved_by is validated and carried in Naive's tool-call log; Stripe's Refund has no approver field.
+      const { job_id, reason, amount_cents, request_id } = parse('refund_large', raw);
+      return refundOut(job_id, await refundEscrow(escrowDeps, job_id, reason, { amountCents: amount_cents, allowLarge: true, requestId: request_id }));
     },
     async release_payout(raw) {
       const { job_id } = parse('release_payout', raw);
@@ -212,6 +226,11 @@ export async function callTool(deps: ToolDeps, name: string, input: unknown): Pr
 export function describeToolError(err: unknown): { code: string; message: string } {
   if (err instanceof ZodError) return { code: 'invalid_input', message: err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
   if (err instanceof MoneyVerificationError) return { code: err.code, message: err.message };
+  // Why: Stripe refuses a reused idempotency key sent with different params; the agent must retry the ORIGINAL call
+  // (same request_id, amount_cents) or use a new request_id for a new refund, not escalate to a human.
+  if (err instanceof Error && (err as { rawType?: string }).rawType === 'idempotency_error') {
+    return { code: 'idempotency_conflict', message: `${err.message} Retry with the same amount_cents as the original call, or use a new request_id for a different refund.` };
+  }
   if (err instanceof Error) return { code: 'error', message: err.message };
   return { code: 'error', message: String(err) };
 }
