@@ -16,5 +16,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/mcp", "/mcp/:path*", "/.well-known/:path*", "/oauth/:path*"],
+  matcher: ["/", "/mcp", "/mcp/:path*", "/.well-known/:path*", "/oauth/:path*", "/SKILL.md", "/skill.md"],
 };

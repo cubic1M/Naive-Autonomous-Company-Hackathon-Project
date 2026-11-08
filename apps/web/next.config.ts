@@ -12,6 +12,8 @@ const config: NextConfig = {
       { source: "/mcp", destination: `${API_URL}/mcp` },
       { source: "/mcp/:path*", destination: `${API_URL}/mcp/:path*` },
       { source: "/llms.txt", destination: `${API_URL}/llms.txt` },
+      { source: "/SKILL.md", destination: `${API_URL}/SKILL.md` },
+      { source: "/skill.md", destination: `${API_URL}/SKILL.md` },
       { source: "/v1/:path*", destination: `${API_URL}/v1/:path*` },
       { source: "/webhooks/:path*", destination: `${API_URL}/webhooks/:path*` },
       // MCP OAuth: discovery + endpoints live on the API; the consent page (/connect) is ours

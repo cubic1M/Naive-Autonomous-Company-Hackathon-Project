@@ -1,39 +1,38 @@
 "use client";
 
-// "Paste one prompt into your agent": the fastest way in for agents with web access.
+// "Give this to your agent": short command shown, fuller instruction copied (see lib/quickstart.ts).
 import { useState } from "react";
 
-import { quickStartPrompt } from "@/lib/quickstart";
+import { copiedInstruction, SHOWN_COMMAND } from "@/lib/quickstart";
 
-export default function QuickStart({ compact = false }: { compact?: boolean }) {
-  const [email, setEmail] = useState("");
-  const [company, setCompany] = useState("");
-  const [task, setTask] = useState("");
+export default function QuickStart({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const text = quickStartPrompt({ email, company, task });
-  const input: React.CSSProperties = { font: "inherit", fontSize: 14, padding: "10px 12px", borderRadius: 8, border: "1px solid #C5BEB0", background: "#FBF9F5", color: "#232824", flex: "1 1 180px", minWidth: 0 };
+  const [peek, setPeek] = useState(false);
+  const muted = dark ? "#C3CBC2" : "#5B635C";
+  const copy = async () => { await navigator.clipboard.writeText(copiedInstruction()); setCopied(true); setTimeout(() => setCopied(false), 1800); };
 
   return (
-    <div style={{ width: "100%", maxWidth: compact ? 640 : undefined, textAlign: "left", background: "#FBF9F5", border: "1px solid #DCD6CA", borderRadius: 14, padding: compact ? 14 : 20, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-        <strong style={{ fontFamily: "var(--font-display)", fontWeight: 600, color: "#1F2A22" }}>Fastest: paste one prompt into your agent</strong>
-        <span style={{ fontSize: 12, color: "#5B635C" }}>Claude Code, Codex, Cursor agent, Naïve and custom agents with web access</span>
-      </div>
-      {!compact && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input style={input} placeholder="Your email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input style={input} placeholder="Company name" value={company} onChange={(e) => setCompany(e.target.value)} />
-          <input style={{ ...input, flex: "2 1 320px" }} placeholder="Task, e.g. photograph the storefront at 2102 Union St, $30, within 3 hours" value={task} onChange={(e) => setTask(e.target.value)} />
-        </div>
-      )}
-      <div style={{ position: "relative" }}>
-        <pre style={{ margin: 0, whiteSpace: "pre-wrap", background: "#17211a", color: "#e9e5dc", padding: "14px 14px 14px", borderRadius: 10, fontSize: 12.5, lineHeight: 1.6, fontFamily: "var(--font-mono)" }}>{text}</pre>
-        <button type="button" onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-          style={{ position: "absolute", top: 8, right: 8, border: 0, borderRadius: 8, padding: "6px 12px", background: copied ? "#a9c0a2" : "#46664f", color: copied ? "#17211a" : "#f7f4ee", fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
+    <div style={{ width: "100%", maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 14, textAlign: "center" }}>
+      <p style={{ margin: 0, fontSize: compact ? 18 : 22, color: dark ? "#F3EEE4" : "#3C443E", fontFamily: "var(--font-display)", letterSpacing: "-0.01em" }}>
+        Give this to your agent
+        <span style={{ marginLeft: 10, fontSize: 13, color: muted, fontFamily: "var(--font)" }}>Claude · ChatGPT · Cursor · Codex · Naïve</span>
+      </p>
+      <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: "#17211A", border: "1px solid #2F3D33", borderRadius: 14, padding: compact ? "14px 14px 14px 20px" : "18px 18px 18px 24px", boxShadow: "0 18px 40px rgba(23,33,26,0.22)" }}>
+        <span style={{ fontFamily: "var(--font-mono)", color: "#7A8178", fontSize: 15 }}>$</span>
+        <code style={{ flex: 1, textAlign: "left", fontFamily: "var(--font-mono)", color: "#E9E5DC", fontSize: compact ? 15 : 17, overflowX: "auto", whiteSpace: "nowrap" }}>{SHOWN_COMMAND}</code>
+        <button type="button" onClick={copy} aria-label="Copy instruction for your agent"
+          style={{ flexShrink: 0, border: 0, borderRadius: 10, padding: "10px 14px", background: copied ? "#A9C0A2" : "#46664F", color: copied ? "#17211A" : "#F7F4EE", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <span style={{ fontSize: 12, color: "#5B635C" }}>Your agent signs you up with your email, saves its key, connects for next time, and hires the person. You pay once at the Stripe link it gives you. Chat apps (ChatGPT, claude.ai) can&apos;t run this; add <code>https://operis.live/mcp</code> as a connector instead and sign in when asked.</span>
+      <p style={{ margin: 0, fontSize: compact ? 16 : 18, color: muted }}>and let it take it from there.</p>
+      {!compact && (
+        <button type="button" onClick={() => setPeek((p) => !p)} style={{ border: 0, background: "transparent", color: muted, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+          {peek ? "Hide" : "What gets copied?"}
+        </button>
+      )}
+      {peek && <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: muted, textAlign: "left", background: dark ? "#1F2A22" : "#F3EFE7", borderRadius: 10, padding: 14 }}>{copiedInstruction()}</p>}
+      {!compact && <p style={{ margin: 0, fontSize: 12.5, color: muted }}>Chat apps without a terminal: add <code>https://operis.live/mcp</code> as a connector and sign in.</p>}
     </div>
   );
 }
