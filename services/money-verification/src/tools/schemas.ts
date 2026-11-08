@@ -162,6 +162,7 @@ export const toolSchemas = {
     output: z.object({
       status: z.enum(['verified', 'needs_review', 'failed']), reasons: z.array(z.string()),
       name_on_record: z.string().nullable(), licence_status: z.string().nullable(),
+      name_source: z.enum(['verified_identity', 'typed']),
     }),
   },
   verify_identity: {

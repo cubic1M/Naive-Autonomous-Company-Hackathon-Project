@@ -39,15 +39,21 @@ export async function checkEligibility(
       reasons.push(label === 'notary' ? 'notary_commission_expires_before_deadline' : 'attorney_check_expires_before_deadline');
     }
   };
-  if (job.task_type === 'notarization' || rules.includes('L1')) await licence('notary_commission', 'notary', 'no verification on file');
-  if (rules.includes('L2')) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
+  const needsNotary = job.task_type === 'notarization' || rules.includes('L1');
+  const needsAttorney = rules.includes('L2');
+  if (needsNotary) await licence('notary_commission', 'notary', 'no verification on file');
+  if (needsAttorney) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
+  // Licensed work is tied to a real, verified person: notary and legal jobs need a verified identity whatever IDENTITY_GATE says.
+  const licensedWork = needsNotary || needsAttorney;
   let advisory: string | null = null;
-  if (profile.identityRequired) {
+  if (profile.identityRequired || licensedWork) {
     const v = await deps.repo.getWorkerVerification(worker.id, 'identity');
     if (!v || v.status !== 'verified') {
       const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-      const reason = `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
-      if (profile.identityEnforced) reasons.push(reason);
+      const reason = licensedWork
+        ? `identity_not_verified: notary and legal jobs need a verified identity, so the licence is tied to the person; ${has} (start one with verify_identity)`
+        : `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
+      if (profile.identityEnforced || licensedWork) reasons.push(reason);
       else advisory = `${reason}; not enforced (IDENTITY_GATE=log)`;
     }
   }

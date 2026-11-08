@@ -45,6 +45,35 @@ describe('verifyAttorney', () => {
     const empty = '<html><head><title>\n # 999002 - Attorney Licensee Search\n  </title></head><body><h3 class="donotprint"><b>Attorney Profile</b></h3></body></html>';
     expect(await run(page(empty), 'Jordan Example', '999002').out).toMatchObject({ status: 'failed', reasons: ['not_found'] });
   });
+  describe('with a verified Stripe Identity on file, the ID name is compared, not the typed one', () => {
+    const withIdentity = async (first: string | null, last: string | null, typed: string) => {
+      const repo = new InMemoryRepo();
+      await repo.upsertWorkerVerification({
+        worker_id: WORKER_ID, kind: 'identity', status: 'verified', provider_ref: 'vs_test', details: { first_name: first, last_name: last },
+        verified_at: T0, expires_at: null,
+      });
+      return verifyAttorney({ repo, fetchText: page(fixture('calbar-active.html')), now: () => T0 }, { workerId: WORKER_ID, barNumber: '999001', name: typed });
+    };
+    it('verifies when the ID name matches the State Bar profile', async () => {
+      expect(await withIdentity('Jordan', 'Example', 'Jordan Example')).toMatchObject({ status: 'verified', reasons: [], name_source: 'verified_identity' });
+    });
+    it('fails a worker whose ID is someone else, even when the typed name matches the profile', async () => {
+      const r = await withIdentity('Someone', 'Else', 'Jordan Q. Example');
+      expect(r.status).toBe('failed');
+      expect(r.reasons[0]).toBe('name_mismatch');
+      expect(r.reasons.some((x) => x.startsWith('typed_name_mismatch'))).toBe(true);
+    });
+    it('flags a typed name that differs from the ID without changing the outcome', async () => {
+      const r = await withIdentity('Jordan', 'Example', 'Pat Example');
+      expect(r.status).toBe('verified');
+      expect(r.reasons.some((x) => x.startsWith('typed_name_mismatch'))).toBe(true);
+    });
+    it('falls back to the typed name, and says so, when Stripe gave no name for the ID', async () => {
+      const r = await withIdentity(null, null, 'Jordan Example');
+      expect(r).toMatchObject({ status: 'verified', name_source: 'typed' });
+      expect(r.reasons.some((x) => x.startsWith('id_name_unavailable'))).toBe(true);
+    });
+  });
   it('needs review when the lookup is unreachable, and stores nothing verified', async () => {
     const { repo, out } = run(async () => { throw new Error('ECONNRESET'); });
     expect(await out).toMatchObject({ status: 'needs_review', reasons: ['lookup_unavailable'] });
