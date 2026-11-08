@@ -10,7 +10,7 @@ import { agentPrompt } from "@/lib/agentPrompt";
 import QuickStart from "@/components/QuickStart";
 
 type Created = { customer_id: string; api_key: string; mcp_url: string };
-type Tab = "prompt" | "plugin" | "claude" | "json" | "naive" | "curl";
+type Tab = "connector" | "prompt" | "plugin" | "claude" | "json" | "naive" | "curl";
 
 const PUBLIC_MCP = process.env.NEXT_PUBLIC_MCP_URL ?? "";
 
@@ -48,7 +48,7 @@ export default function Developers() {
   const [created, setCreated] = useState<Created | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Tab>("plugin");
+  const [tab, setTab] = useState<Tab>("connector");
   const [withKey, setWithKey] = useState(false);
   const [test, setTest] = useState<{ state: "idle" | "running" | "ok" | "fail"; tools?: string[]; msg?: string }>({ state: "idle" });
 
@@ -62,6 +62,17 @@ export default function Developers() {
   const key = created?.api_key ?? "<YOUR_OPERIS_KEY>";
   const url = created?.mcp_url && PUBLIC_MCP ? created.mcp_url : mcpUrl;
   const snippets = useMemo<Record<Tab, string>>(() => ({
+    connector: `No key needed: add this URL and sign in when your app asks (OAuth).
+
+${PUBLIC_MCP || url}
+
+Claude.ai / Claude Desktop:  Settings → Connectors → Add custom connector → paste the URL
+ChatGPT:                     Settings → Connectors (developer mode) → add the URL
+Claude Code:                 claude mcp add --transport http operis ${PUBLIC_MCP || url}
+                             then /mcp → operis → Authenticate
+Cursor / VS Code:            add an MCP server with just the URL; they prompt you to sign in
+
+You'll see "<app> wants to use Operis for you" on operis.live: sign up or paste your key, and you're connected.`,
     prompt: agentPrompt(url, key, withKey),
     plugin: `# 1. Put your key in your shell profile (~/.zshrc or ~/.bashrc), then open a new terminal:
 export OPERIS_API_KEY=${key}
@@ -125,7 +136,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
     }
   };
 
-  const tabs: [Tab, string][] = [["plugin", "Claude Code plugin"], ["claude", "Claude Code (one command)"], ["json", "Cursor / Claude Desktop JSON"], ["naive", "Naïve agent"], ["prompt", "Prompt for your agent"], ["curl", "curl"]];
+  const tabs: [Tab, string][] = [["connector", "Connector (sign in, no key)"], ["plugin", "Claude Code plugin"], ["claude", "Claude Code (one command)"], ["json", "Cursor / Claude Desktop JSON"], ["naive", "Naïve agent"], ["prompt", "Prompt for your agent"], ["curl", "curl"]];
   const serverCfg = { url, headers: { Authorization: `Bearer ${key}` } };
   const cursorLink = `cursor://anysphere.cursor-deeplink/mcp/install?name=operis&config=${typeof window === "undefined" ? "" : btoa(JSON.stringify(serverCfg))}`;
   const vscodeLink = `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: "operis", type: "http", ...serverCfg }))}`;
@@ -195,6 +206,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
               <label className="row small" style={{ gap: 8, cursor: "pointer" }}><input type="checkbox" checked={withKey} onChange={(e) => setWithKey(e.target.checked)} /> My agent can&apos;t use MCP: include my key in the prompt (keep it out of shared files)</label>
             </div>
           )}
+          {tab === "connector" && <p className="small muted">Works in Claude.ai, ChatGPT, Claude Code, Cursor and VS Code. The app gets its own key for your company after you sign in, so you don&apos;t need to create one above.</p>}
           {tab === "plugin" && <p className="small muted">Recommended for Claude Code: one install gives your agent the Operis tools and the knowledge of when and how to use them.</p>}
           <CopyBlock text={snippets[tab]} />
         </Step>

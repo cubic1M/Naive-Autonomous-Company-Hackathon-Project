@@ -14,6 +14,13 @@ const config: NextConfig = {
       { source: "/llms.txt", destination: `${API_URL}/llms.txt` },
       { source: "/v1/:path*", destination: `${API_URL}/v1/:path*` },
       { source: "/webhooks/:path*", destination: `${API_URL}/webhooks/:path*` },
+      // MCP OAuth: discovery + endpoints live on the API; the consent page (/connect) is ours
+      { source: "/.well-known/oauth-protected-resource/:path*", destination: `${API_URL}/.well-known/oauth-protected-resource/:path*` },
+      { source: "/.well-known/oauth-protected-resource", destination: `${API_URL}/.well-known/oauth-protected-resource` },
+      { source: "/.well-known/oauth-authorization-server/:path*", destination: `${API_URL}/.well-known/oauth-authorization-server/:path*` },
+      { source: "/.well-known/oauth-authorization-server", destination: `${API_URL}/.well-known/oauth-authorization-server` },
+      { source: "/.well-known/openid-configuration", destination: `${API_URL}/.well-known/openid-configuration` },
+      { source: "/oauth/:path*", destination: `${API_URL}/oauth/:path*` },
     ];
   },
   async headers() {
