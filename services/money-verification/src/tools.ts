@@ -188,7 +188,7 @@ export function createTools(deps: ToolDeps): Tools {
     },
     async verify_attorney(raw) {
       const { worker_id, bar_number, name } = parse('verify_attorney', raw);
-      return verifyAttorney({ repo: deps.repo, now: deps.now }, { workerId: worker_id, barNumber: bar_number, name });
+      return verifyAttorney({ repo: deps.repo, now: deps.now, stripe: deps.stripe }, { workerId: worker_id, barNumber: bar_number, name });
     },
     async verify_identity(raw) {
       const { worker_id } = parse('verify_identity', raw);

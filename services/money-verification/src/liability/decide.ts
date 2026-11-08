@@ -1,18 +1,19 @@
 // services/money-verification/src/liability/decide.ts
-import { InvalidStateError } from '../errors.js';
+import { InvalidStateError, NotFoundError } from '../errors.js';
 import type { Repo } from '../repo.js';
 import type { JobLiability } from '../types.js';
 import { POLICY_VERSION, RULES, policyText, ruleById, type LiabilityModel } from './policy.js';
 
 export interface LiabilityDeps {
-  repo: Pick<Repo, 'getJobLiability' | 'insertJobLiability' | 'decideJobLiability'>;
+  repo: Pick<Repo, 'getJob' | 'getJobLiability' | 'insertJobLiability' | 'decideJobLiability'>;
   now?: () => Date;
 }
 
 export interface LiabilityContext {
   job_id: string;
   pricing: JobLiability['pricing'];
-  tags: JobLiability['tags'];
+  /** hints: mentions intake found that force nothing; the agent judges them (policy text, "Tags and hints"). */
+  tags: { rules: string[]; forced: JobLiability['tags']['forced']; hints: string[] };
   decision: { model: string; rule_id: string | null; reason: string | null; decided_by: string | null; decided_at: string | null } | null;
   allowed_models: LiabilityModel[];
   policy_version: string;
@@ -44,7 +45,7 @@ export async function getLiabilityContext(deps: LiabilityDeps, jobId: string): P
   return {
     job_id: jobId,
     pricing: row.pricing,
-    tags: row.tags,
+    tags: { rules: row.tags.rules, forced: row.tags.forced, hints: row.tags.hints ?? [] },
     decision: row.model
       ? { model: row.model, rule_id: row.rule_id, reason: row.reason, decided_by: row.decided_by, decided_at: row.decided_at?.toISOString() ?? null }
       : null,
@@ -58,6 +59,12 @@ export async function setLiability(
   deps: LiabilityDeps,
   input: { jobId: string; model: LiabilityModel; ruleId: string; reason: string; decidedBy: string },
 ): Promise<DecisionOutcome> {
+  // A decision belongs to a funded job that is not dispatched yet: later states would cancel or release the wrong thing.
+  const job = await deps.repo.getJob(input.jobId);
+  if (!job) throw new NotFoundError('job', input.jobId);
+  if (job.status !== 'held') {
+    throw new InvalidStateError(`job_not_held: job ${input.jobId} is ${job.status}; a liability decision is recorded only while the job is held (funded, not yet dispatched)`);
+  }
   const row = await intakeRow(deps, input.jobId);
   const rule = ruleById(input.ruleId);
   if (!rule) throw new InvalidStateError(`unknown_rule: ${input.ruleId} is not in liability policy ${POLICY_VERSION}`);
@@ -69,6 +76,11 @@ export async function setLiability(
   if (input.model === 'connector' && licensed && row.pricing === 'standard') {
     throw new InvalidStateError(
       'repost_required: this job was priced as a standard job; refuse it with rule L1 or L2 and tell the customer to post it again as a notary or legal job so it is priced as one',
+    );
+  }
+  if (input.model === 'connector' && licensed && !row.tags.rules.includes(rule.id)) {
+    throw new InvalidStateError(
+      `rule_not_tagged: ${rule.id} is not among this job's intake tags ${JSON.stringify(row.tags.rules)}; record the tagged rule, so the licence checked at accept is the one the work needs`,
     );
   }
   const repostRefusal = input.model === 'refuse' && licensed && row.pricing === 'standard';
@@ -90,13 +102,29 @@ export async function setLiability(
   return { liability: stored, next: nextFor(stored.model as LiabilityModel), changed };
 }
 
+/** The model and rule the intake tags give: a forced tag decides with its first rule; an untagged job gets `untagged`. */
+function byTags(row: JobLiability, untagged: readonly [LiabilityModel, string]): readonly [LiabilityModel, string] {
+  const firstOf = (model: LiabilityModel) => RULES.find((r) => r.model === model && row.tags.rules.includes(r.id))?.id;
+  if (row.tags.forced === 'refuse') return ['refuse', firstOf('refuse') ?? 'R'];
+  if (row.tags.forced === 'connector') return ['connector', firstOf('connector') ?? 'U'];
+  return untagged;
+}
+
+/** The sweep's fifteen-minute timeout: the tags decide; an untagged job is connector under U (nobody judged it). */
 export async function decideFallback(deps: LiabilityDeps, jobId: string): Promise<DecisionOutcome> {
   const row = await intakeRow(deps, jobId);
   if (row.model) return { liability: row, next: nextFor(row.model), changed: false };
-  const firstOf = (model: LiabilityModel) => RULES.find((r) => r.model === model && row.tags.rules.includes(r.id))?.id;
-  const [model, ruleId] =
-    row.tags.forced === 'refuse' ? (['refuse', firstOf('refuse') ?? 'R'] as const)
-    : row.tags.forced === 'connector' ? (['connector', firstOf('connector') ?? 'U'] as const)
-    : (['connector', 'U'] as const);
+  const [model, ruleId] = byTags(row, ['connector', 'U']);
   return setLiability(deps, { jobId, model, ruleId, reason: 'no decision within fifteen minutes', decidedBy: 'fallback' });
+}
+
+/**
+ * No Compliance agent configured (NAIVE_AGENT_COMPLIANCE unset): decide at held by the intake tags, so funded jobs are
+ * not held for the timeout. An untagged job is operis under D; U stays the outcome of a real timeout only.
+ */
+export async function decideByTags(deps: LiabilityDeps, jobId: string): Promise<DecisionOutcome> {
+  const row = await intakeRow(deps, jobId);
+  if (row.model) return { liability: row, next: nextFor(row.model), changed: false };
+  const [model, ruleId] = byTags(row, ['operis', 'D']);
+  return setLiability(deps, { jobId, model, ruleId, reason: 'no Compliance agent configured: decided by the intake tags', decidedBy: 'auto (no compliance agent)' });
 }

@@ -7,10 +7,12 @@ describe('connectorFeeCents', () => {
   it.each([
     [2_000, 400],      // $20 -> $4.00
     [10_000, 2_000],   // $100 -> $20.00 (top of tier 1)
-    [10_001, 2_000],   // 20.00 + 0.10 of a cent, rounds half-up to 2000
+    [10_001, 2_000],   // 2000 cents + 10% of 1 cent = 2000.1: rounds down to 2000
     [10_005, 2_001],   // 20.00 + 0.5 cent -> rounds up
     [20_000, 3_000],   // $200 -> $30.00
     [50_000, 6_000],   // $500 -> $20 + $40
+    [50_001, 6_000],   // 6000 + 5% of 1 cent = 6000.05: rounds down
+    [50_010, 6_001],   // 6000 + 5% of 10 cents = 6000.5: half-up to 6001
     [100_000, 8_500],  // $1,000 -> $20 + $40 + $25
   ])('budget %i cents -> fee %i cents', (budget, fee) => {
     expect(connectorFeeCents(budget)).toBe(fee);
@@ -36,6 +38,10 @@ describe('quoteJob', () => {
     const q = quoteJob({ budgetUsd: 80, title: 'Rewire a kitchen outlet', instructions: '', certification_required: null });
     expect(q.tags.forced).toBe('refuse');
     expect(q.pricing).toBe('standard');
+  });
+  it('prices a fractional connector budget to the cent', () => {
+    const q = quoteJob({ budgetUsd: 59.99, title: 'Notarize a deed', instructions: '', certification_required: null });
+    expect(q).toMatchObject({ pricing: 'connector', budgetCents: 5_999, workerPayCents: 5_999, feeCents: 1_200, chargeCents: 7_199 });
   });
   it('enforces the $20 minimum on the budget', () => {
     expect(() => quoteJob({ budgetUsd: 19.99, title: 'Notarize a deed', instructions: '', certification_required: null })).toThrow(/minimum/);

@@ -40,6 +40,25 @@ describe('licences required by the liability tags', () => {
     const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
     expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
   });
+  it('requires a verified identity for licensed work even when IDENTITY_GATE is log', async () => {
+    for (const rule of ['L1', 'L2']) {
+      const repo = await setup([rule]);
+      await repo.upsertWorkerVerification({ ...attorneyCheck(new Date(T0.getTime() + 30 * 24 * 3600 * 1000)), kind: rule === 'L1' ? 'notary_commission' : 'attorney_license' });
+      const r = await checkEligibility({ repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+      expect(r.eligible).toBe(false);
+      expect(r.reasons).toHaveLength(1);
+      expect(r.reasons[0]).toMatch(/^identity_not_verified: notary and legal jobs need a verified identity/);
+      await repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status: 'verified', provider_ref: 'vs_test', details: { first_name: 'Pat', last_name: 'Example' }, verified_at: T0, expires_at: null });
+      expect(await checkEligibility({ repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID })).toMatchObject({ eligible: true, reasons: [] });
+    }
+  });
+  it('also requires the licence of the rule Compliance recorded', async () => {
+    const repo = await setup(['L2']);
+    await repo.decideJobLiability(JOB_ID, { model: 'connector', rule_id: 'L1', reason: 'recorded before the tag check', policy_version: '2026-11-08', decided_by: 'test', decided_at: T0 });
+    const r = await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
+    expect(r.reasons.some((x) => x.startsWith('attorney_not_verified'))).toBe(true);
+  });
   it('changes nothing for a job without tags', async () => {
     const repo = new InMemoryRepo();
     repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));

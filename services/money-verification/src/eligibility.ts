@@ -1,5 +1,6 @@
 import type { Env } from './env.js';
 import { NotFoundError } from './errors.js';
+import { ruleById } from './liability/policy.js';
 import { verificationProfile, type VerificationTier } from './proof/profile.js';
 import type { Repo } from './repo.js';
 
@@ -30,8 +31,11 @@ export async function checkEligibility(
   if (worker.suspended) reasons.push('worker_suspended');
   if (worker.tier < job.required_tier) reasons.push(`tier_too_low: worker tier ${worker.tier}, job requires ${job.required_tier}`);
   // Licences the job's liability tags require (src/liability/policy.ts): L1 a notary commission, also when task_type
-  // is not notarization; L2 an active State Bar licence (verify_attorney). No intake row means no tags.
-  const rules = (await deps.repo.getJobLiability(job.id))?.tags.rules ?? [];
+  // is not notarization; L2 an active State Bar licence (verify_attorney). No intake row means no tags. The rule
+  // Compliance recorded counts too (setLiability only records a licensed rule intake tagged; this is the backstop).
+  const liability = await deps.repo.getJobLiability(job.id);
+  const rules = liability?.tags.rules ?? [];
+  const recorded = liability?.rule_id && liability.model !== 'refuse' ? ruleById(liability.rule_id)?.licence ?? null : null;
   const licence = async (kind: 'notary_commission' | 'attorney_license', label: 'notary' | 'attorney', missing: string) => {
     const v = await deps.repo.getWorkerVerification(worker.id, kind);
     if (!v || v.status !== 'verified') reasons.push(`${label}_not_verified: ${v?.status ?? missing}`);
@@ -39,15 +43,21 @@ export async function checkEligibility(
       reasons.push(label === 'notary' ? 'notary_commission_expires_before_deadline' : 'attorney_check_expires_before_deadline');
     }
   };
-  if (job.task_type === 'notarization' || rules.includes('L1')) await licence('notary_commission', 'notary', 'no verification on file');
-  if (rules.includes('L2')) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
+  const needsNotary = job.task_type === 'notarization' || rules.includes('L1') || recorded === 'notary_commission';
+  const needsAttorney = rules.includes('L2') || recorded === 'attorney_license';
+  if (needsNotary) await licence('notary_commission', 'notary', 'no verification on file');
+  if (needsAttorney) await licence('attorney_license', 'attorney', 'no State Bar check on file (verify with your bar number)');
+  // Licensed work is tied to a real, verified person: notary and legal jobs need a verified identity whatever IDENTITY_GATE says.
+  const licensedWork = needsNotary || needsAttorney;
   let advisory: string | null = null;
-  if (profile.identityRequired) {
+  if (profile.identityRequired || licensedWork) {
     const v = await deps.repo.getWorkerVerification(worker.id, 'identity');
     if (!v || v.status !== 'verified') {
       const has = v ? `identity verification is ${v.status}` : 'no identity verification on file';
-      const reason = `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
-      if (profile.identityEnforced) reasons.push(reason);
+      const reason = licensedWork
+        ? `identity_not_verified: notary and legal jobs need a verified identity, so the licence is tied to the person; ${has} (start one with verify_identity)`
+        : `identity_not_verified: tier ${profile.tier} job requires a verified identity; ${has} (start one with verify_identity)`;
+      if (profile.identityEnforced || licensedWork) reasons.push(reason);
       else advisory = `${reason}; not enforced (IDENTITY_GATE=log)`;
     }
   }

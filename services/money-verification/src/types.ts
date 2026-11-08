@@ -149,7 +149,8 @@ export interface WorkerVerification {
 /** Owned by this package: the per-job liability model (src/liability, migration 0003). */
 export interface JobLiability {
   job_id: string;
-  tags: { rules: string[]; forced: 'connector' | 'refuse' | null };
+  /** rules force the model; hints are mentions intake found that force nothing (absent on rows written before hints). */
+  tags: { rules: string[]; forced: 'connector' | 'refuse' | null; hints?: string[] };
   pricing: 'standard' | 'connector';
   model: 'operis' | 'connector' | 'refuse' | null;
   rule_id: string | null;

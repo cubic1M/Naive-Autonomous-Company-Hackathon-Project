@@ -28,7 +28,7 @@ describe('PostgresRepo: job_liability (migration 0003)', () => {
 
   it('maps a row: tags from jsonb, timestamps to Dates', async () => {
     const liability = await new PostgresRepo(fakeSql([{ match: 'select * from job_liability', rows: [row] }])).getJobLiability(JOB);
-    expect(liability).toEqual({ ...row, decided_at: new Date(row.decided_at), created_at: new Date(row.created_at) });
+    expect(liability).toEqual({ ...row, tags: { ...row.tags, hints: [] }, decided_at: new Date(row.decided_at), created_at: new Date(row.created_at) });
     expect(liability?.decided_at).toBeInstanceOf(Date);
   });
 
