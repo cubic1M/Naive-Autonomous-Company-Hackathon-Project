@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     api_key: key,
     note: "Store this key now; it is not shown again.",
     mcp_url: `${apiBaseUrl()}/mcp`,
-    auth_header: `Authorization: Bearer ${key}`,
+    auth_header_format: "Authorization: Bearer <api_key>",
     guide: `${apiBaseUrl()}/llms.txt`,
   }, { status: 201 });
 }

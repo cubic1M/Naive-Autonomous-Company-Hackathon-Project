@@ -40,7 +40,7 @@ export async function main(browser) {
   const host = await ctx.newPage();
   await host.goto(BASE + '/__phone'); await host.evaluate(() => document.fonts.ready);
   const page = host.frame('app'); const O = { host };
-  const mark = (n) => marks.push([n, (Date.now() - t0) / 1000]);
+  const mark = (n) => { marks.push([n, (Date.now() - t0) / 1000]); console.log('mark', n); };
 
   // 1. the invite email
   await sleep(2200); mark('email');

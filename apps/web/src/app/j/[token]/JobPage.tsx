@@ -356,7 +356,12 @@ export default function JobPage({ token }: { token: string }) {
                     )}
                     <li style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
                       <Tick ok />
-                      <span><strong>Signed in as {user!.name || user!.email}</strong><br /><span style={{ color: "#5B635C" }}>Not you? Log out from the menu.</span></span>
+                      {user ? (
+                        <span><strong>Signed in as {user.name || user.email}</strong><br /><span style={{ color: "#5B635C" }}>Not you? Log out from the menu.</span></span>
+                      ) : (
+                        // worker accounts aren't live yet: the personal job link is the credential (NEXT_PUBLIC_WORKER_LOGIN unset)
+                        <span><strong>Using your personal job link</strong><br /><span style={{ color: "#5B635C" }}>Don&apos;t share it; it&apos;s how we know the job is yours.</span></span>
+                      )}
                     </li>
                   </ul>
                 </div>

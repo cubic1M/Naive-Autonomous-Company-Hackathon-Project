@@ -38,7 +38,10 @@ type Data = {
 
 export default function Backoffice() {
   const [key, setKey] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [login, setLogin] = useState({ email: "", password: "" });
+  const [loginErr, setLoginErr] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [me, setMe] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [live, setLive] = useState(true);
   const [authErr, setAuthErr] = useState(false);
@@ -49,7 +52,7 @@ export default function Backoffice() {
   const first = useRef(true);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
 
-  useEffect(() => setKey(localStorage.getItem("operis_admin")), []);
+  useEffect(() => { setKey(localStorage.getItem("operis_admin")); setMe(localStorage.getItem("operis_admin_email")); }, []);
 
   const poll = useCallback(async () => {
     if (!key) return;
@@ -82,12 +85,24 @@ export default function Backoffice() {
     return (
       <main className="dash" style={{ maxWidth: 520 }}>
         <span className="brand"><Logo /> operis. backoffice</span>
-        <form className="card stack" onSubmit={(e) => { e.preventDefault(); localStorage.setItem("operis_admin", draft.trim()); setKey(draft.trim()); setAuthErr(false); first.current = true; }}>
+        <form className="card stack" onSubmit={async (e) => {
+          e.preventDefault(); setSigningIn(true); setLoginErr("");
+          const r = await fetch("/api/v1/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
+          const j = await r.json().catch(() => ({}));
+          setSigningIn(false);
+          if (!r.ok || !j.token) return setLoginErr(j.error ?? `Sign-in failed (${r.status}).`);
+          localStorage.setItem("operis_admin", j.token); localStorage.setItem("operis_admin_email", j.email);
+          setMe(j.email); setKey(j.token); setAuthErr(false); first.current = true;
+        }}>
           <h1>Founders only</h1>
-          {authErr && <div className="notice bad">That admin key didn&apos;t work.</div>}
-          <input type="password" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="ADMIN_KEY" autoFocus
+          <p className="small muted">Sign in with your Operis founder email.</p>
+          {authErr && !loginErr && <div className="notice warn">Your session expired. Sign in again.</div>}
+          {loginErr && <div className="notice bad">{loginErr}</div>}
+          <input type="email" required autoComplete="username" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} placeholder="Email" autoFocus
             style={{ font: "inherit", padding: 14, borderRadius: 10, border: "1px solid var(--border-strong)", background: "var(--surface)" }} />
-          <button className="btn">Open backoffice</button>
+          <input type="password" required autoComplete="current-password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} placeholder="Password"
+            style={{ font: "inherit", padding: 14, borderRadius: 10, border: "1px solid var(--border-strong)", background: "var(--surface)" }} />
+          <button className="btn" disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button>
         </form>
       </main>
     );
@@ -103,7 +118,8 @@ export default function Backoffice() {
         <div className="row small muted" style={{ gap: 10 }}>
           <span className={`live-dot ${live ? "" : "off"}`} aria-hidden />
           {live ? "Live" : "Reconnecting…"}
-          <button className="pill" style={{ border: 0, cursor: "pointer" }} onClick={() => { localStorage.removeItem("operis_admin"); setKey(null); }}>Sign out</button>
+          {me && <span className="small">{me}</span>}
+          <button className="pill" style={{ border: 0, cursor: "pointer" }} onClick={() => { localStorage.removeItem("operis_admin"); localStorage.removeItem("operis_admin_email"); setKey(null); setMe(null); }}>Sign out</button>
         </div>
       </header>
 

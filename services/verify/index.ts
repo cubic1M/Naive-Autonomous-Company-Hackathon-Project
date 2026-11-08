@@ -28,7 +28,10 @@ const verify: ServiceModule = {
       out.error === "reused_media" ? "outside_geofence" : out.error === "identity_unverified" ? "below_threshold" : out.error;
     return { error };
   },
-  escalate: (input, ctx) => tools(ctx).escalate(input),
+  // contracts/tools.ts types escalate's result as { job_id, status: "escalated" } only. A proof that is already approved
+  // (the job is being paid) is not re-opened: the agent gets { job_id, status: "approved", error: "already_approved",
+  // message } as a readable result instead of a thrown tool error. The cast only narrows the declared type.
+  escalate: (input, ctx) => tools(ctx).escalate(input) as Promise<{ job_id: string; status: "escalated" }>,
 };
 export default verify;
 

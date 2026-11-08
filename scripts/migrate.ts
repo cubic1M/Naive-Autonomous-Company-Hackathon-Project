@@ -4,7 +4,7 @@ import path from "node:path";
 import postgres from "postgres";
 import { ROOT } from "./env";
 
-const MIGRATIONS = ["contracts/schema.sql", "apps/api/migrations/002_edwin.sql", "apps/api/migrations/003_customers_selfserve.sql", "apps/api/migrations/004_proof_files.sql", "apps/api/migrations/005_workers_email.sql", "apps/api/migrations/006_agent_feed.sql", "services/outreach/migrations/0001_outreach.sql", "services/outreach/migrations/0002_people.sql", "services/outreach/migrations/0003_pool.sql", "services/money-verification/migrations/0001_money_verification.sql"];
+const MIGRATIONS = ["contracts/schema.sql", "apps/api/migrations/002_edwin.sql", "apps/api/migrations/003_customers_selfserve.sql", "apps/api/migrations/004_proof_files.sql", "apps/api/migrations/005_workers_email.sql", "apps/api/migrations/006_agent_feed.sql", "apps/api/migrations/007_oauth.sql", "apps/api/migrations/008_admin_login.sql", "services/outreach/migrations/0001_outreach.sql", "services/outreach/migrations/0002_people.sql", "services/outreach/migrations/0003_pool.sql", "services/money-verification/migrations/0001_money_verification.sql"];
 const sql = postgres(process.env.DATABASE_URL!, { prepare: false, onnotice: () => {} });
 await sql`create table if not exists _migrations (name text primary key, applied_at timestamptz default now())`;
 for (const name of MIGRATIONS) {

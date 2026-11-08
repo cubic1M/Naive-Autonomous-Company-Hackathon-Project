@@ -111,12 +111,16 @@ async function runVision(
   }
 }
 
-/**
- * Automated review under the job's verification profile: deterministic checks first, then (unless a fraud
- * signal already rejected it) the tier-2 identity gate and the vision scorer. Approved only when every check
- * passes, so a tier-2 proof from a worker without a verified identity always escalates.
- */
-export async function reviewProof(deps: DecideDeps, proofId: string): Promise<ProofReview> {
+interface Assessment {
+  proof: Proof;
+  job: Job;
+  checks: ProofCheck[];
+  decision: ProofDecision;
+  confidence: number | null;
+}
+
+/** The automated review's checks and verdict, computed but not recorded (reviewProof records them). */
+async function assessProof(deps: DecideDeps, proofId: string): Promise<Assessment> {
   const { proof, job } = await loadProofAndJob(deps.repo, proofId);
   const profile = verificationProfile(job);
   const { checks: deterministic } = await runChecks(deps, job, proof, profile);
@@ -133,7 +137,16 @@ export async function reviewProof(deps: DecideDeps, proofId: string): Promise<Pr
     decision = checks.every((c) => c.status === 'pass') ? 'approved' : 'escalated';
     // Any non-hard 'fail' (e.g. completeness) is still not auto-approvable; it goes to a human.
   }
+  return { proof, job, checks, decision, confidence };
+}
 
+/**
+ * Automated review under the job's verification profile: deterministic checks first, then (unless a fraud
+ * signal already rejected it) the tier-2 identity gate and the vision scorer. Approved only when every check
+ * passes, so a tier-2 proof from a worker without a verified identity always escalates.
+ */
+export async function reviewProof(deps: DecideDeps, proofId: string): Promise<ProofReview> {
+  const { proof, job, checks, decision, confidence } = await assessProof(deps, proofId);
   const review = await deps.repo.upsertProofReview({
     proof_id: proof.id,
     job_id: job.id,
@@ -148,7 +161,7 @@ export async function reviewProof(deps: DecideDeps, proofId: string): Promise<Pr
 
 async function recordManual(
   deps: DecideDeps,
-  base: ProofReview,
+  base: Pick<ProofReview, 'proof_id' | 'job_id' | 'confidence' | 'checks'>,
   decision: ProofDecision,
   reviewer: string,
   detail: string,
@@ -202,16 +215,49 @@ export async function approveProof(
   return recordManual(deps, review, 'approved', input.reviewer, input.notes ?? '', extra);
 }
 
+/**
+ * An approval already moved the job to approved and woke Finance (capture, then payout); contracts/states.ts has no
+ * way back. Overwriting it would leave the review contradicting the job, and payWorker refusing a worker whose
+ * customer was already charged. So an approved review is final here: a bad proof found later is a refund or dispute.
+ */
+function refuseIfApproved(review: ProofReview, outcome: 'escalated' | 'rejected'): void {
+  if (review.decision !== 'approved') return;
+  throw new InvalidStateError(
+    `already_approved: proof ${review.proof_id} is already approved and job ${review.job_id} is being paid ` +
+      `(capture and payout follow approval), so it cannot be ${outcome}. A genuinely bad proof now goes to the ` +
+      'refund/dispute path (refund or refund_large, or a Stripe dispute), not to escalate; put the reason in your final answer.',
+  );
+}
+
+/**
+ * Escalate or reject on top of the review on record (refused once that is an approval), or, with none yet, on the
+ * automated checks computed now but not recorded: recording them would fire their own decision first, and an
+ * explicit escalate must never start by approving the proof and waking Finance.
+ */
+async function recordEscalationOrRejection(
+  deps: DecideDeps,
+  input: { proofId: string; reviewer: string; reason: string },
+  decision: 'escalated' | 'rejected',
+): Promise<ProofReview> {
+  const stored = await deps.repo.getProofReview(input.proofId);
+  if (stored) {
+    refuseIfApproved(stored, decision);
+    return recordManual(deps, stored, decision, input.reviewer, input.reason);
+  }
+  const { proof, job, checks, confidence } = await assessProof(deps, input.proofId);
+  return recordManual(deps, { proof_id: proof.id, job_id: job.id, confidence, checks }, decision, input.reviewer, input.reason);
+}
+
 export async function escalateProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; reason: string },
 ): Promise<ProofReview> {
-  return recordManual(deps, await reviewOnRecord(deps, input.proofId), 'escalated', input.reviewer, input.reason);
+  return recordEscalationOrRejection(deps, input, 'escalated');
 }
 
 export async function rejectProof(
   deps: DecideDeps,
   input: { proofId: string; reviewer: string; reason: string },
 ): Promise<ProofReview> {
-  return recordManual(deps, await reviewOnRecord(deps, input.proofId), 'rejected', input.reviewer, input.reason);
+  return recordEscalationOrRejection(deps, input, 'rejected');
 }

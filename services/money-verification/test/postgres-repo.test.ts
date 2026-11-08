@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { completenessCheck, loadExif } from '../src/proof/checks.js';
 import { PostgresRepo, type SqlClient } from '../src/repo/postgres.js';
+import { makeJob } from './helpers.js';
 
 /** Scripted SQL client: answers each query by matching a substring of its text; records every call. */
 function fakeSql(answers: Array<{ match: string; rows: Record<string, unknown>[] }>): SqlClient & { calls: { text: string; params: unknown[] }[] } {
@@ -82,6 +84,39 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
     expect(proof?.fields).toEqual({});
     expect(await repo.findProofsByMediaSha256('')).toEqual([]);
     expect(sql.calls.filter((c) => c.text.includes('jsonb_array_elements'))).toHaveLength(0);
+  });
+
+  it("maps the API proof route's media rows {url, kind: <MIME type>, name}, Blob URL or extension-less /v1/files/<uuid>", async () => {
+    // apps/api/src/app/v1/worker/jobs/[token]/proof/route.ts stores kind = File.type ('application/octet-stream' when the
+    // browser sent none); without BLOB_READ_WRITE_TOKEN the url is <api>/v1/files/<uuid>, with no extension.
+    const blob = 'https://abc123.public.blob.vercel-storage.com/proofs/job-1/1762560000000-IMG_0042-Xy12AbCd.jpg';
+    const files = 'https://api.operis.live/v1/files/9b2f6c1e-3d4a-4f5b-8c6d-7e8f9a0b1c2d';
+    const media = [
+      { url: blob, kind: 'image/jpeg', name: 'IMG_0042.jpg' },
+      { url: files, kind: 'image/jpeg', name: 'IMG_0043.jpg' },
+      { url: files, kind: 'image/heic', name: 'IMG_0044.HEIC' },
+      { url: files, kind: 'video/quicktime', name: 'clip.MOV' },
+      { url: files, kind: 'application/pdf', name: 'receipt.pdf' },
+      { url: files, kind: 'application/octet-stream', name: 'IMG_0045.JPG' },
+      { url: files, kind: 'application/octet-stream', name: 'notes' },
+    ];
+    const sql = fakeSql([
+      { match: 'from proofs where id', rows: [{ id: 'p2', job_id: JOB, worker_id: 'w1', media, fields: {}, gps_lat: null, gps_lng: null, captured_at: null }] },
+    ]);
+    const proof = await new PostgresRepo(sql).getProof('p2');
+    if (!proof) throw new Error('proof not mapped');
+    expect(proof.media.map((m) => m.mime)).toEqual([
+      'image/jpeg',
+      'image/jpeg',
+      'image/heic',
+      'video/quicktime',
+      'application/pdf',
+      'image/jpeg',
+      'application/octet-stream',
+    ]);
+    // The readers that key off the MIME prefix now see the four images: completeness counts them, EXIF is read for each.
+    expect(completenessCheck(makeJob({ proof_schema: { photos: { min: 4, must_show: [] } } }), proof)).toMatchObject({ status: 'pass', detail: '4 image(s), required fields present' });
+    expect((await loadExif({ repo: new PostgresRepo(sql) }, proof)).map((e) => e.media.url)).toEqual([blob, files, files, files]);
   });
 
   it('writes amount_usd alongside amount_cents and reads rows other packages wrote in USD', async () => {

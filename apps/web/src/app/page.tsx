@@ -1,6 +1,7 @@
 import { AuthButtons, LogoPill } from "@/components/SiteHeader";
 import LaunchHands from "@/components/LaunchHands";
 import HowItWorks from "./HowItWorks";
+import QuickStart from "@/components/QuickStart";
 
 // Ported 1:1 from the "Operis Homepage" design canvas, artboard "Launch page" (Launch.dc.html).
 // Log in / Sign up / Find work point at the "For people" steps: workers don't have accounts (the job link is the credential).
@@ -43,6 +44,7 @@ export default function Home() {
             <a href="/developers" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#46664F", color: "#F7F4EE", fontSize: "17px", fontWeight: "500", textDecoration: "none" }}>Get API access</a>
             <a href="/jobs" style={{ display: "inline-flex", alignItems: "center", minHeight: "50px", padding: "0 22px", borderRadius: "8px", background: "#FFFFFF", color: "#1F2A22", fontSize: "17px", fontWeight: "500", textDecoration: "none", border: "1px solid #DCD6CA" }}>Find work as a human</a>
           </div>
+          <QuickStart compact />
         </div>
 
         <div aria-hidden="true" style={{ position: "absolute", right: "12%", top: "300px", width: "44px", height: "44px", borderRadius: "12px", background: "#FFFFFF", boxShadow: "0 10px 24px rgba(30, 40, 30, 0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>

@@ -5,6 +5,7 @@ import { makeContext } from "@/tools/context";
 import { requestHuman, getJob, cancelJob } from "@/tools/edwin";
 import { createHold } from "@/tools/registry";
 import { apiBaseUrl } from "@/lib/env";
+import { publicOrigin, CORS } from "@/lib/oauth";
 
 const INSTRUCTIONS = `Operis sends a verified human to do a real-world task for you in San Francisco (within 8 km of the YC office):
 photograph or verify a place, pick up and ship an item, or receive/scan/mail paperwork.
@@ -25,7 +26,11 @@ async function handle(req: Request) {
       get_a_key: `curl -X POST ${apiBaseUrl()}/v1/customers -H 'Content-Type: application/json' -d '{"name":"Your agent","contact_email":"you@example.com"}'`,
       agents: "AI agents can sign themselves up: POST /v1/customers (with your owner's email), then call this endpoint with the key. Steps: /llms.txt",
       guide: `${apiBaseUrl()}/llms.txt`,
-    }, { status: 401 });
+    }, {
+      status: 401,
+      // MCP authorization: clients that support OAuth discover sign-in from here
+      headers: { ...CORS, "WWW-Authenticate": `Bearer resource_metadata="${publicOrigin(req)}/.well-known/oauth-protected-resource"` },
+    });
   const ctx = makeContext();
   return serveMcp(req, "operis", {
     request_human: (a) => requestHuman(a, ctx, customer.id, createHold),

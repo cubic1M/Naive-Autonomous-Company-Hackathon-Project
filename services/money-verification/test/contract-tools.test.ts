@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createContractTools } from '../src/contract-tools.js';
 import { RequiresApprovalError } from '../src/errors.js';
+import { escalateProof, rejectProof } from '../src/proof/decide.js';
 import type { VisionScorer } from '../src/proof/vision.js';
 import { createTools } from '../src/tools.js';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
@@ -62,6 +63,34 @@ describe('contracts/tools.ts adapters', () => {
     expect(ev.gps_distance_m).toBeGreaterThan(290);
     expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'outside_geofence' });
     expect(await contract.escalate({ job_id: JOB_ID, proof_id: PROOF_ID, reason: 'human look' })).toEqual({ job_id: JOB_ID, status: 'escalated' });
+  });
+
+  it('escalate after an automated approval is refused (tier 0 at 0.82): the review stays approved and the worker is paid', async () => {
+    const { world, contract } = await fundedWorld({ vision: scorer(0.82), budget: 3000 });
+    const ev = await contract.check_proof({ job_id: JOB_ID });
+    expect(ev).toMatchObject({ decision: 'approved', tier: 0, overall_score: 0.82, profile: { confidence_threshold: 0.8 } });
+
+    // A Verifier still applying a fixed 0.85 bar escalates; the approval (job approved, Finance woken) must stand.
+    const out = await contract.escalate({ job_id: JOB_ID, proof_id: PROOF_ID, reason: 'overall_score 0.82 is under 0.85' });
+    expect(out).toMatchObject({ job_id: JOB_ID, status: 'approved', error: 'already_approved' });
+    expect('message' in out ? out.message : '').toMatch(/already approved and job \S+ is being paid.*refund\/dispute path/);
+    const decideDeps = { repo: world.repo, hooks: world.hooks };
+    await expect(escalateProof(decideDeps, { proofId: PROOF_ID, reviewer: 'verifier-agent', reason: 'again' })).rejects.toThrow(/^already_approved: .* cannot be escalated/);
+    await expect(rejectProof(decideDeps, { proofId: PROOF_ID, reviewer: 'verifier-agent', reason: 'bad photo' })).rejects.toThrow(/^already_approved: .* cannot be rejected/);
+    expect(await world.repo.getProofReview(PROOF_ID)).toMatchObject({ decision: 'approved', reviewer: 'auto', confidence: 0.82 });
+    expect(world.fired.filter((f) => f.name === 'onProofDecision').map((f) => f.args[2])).toEqual(['approved']);
+
+    expect(await contract.capture_payment({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, captured_usd: 30 });
+    expect(await contract.payout({ job_id: JOB_ID })).toEqual({ job_id: JOB_ID, status: 'paid', worker_pay_usd: 22.5, fee_usd: 7.5 });
+  });
+
+  it('escalate on a proof with no review yet records the escalation without recording the automated approval first', async () => {
+    const { world, contract } = await fundedWorld({ vision: scorer(0.82), budget: 3000 });
+    expect(await contract.escalate({ job_id: JOB_ID, proof_id: PROOF_ID, reason: 'ops wants a look' })).toEqual({ job_id: JOB_ID, status: 'escalated' });
+    expect(world.fired.filter((f) => f.name === 'onProofDecision').map((f) => f.args[2])).toEqual(['escalated']);
+    const review = await world.repo.getProofReview(PROOF_ID);
+    expect(review).toMatchObject({ decision: 'escalated', reviewer: 'verifier-agent', confidence: 0.82 });
+    expect(review?.checks.map((c) => c.name)).toEqual(['profile', 'reuse', 'completeness', 'geofence', 'time', 'vision', 'reviewer_note']);
   });
 
   it('capture_payment, payout and ledger speak USD', async () => {
