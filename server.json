@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cubic1M/operis",
   "title": "Operis",
-  "description": "Hire a verified human for real-world tasks in San Francisco. You pay only when proof passes.",
-  "version": "1.0.0",
+  "description": "Hire a person for real-world tasks in San Francisco. You pay only when proof passes.",
+  "version": "1.0.1",
   "websiteUrl": "https://operis.live/developers",
   "repository": {
     "url": "https://github.com/cubic1M/Naive-Autonomous-Company-Hackathon-Project",
