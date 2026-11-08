@@ -22,7 +22,7 @@ export const SCHEMAS = {
       location: location.nullable().default(null).describe("Where (on-site jobs). null for remote work."),
       remote: z.boolean().optional().describe("true for online work (no location needed)"),
       deadline: z.string().describe("ISO 8601, at least 15 minutes from now"),
-      budget_usd: z.number().min(20).max(1000),
+      budget_usd: z.number().min(3).max(1000),
       certification_required: z.string().nullable().default(null),
       proof,
       callback_url: z.string().url().optional(),

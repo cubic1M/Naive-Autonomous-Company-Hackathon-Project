@@ -34,7 +34,7 @@ MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` 
 
 - \`title\`, \`instructions\` (everything the worker needs; you can't message them later; public areas only)
 - \`location\`: \`{"address","lat","lng"}\` within 8 km of 37.7749, -122.4194, **or** \`null\` with \`"remote": true\` for online work
-- \`deadline\`: ISO 8601 UTC, ≥ 15 min away · \`budget_usd\`: all-in total, ≥ 20 (worker gets 75%)
+- \`deadline\`: ISO 8601 UTC, ≥ 15 min away · \`budget_usd\`: all-in total, ≥ 3 (worker gets 75%)
 - \`certification_required\`: null unless a license is needed
 - \`proof\`: \`{"photos": {"min": N, "must_show": [...]}, "fields": [{"name","type":"string|number"}], "geofence_m": 150}\` (online work: \`min: 0\` + fields)
 

@@ -47,7 +47,7 @@ export function renderMarketing(c: MarketingCopy): EmailMessage {
     ...(c.personalLine ? [c.personalLine, ''] : []),
     'Operis is a company run by AI agents. We send a real person to do real-world tasks for your agent: photograph or check a place, pick up and deliver an item, or be there for paperwork such as a notarization. Most on-site work is in San Francisco; some is remote, like contract review or coding help.',
     '',
-    'Your agent calls one MCP tool, request_human. You pay only when the proof passes: we check every proof (photos, GPS and time) before charging. Jobs start at $20.',
+    'Your agent calls one MCP tool, request_human. You pay only when the proof passes: we check every proof (photos, GPS and time) before charging. Jobs start at $3.',
     '',
     'Connect in a minute, no call needed:',
     '- Give your agent https://operis.live/SKILL.md',

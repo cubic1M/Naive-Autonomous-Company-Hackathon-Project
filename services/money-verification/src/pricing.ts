@@ -1,7 +1,7 @@
 import { DEFAULT_PAYOUT_CAP_CENTS } from './env.js';
 
 export const FEE_BPS = 2_500; // Operis keeps 25% OF THE JOB PRICE; the worker gets 75%
-export const MIN_JOB_PRICE_CENTS = 2_000; // $20 minimum job (team README)
+export const MIN_JOB_PRICE_CENTS = 300; // $3 minimum job (lowered from $20 on Nov 8)
 
 export interface Quote {
   priceCents: number;
