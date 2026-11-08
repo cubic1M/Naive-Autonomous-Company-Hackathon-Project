@@ -164,6 +164,10 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
   async redeem_promo() {
     return { eligible: false as const, reason: "mock" };
   },
+  async reddit_research({ op, subreddit }) {
+    const list = op === "rules" ? { rules: [] } : { posts: [] };
+    return { op, subreddit, error: "mock", note: "mock: no Reddit data was read", ...list, truncated: false, spend_usd: 0, spend_today_usd: 0, daily_cap_usd: 0.25 };
+  },
 
   // public tools are implemented in edwin.ts, not mocked
   request_human: null as any,

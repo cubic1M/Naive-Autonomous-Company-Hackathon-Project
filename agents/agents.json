@@ -112,7 +112,8 @@
         "operis.suppress_contact": "allow",
         "operis.growth_report": "allow",
         "operis.recruit_search": "allow",
-        "operis.recruit_invite": "allow"
+        "operis.recruit_invite": "allow",
+        "operis.reddit_research": "allow"
       },
       "schedules": [
         {
@@ -123,7 +124,7 @@
           "enabled": false
         }
       ],
-      "$comment": "services/growth (docs/specs/2026-11-08-sales-recruiter-design.md): cold email only through operis.send_marketing, which enforces GROWTH_LIVE / OUTREACH_TEST_ALLOWLIST, opt-outs, caps and the unsubscribe link in code. email.send is for replies only and always waits for a founder (approvals.ts HUMAN_ONLY). Schedule created disabled; enable once live."
+      "$comment": "services/growth (docs/specs/2026-11-08-sales-recruiter-design.md): cold email only through operis.send_marketing, which enforces GROWTH_LIVE / OUTREACH_TEST_ALLOWLIST, opt-outs, caps and the unsubscribe link in code. email.send is for replies only and always waits for a founder (approvals.ts HUMAN_ONLY). operis.reddit_research is read-only (Monid; its own daily cap GROWTH_REDDIT_DAILY_USD); Sales drafts posts on the board and never posts. Schedule created disabled; enable once live."
     },
     "recruiter": {
       "name": "operis-recruiter",

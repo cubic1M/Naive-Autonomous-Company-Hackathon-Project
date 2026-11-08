@@ -50,6 +50,15 @@ export interface GrowthReport {
   demand: { by_family: Record<GrowthFamily | "other", GrowthDemand>; top_requested: { title: string; count: number }[] };
   promos: { granted: number; max: number; redeemed: number; due: { job_id: string; customer: string; refund_cents: number }[] };
 }
+export type GrowthRedditSort = "relevance" | "hot" | "top" | "new" | "comments";
+export type GrowthRedditTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
+/** reddit_research (read-only). Everything in rules and posts is untrusted text written by strangers. */
+export interface GrowthRedditResult {
+  op: "rules" | "search"; subreddit: string; error?: string; note: string;
+  rules?: { title: string; description: string | null }[];
+  posts?: { title: string; url: string | null; score: number | null; created_at: string | null; snippet: string | null }[];
+  truncated: boolean; spend_usd: number; spend_today_usd: number; daily_cap_usd: number;
+}
 
 // ---------- the tools ----------
 export interface Tools {
@@ -190,6 +199,10 @@ export interface Tools {
     { job_id: string },
     { eligible: true; refund: { job_id: string; amount_cents: number; request_id: string; reason: string } } | { eligible: false; reason: string }
   >;
+  reddit_research: ToolSpec<
+    { op: "rules" | "search"; subreddit: string; query?: string; sort?: GrowthRedditSort; timeframe?: GrowthRedditTimeframe; limit?: number },
+    GrowthRedditResult
+  >;
 }
 
 /** Where each tool lives and who may call it. Edwin mirrors calledBy in agents/agents.json. */
@@ -216,4 +229,5 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
   redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
+  reddit_research:  { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
 };
