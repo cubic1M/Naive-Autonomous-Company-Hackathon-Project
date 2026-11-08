@@ -80,8 +80,8 @@ if (AUTH === "vault") {
   const vault = vaults.find((v) => v.display_name === "operis") ?? (await api("POST", "/vaults", { display_name: "operis" }));
   const creds = (await api("GET", `/vaults/${vault.id}/credentials`)).data ?? [];
   for (const c of creds) if (c.key === "operis-internal") await api("DELETE", `/vaults/${vault.id}/credentials/${c.id}`);
-  await api("POST", `/vaults/${vault.id}/credentials`, { kind: "static_bearer", key: "operis-internal", host, value: INTERNAL });
-  console.log(`✓ vault ${vault.id}: static_bearer for ${host}`);
+  await api("POST", `/vaults/${vault.id}/credentials`, { kind: "static_bearer", key: "operis-internal", mcp_server_url: `${BASE}/mcp/internal`, value: INTERNAL });
+  console.log(`✓ vault ${vault.id}: static_bearer for ${host}/mcp/internal`);
 }
 
 // 2. members
