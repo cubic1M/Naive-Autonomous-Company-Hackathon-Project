@@ -7,6 +7,7 @@ import {
   createContractTools,
   createEscrow,
   createOnboardingLink,
+  createPaymentSetupLink as createCustomerPaymentSetupLink,
   depsFromApiContext,
   depsFromProcessEnv,
   handleStripeWebhook,
@@ -80,9 +81,21 @@ export async function createPayoutLink(workerId: string): Promise<{ url: string 
 }
 
 /**
+ * Called by POST /v1/customers/payment-setup (customer agent, Bearer opk_ key): a Stripe Checkout link in setup mode
+ * that saves a card on the customer's Stripe Customer (created on first use). Once the checkout.session.completed
+ * webhook stores the card, every request_human from that customer is funded directly: escrow_url null, status held.
+ */
+export async function createPaymentSetupLink(customerId: string): Promise<{ url: string }> {
+  const deps = depsFromProcessEnv();
+  const { url } = await createCustomerPaymentSetupLink(deps, customerId);
+  return { url };
+}
+
+/**
  * Drop-in body for apps/api/src/app/webhooks/stripe/route.ts:
  *   export const POST = (req: Request) => stripeWebhook(req, { sql, transition, baseUrl: baseUrl(), log: console.log });
- * Verifies the signature over the raw body, dedupes on event id, handles checkout.session.completed,
+ * Verifies the signature over the raw body, dedupes on event id, handles checkout.session.completed (payment
+ * mode funds the job, setup mode saves a customer's card), payment_intent.amount_capturable_updated,
  * payment_intent.canceled, charge.refunded, refund.created/updated, account.updated, charge.dispute.* and
  * identity.verification_session.verified/requires_input/canceled (worker identity, services/verify), and
  * moves the job through ctx.transition().
