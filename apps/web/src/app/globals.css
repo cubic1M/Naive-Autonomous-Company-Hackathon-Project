@@ -146,6 +146,9 @@ p { margin: 0; }
 .muted { color: var(--muted); }
 .small { font-size: 0.88rem; }
 .mono { font-family: var(--font-code); font-size: 0.85em; }
+/* Browsers don't pass the page font to form controls; without this, buttons and fields fall back to Arial. */
+button, input, select, textarea { font-family: inherit; }
+code, pre, kbd, samp { font-family: var(--font-code); }
 .pre { white-space: pre-wrap; }
 
 /* ---------- job page ---------- */

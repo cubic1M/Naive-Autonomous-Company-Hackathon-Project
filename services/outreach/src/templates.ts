@@ -164,8 +164,8 @@ export function renderEmail(ctx: MessageContext): EmailMessage {
 }
 
 /**
- * Branded HTML version, "editorial" style (cream page, serif headings, sage green, soft beige cards,
- * pill buttons). Table layout + inline styles for Gmail/Outlook/Apple Mail. No images or tracking
+ * Branded HTML version in operis.live's type: Avenir (Apple Mail/iOS have it), Nunito Sans where the client
+ * loads web fonts, then Helvetica/Arial. Cream page, sage green, soft beige cards, pill buttons. Table layout + inline styles for Gmail/Outlook/Apple Mail. No images or tracking
  * pixels (they hurt deliverability and trust): the green hero is a CSS gradient with a solid fallback.
  */
 export function renderEmailHtml(ctx: MessageContext): string {
@@ -184,10 +184,11 @@ export function renderEmailHtml(ctx: MessageContext): string {
     label: '#46664f',
     deep: '#2f4b38', // brand green (hero), matches operis.live
   };
-  const serif = "Georgia,'Times New Roman',Times,serif";
-  const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  // Same family as operis.live (apps/web globals.css --font). Single quotes: these go inside style="...".
+  const sans = "'Avenir Next',Avenir,'Nunito Sans','Helvetica Neue',Helvetica,Arial,sans-serif";
+  const display = `${sans};font-weight:600;letter-spacing:-0.02em`;
   const pill = (label: string, wide = false) =>
-    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};background-image:linear-gradient(180deg,#567760 0%,#3f5e48 100%);border:1px solid #34503d;color:#f4f1e8;text-decoration:none;font-family:${sans};font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;padding:${wide ? '15px 44px' : '11px 34px'};border-radius:999px">${esc(label)}</a>`;
+    `<a href="${esc(ctx.link)}" style="display:inline-block;background:${C.sage};background-image:linear-gradient(180deg,#567760 0%,#3f5e48 100%);border:1px solid #34503d;color:#f4f1e8;text-decoration:none;font-family:${sans};font-size:15px;font-weight:600;padding:${wide ? '15px 40px' : '13px 30px'};border-radius:12px">${esc(label)}</a>`;
   const detail = (label: string, value: string) =>
     `<tr><td style="padding:4px 12px 4px 0;font-family:${sans};font-size:13px;color:${C.muted};white-space:nowrap;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-family:${sans};font-size:14px;color:${C.ink}">${esc(value)}</td></tr>`;
   const details = [
@@ -198,17 +199,18 @@ export function renderEmailHtml(ctx: MessageContext): string {
   ].join('');
 
   return `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(job.title)}</title></head>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(job.title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet"></head>
 <body style="margin:0;padding:0;background:${C.page}">
 <div style="display:none;max-height:0;overflow:hidden">${esc(`${job.title} · ${pay}. The first qualified person to accept gets it.`)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:24px 12px 0">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 
-  <tr><td align="center" style="padding:6px 0 18px;font-family:${serif};font-size:19px;font-weight:700;color:${C.ink}">Operis</td></tr>
+  <tr><td align="center" style="padding:6px 0 18px;font-family:${display};font-size:20px;color:${C.ink}">operis.</td></tr>
 
   <tr><td bgcolor="${C.deep}" align="center" style="background:${C.deep};background-image:radial-gradient(ellipse at 18% 12%,rgba(214,226,206,0.16) 0%,rgba(214,226,206,0) 55%),linear-gradient(135deg,#6a8a71 0%,#4f6f57 40%,#3a5a43 70%,#2a4433 100%);border-radius:16px;padding:56px 28px">
     <div style="font-family:${sans};font-size:12px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#cfd9cc;margin-bottom:14px">${esc(`${pay} · ${urgencyLabel(job.deadline)}`)}</div>
-    <div style="font-family:${serif};font-size:44px;line-height:1.1;color:#ffffff">You've been<br>selected</div>
+    <div style="font-family:${display};font-size:42px;line-height:1.08;color:#ffffff">You've been<br>selected</div>
   </td></tr>
 
   <tr><td align="center" style="padding:22px 20px 26px;font-family:${sans};font-size:16px;line-height:1.5;color:${C.body}">
@@ -217,7 +219,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
 
   <tr><td style="background:${C.card};border-radius:16px;padding:28px 30px" align="center">
     <div style="font-family:${sans};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${C.label};margin-bottom:8px">${job.remote ? 'Remote job' : 'On-site job'}</div>
-    <div style="font-family:${serif};font-size:25px;line-height:1.25;color:${C.ink};margin-bottom:14px">${esc(job.title)}</div>
+    <div style="font-family:${display};font-size:24px;line-height:1.25;color:${C.ink};margin-bottom:14px">${esc(job.title)}</div>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 20px;text-align:left">${details}</table>
     ${pill('View job & accept')}
   </td></tr>
@@ -227,7 +229,7 @@ export function renderEmailHtml(ctx: MessageContext): string {
 </td></tr>
 <tr><td align="center" style="background:${C.card};padding:26px 16px 30px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td style="padding:0 18px">
-    <div style="font-family:${serif};font-size:21px;font-weight:700;color:${C.ink};margin-bottom:10px">Operis</div>
+    <div style="font-family:${display};font-size:20px;color:${C.ink};margin-bottom:10px">operis.</div>
     <div style="font-family:${sans};font-size:12px;line-height:1.6;color:${C.muted}">
       Why you got this: ${esc(whyLine(person))}<br>
       ${esc(COMPANY.address)} · <a href="https://${COMPANY.site}" style="color:${C.muted}">${COMPANY.site}</a><br>

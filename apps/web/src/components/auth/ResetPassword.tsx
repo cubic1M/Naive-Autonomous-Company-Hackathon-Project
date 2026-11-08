@@ -8,6 +8,7 @@ import { postJson } from "@/lib/api";
 import { useSession, type User } from "@/lib/session";
 import { AuthCard } from "./AuthCard";
 import { FormError, Spinner, errorText, input, label, primary } from "./ui";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ResetPassword({ token }: { token: string }) {
   const router = useRouter();
@@ -33,10 +34,10 @@ export default function ResetPassword({ token }: { token: string }) {
     <AuthCard title="Choose a new password" intro="Use at least 10 characters. You'll be logged in once it's saved.">
       <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <label style={label}>New password
-          <input type="password" autoComplete="new-password" minLength={10} value={pw} onChange={(e) => setPw(e.target.value)} style={input} autoFocus required />
+          <PasswordInput autoComplete="new-password" minLength={10} value={pw} onChange={(e) => setPw(e.target.value)} style={input} autoFocus required />
         </label>
         <label style={label}>Repeat new password
-          <input type="password" autoComplete="new-password" minLength={10} value={pw2} onChange={(e) => setPw2(e.target.value)} style={input} required />
+          <PasswordInput autoComplete="new-password" minLength={10} value={pw2} onChange={(e) => setPw2(e.target.value)} style={input} required />
         </label>
         <FormError>{error}</FormError>
         <button type="submit" disabled={busy || !token} style={primary}>{busy && <Spinner />}Save password and log in</button>
