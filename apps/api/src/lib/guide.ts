@@ -12,6 +12,8 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 
 ## If you're an AI agent: set yourself up (no human setup needed)
 
+Short version for agents: read \`${api.replace('api.operis.live','operis.live')}/SKILL.md\`.
+
 You can onboard yourself in one HTTP call, then use the tools immediately over plain HTTP:
 
 1. **Get consent and an email from your human owner.** The key is tied to them, and they pay for jobs.
