@@ -7,6 +7,7 @@ How production is wired today, and how to change or rebuild it. Owner: Edwin.
 | Address | Served by | Notes |
 |---|---|---|
 | `https://operis.live` (+ `www`) | Vercel project **operis-web** (root `apps/web`) | Dora's site. Rewrites `/api/*`, `/mcp`, `/llms.txt`, `/v1/*`, `/webhooks/*` to the API |
+| `https://admin.operis.live` | **operis-web** (same project) | Founders' backoffice at the root; sign in with an allowlisted email (`ADMIN_EMAILS`) + the shared password (stored only as `ADMIN_PASSWORD_SALT`/`ADMIN_PASSWORD_HASH`) |
 | `https://api.operis.live` | Vercel project **operis-api** (root `apps/api`) | API, MCP servers, webhooks, crons, founder console `/admin` |
 | Database | **Neon** `operis-db` (Vercel Marketplace integration on operis-api) | `DATABASE_URL` set by the integration (pooled) |
 | Proof photos | **Vercel Blob** `operis-proofs` (public, sfo1) on operis-web | `BLOB_READ_WRITE_TOKEN`; phones upload originals straight to Blob |
@@ -24,7 +25,7 @@ VERCEL_ORG_ID=team_MzpxNSNWXaxrfns5sZ2S6ZrN VERCEL_PROJECT_ID=prj_muMT6UwKIRPVAp
 
 ## Environment variables
 
-**operis-api**: `DATABASE_URL` (Neon), `API_BASE_URL=https://api.operis.live`, `PUBLIC_BASE_URL=https://operis.live` (worker links), `NAIVE_API_KEY` (Operis org), `NAIVE_AGENT_{CEO,OPS,VERIFIER,FINANCE,SALES,DISPUTES}`, `INTERNAL_MCP_KEY`, `LINK_SIGNING_SECRET`, `NAIVE_WEBHOOK_SECRET`, `CALLBACK_SIGNING_SECRET`, `ADMIN_KEY`, `CRON_SECRET`, `MONID_API_KEY`, `AGENTMAIL_INBOX=ops@mail.operis.live`, `OUTREACH_LIVE` (`false` = demo mode: only `OUTREACH_TEST_ALLOWLIST` is really emailed), `OUTREACH_TEST_ALLOWLIST`, `OUTREACH_MAX_SPEND_USD`, `USE_MOCKS=false`, `MOCK_PAYMENTS=false`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Cameron, sensitive), `VERIFIER_BASE_URL=https://api.vetta.sh/v1/proxy/openai/v1`, `VERIFIER_API_KEY` (Naïve key), `VERIFIER_MODEL=anthropic/claude-haiku-5.5`, limits (`MAX_OPEN_JOBS_PER_CUSTOMER`, `MAX_JOBS_PER_CUSTOMER_PER_DAY`, `MAX_JOBS_PER_DAY`, `GEOFENCE_*`), optional `AUTO_APPROVE_TOOLS`.
+**operis-api**: `DATABASE_URL` (Neon), `API_BASE_URL=https://api.operis.live`, `PUBLIC_BASE_URL=https://operis.live` (worker links), `NAIVE_API_KEY` (Operis org), `NAIVE_AGENT_{CEO,OPS,VERIFIER,FINANCE,SALES,DISPUTES}`, `INTERNAL_MCP_KEY`, `LINK_SIGNING_SECRET`, `NAIVE_WEBHOOK_SECRET`, `CALLBACK_SIGNING_SECRET`, `ADMIN_KEY` (also signs founder sessions), `ADMIN_EMAILS`, `ADMIN_PASSWORD_SALT`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`, `MONID_API_KEY`, `AGENTMAIL_INBOX=ops@mail.operis.live`, `OUTREACH_LIVE` (`false` = demo mode: only `OUTREACH_TEST_ALLOWLIST` is really emailed), `OUTREACH_TEST_ALLOWLIST`, `OUTREACH_MAX_SPEND_USD`, `USE_MOCKS=false`, `MOCK_PAYMENTS=false`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (Cameron, sensitive), `VERIFIER_BASE_URL=https://api.vetta.sh/v1/proxy/openai/v1`, `VERIFIER_API_KEY` (Naïve key), `VERIFIER_MODEL=anthropic/claude-haiku-5.5`, limits (`MAX_OPEN_JOBS_PER_CUSTOMER`, `MAX_JOBS_PER_CUSTOMER_PER_DAY`, `MAX_JOBS_PER_DAY`, `GEOFENCE_*`), optional `AUTO_APPROVE_TOOLS`.
 
 **operis-web**: `API_URL=https://api.operis.live`, `NEXT_PUBLIC_MCP_URL=https://operis.live/mcp`, `BLOB_READ_WRITE_TOKEN` (Blob store), optional `NEXT_PUBLIC_WORKER_LOGIN=required` once worker accounts exist.
 
