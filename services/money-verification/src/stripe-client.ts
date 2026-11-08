@@ -14,6 +14,8 @@ export interface StripeClient {
     };
   };
   paymentIntents: {
+    /** Direct off-session hold against a saved card (agent-payable escrow); Checkout stays the no-card path. */
+    create(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
     capture(
       id: string,
       params?: Stripe.PaymentIntentCaptureParams,
@@ -37,6 +39,13 @@ export interface StripeClient {
   };
   accountLinks: {
     create(params: Stripe.AccountLinkCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.AccountLink>;
+  };
+  customers: {
+    create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
+  };
+  setupIntents: {
+    /** A setup-mode Checkout session only carries the SetupIntent id; the saved payment_method comes from a retrieve. */
+    retrieve(id: string, params?: Stripe.SetupIntentRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.SetupIntent>;
   };
   identity: {
     verificationSessions: {
