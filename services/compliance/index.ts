@@ -3,7 +3,6 @@
 // Logic lives in services/money-verification (src/liability, src/certs/attorney.ts); this file binds it to the API.
 import type { ToolContext } from "../../contracts/runtime";
 import {
-  NotFoundError,
   checkEligibility,
   createTools,
   decideByTags,
@@ -11,7 +10,6 @@ import {
   depsFromApiContext,
   depsFromProcessEnv,
   quoteJob,
-  releaseEscrow,
   ruleById,
   verifyAttorney,
   verifyNotary,
@@ -58,16 +56,6 @@ export async function autoDecision(jobId: string) {
 /** The Ops gate: find_people / send_blast wait for a decision. */
 export async function hasDecision(jobId: string): Promise<boolean> {
   return Boolean((await depsFromProcessEnv().repo.getJobLiability(jobId))?.model);
-}
-
-/** A refused job: cancel the card authorization (nothing was captured) before the job moves to cancelled. */
-export async function releaseHold(jobId: string, reason: string): Promise<void> {
-  try {
-    await releaseEscrow(depsFromProcessEnv(), jobId, reason);
-  } catch (e) {
-    // No escrow means nothing was held (MOCK_PAYMENTS jobs); anything else must surface.
-    if (!(e instanceof NotFoundError)) throw e;
-  }
 }
 
 /** acceptJob's gate. */

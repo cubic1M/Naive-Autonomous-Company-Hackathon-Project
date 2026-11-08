@@ -5,7 +5,7 @@ import { fire, type Hooks } from './hooks.js';
 import * as ledger from './ledger.js';
 import type { Repo } from './repo.js';
 import type { StripeClient } from './stripe-client.js';
-import type { Escrow, Job, LedgerEntry } from './types.js';
+import type { Escrow, EscrowStatus, Job, LedgerEntry } from './types.js';
 
 export interface EscrowDeps {
   stripe: StripeClient;
@@ -482,4 +482,29 @@ export async function expireStaleEscrows(deps: EscrowDeps, now: Date = deps.now?
     }
   }
   return released;
+}
+
+export interface CancelledHoldResult {
+  /** True when this call released the hold. */
+  released: boolean;
+  /** The escrow's status after the call; null when the job has no escrow. */
+  escrowStatus: EscrowStatus | null;
+  /** Why nothing was released: the job is not cancelled, it has no escrow (MOCK_PAYMENTS jobs), or the hold is not open. */
+  skipped?: 'job_not_cancelled' | 'no_escrow' | 'not_open';
+}
+
+/**
+ * The card hold of a cancelled job: released while it is still pending or authorized (the customer's cancel_job, the
+ * sweep's overdue cancel, a liability refusal; apps/api runs it after every move to cancelled and the sweep retries it).
+ * Idempotent. Never touches a job that is not cancelled, so it cannot release the hold of work in progress.
+ */
+export async function releaseCancelledJobHold(deps: EscrowDeps, jobId: string, reason = 'job_cancelled'): Promise<CancelledHoldResult> {
+  const job = await deps.repo.getJob(jobId);
+  if (!job) throw new NotFoundError('job', jobId);
+  const escrow = await deps.repo.getEscrow(jobId);
+  if (job.status !== 'cancelled') return { released: false, escrowStatus: escrow?.status ?? null, skipped: 'job_not_cancelled' };
+  if (!escrow) return { released: false, escrowStatus: null, skipped: 'no_escrow' };
+  if (escrow.status !== 'pending' && escrow.status !== 'authorized') return { released: false, escrowStatus: escrow.status, skipped: 'not_open' };
+  const after = await releaseEscrow(deps, jobId, reason);
+  return { released: true, escrowStatus: after.status };
 }

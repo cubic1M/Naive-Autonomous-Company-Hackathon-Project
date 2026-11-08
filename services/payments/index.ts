@@ -10,8 +10,11 @@ import {
   createPaymentSetupLink as createCustomerPaymentSetupLink,
   depsFromApiContext,
   depsFromProcessEnv,
+  expireStaleEscrows,
   handleStripeWebhook,
+  releaseCancelledJobHold,
   type ApiContext,
+  type CancelledHoldResult,
 } from "../money-verification/src/index";
 
 const tools = (ctx: ToolContext) => createContractTools(depsFromApiContext(ctx as ApiContext));
@@ -96,6 +99,22 @@ export async function createPaymentSetupLink(customerId: string): Promise<{ url:
   const deps = depsFromProcessEnv();
   const { url } = await createCustomerPaymentSetupLink(deps, customerId);
   return { url };
+}
+
+/**
+ * The customer's card hold when a funded job is cancelled (Cameron approved, 2026-11-08). apps/api's transition()
+ * calls it after every move to cancelled: the customer's cancel_job, the sweep's overdue cancel, a liability refusal.
+ * Releases a pending or authorized hold (cancels the PaymentIntent); a job that is not cancelled, has no escrow
+ * (MOCK_PAYMENTS jobs) or whose hold is already released is left alone. Idempotent, so the sweep can retry it.
+ * Needs DATABASE_URL and STRIPE_SECRET_KEY (Stripe only when there is a PaymentIntent to cancel).
+ */
+export async function releaseCancelledHold(jobId: string, reason = "job cancelled"): Promise<CancelledHoldResult> {
+  return releaseCancelledJobHold(depsFromProcessEnv(), jobId, reason);
+}
+
+/** The five-minute sweep: release every authorized hold whose card authorization has expired. Returns how many. */
+export async function expireStaleHolds(): Promise<number> {
+  return (await expireStaleEscrows(depsFromProcessEnv())).length;
 }
 
 /**
