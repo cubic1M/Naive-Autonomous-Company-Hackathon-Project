@@ -13,10 +13,11 @@ export interface Env {
   /** Per-job payout cap, in cents, above which release_payout_large (human approval) is required. Default 15000. */
   PAYOUT_CAP_CENTS: number;
   /**
-   * Identity gate for every job. 'enforce' (default): a worker without a verified Stripe Identity cannot accept a
-   * job (check_eligibility) and an agent can never approve their proof (a founder can, recording a waiver). 'log' is
-   * an emergency switch: the identity check is recorded but blocks only notary and legal jobs. While 'log' is set,
-   * the "verified human" promise in llms.txt and SKILL.md is not true.
+   * Identity gate for every job. 'enforce': a worker without a verified Stripe Identity cannot accept a job
+   * (check_eligibility) and an agent can never approve their proof (a founder can, recording a waiver). 'log', the
+   * default until the job page can get every worker verified (README, open items): the check is recorded but blocks
+   * only notary and legal jobs. The "verified human" promise in llms.txt and SKILL.md holds only under 'enforce',
+   * with Stripe Identity in live mode.
    */
   IDENTITY_GATE: IdentityGate;
   /** OpenAI-compatible chat completions endpoint for the vision scorer. */
@@ -29,7 +30,7 @@ export const DEFAULT_DAILY_ESCROW_CAP_CENTS = 200_000;
 export const DEFAULT_PAYOUT_CAP_CENTS = 15_000;
 
 export type IdentityGate = 'enforce' | 'log';
-export const DEFAULT_IDENTITY_GATE: IdentityGate = 'enforce';
+export const DEFAULT_IDENTITY_GATE: IdentityGate = 'log';
 
 function identityGateOr(value: string | undefined, fallback: IdentityGate): IdentityGate {
   if (value === undefined || value.trim() === '') return fallback;
