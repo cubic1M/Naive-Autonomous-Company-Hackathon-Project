@@ -1,0 +1,122 @@
+/**
+ * Verification profile: how strictly a proof is checked, derived from the job. Strictness scales with
+ * what is at stake, so the agents can close cheap jobs on their own and spend the expensive checks
+ * (EXIF capture time, two photos, a verified identity, a 0.90 score) where a wrong approval costs
+ * real money or a licence.
+ *
+ *   tier 0  budget under $50, no certification   1 photo, device GPS and device capture time accepted
+ *                                                when EXIF has none, confidence >= 0.80
+ *   tier 1  $50 to $150                          EXIF capture time required (missing -> review), >= 0.85
+ *   tier 2  above $150, or any certification     2 photos, EXIF required, verified identity, >= 0.90
+ *
+ * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2;
+ * `required_tier` is a floor; the customer's own proof requirement (photos.min, must_show, geofence_m,
+ * fields) always applies on top, the photo minimum by max.
+ */
+import type { Job } from '../types.js';
+
+export type VerificationTier = 0 | 1 | 2;
+export type ExifTimePolicy = 'require' | 'device_fallback';
+
+export interface TierRules {
+  /** Vision confidence needed for automatic approval (and for approve_proof without override). */
+  confidenceThreshold: number;
+  /** Images the proof must contain before the customer's own minimum is composed in. */
+  minPhotos: number;
+  /** 'require': no EXIF capture time is a review flag. 'device_fallback': the proof's device captured_at stands in. */
+  exifTimePolicy: ExifTimePolicy;
+  /** The worker must hold a verified Stripe Identity (worker_verifications kind 'identity'). */
+  identityRequired: boolean;
+}
+
+export interface VerificationProfile extends TierRules {
+  tier: VerificationTier;
+  /** The customer requires a certification (a notary commission, or anything in jobs.certification_required). */
+  certificationRequired: boolean;
+  /** How the tier was derived, one line per rule that applied; shown in check_proof evidence. */
+  notes: string[];
+}
+
+/** Budget boundaries, in cents: under $50 is tier 0, $50 to $150 inclusive is tier 1, above $150 is tier 2. */
+export const TIER_1_FROM_CENTS = 5_000;
+export const TIER_2_ABOVE_CENTS = 15_000;
+
+export const TIER_RULES: Record<VerificationTier, TierRules> = {
+  0: { confidenceThreshold: 0.8, minPhotos: 1, exifTimePolicy: 'device_fallback', identityRequired: false },
+  1: { confidenceThreshold: 0.85, minPhotos: 1, exifTimePolicy: 'require', identityRequired: false },
+  2: { confidenceThreshold: 0.9, minPhotos: 2, exifTimePolicy: 'require', identityRequired: true },
+};
+
+const RISK_CLASS_TIER: Record<string, VerificationTier> = { low: 0, standard: 1, high: 2 };
+
+const usd = (cents: number): string => '$' + (cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2));
+
+export function budgetTier(budgetCents: number): VerificationTier {
+  if (budgetCents < TIER_1_FROM_CENTS) return 0;
+  if (budgetCents <= TIER_2_ABOVE_CENTS) return 1;
+  return 2;
+}
+
+const clampTier = (n: number): VerificationTier => (n >= 2 ? 2 : n >= 1 ? 1 : 0);
+
+export function verificationProfile(job: Job): VerificationProfile {
+  const notes: string[] = [];
+  let tier = budgetTier(job.budget_cents);
+  notes.push(`budget ${usd(job.budget_cents)}: tier ${tier}`);
+
+  if (job.risk_class) {
+    const key = job.risk_class.trim().toLowerCase();
+    const risk = RISK_CLASS_TIER[key];
+    if (risk === undefined) {
+      notes.push(`risk_class ${job.risk_class} is not low | standard | high; ignored`);
+    } else {
+      tier = risk;
+      notes.push(`risk_class ${key}: tier ${risk} (overrides the budget tier)`);
+    }
+  }
+
+  const certification = job.certification_required?.trim() || (job.task_type === 'notarization' ? 'notary commission' : '');
+  const certificationRequired = certification !== '';
+  if (certificationRequired) {
+    if (tier < 2) tier = 2;
+    notes.push(`certification required (${certification}): tier 2`);
+  }
+
+  const floor = clampTier(job.required_tier);
+  if (floor > tier) {
+    tier = floor;
+    notes.push(`required_tier ${job.required_tier}: floor tier ${floor}`);
+  }
+
+  const rules = TIER_RULES[tier];
+  const customerMin = job.proof_schema.photos.min;
+  const minPhotos = Math.max(rules.minPhotos, customerMin);
+  if (customerMin > rules.minPhotos) notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
+
+  return { tier, ...rules, minPhotos, certificationRequired, notes };
+}
+
+/** One line for the evidence an agent reads, e.g. "tier 2: confidence >= 0.9, >= 2 photos, EXIF capture time required, verified identity required". */
+export function describeProfile(p: VerificationProfile): string {
+  const parts = [
+    `confidence >= ${p.confidenceThreshold}`,
+    `>= ${p.minPhotos} photo${p.minPhotos === 1 ? '' : 's'}`,
+    p.exifTimePolicy === 'require' ? 'EXIF capture time required' : 'device capture time accepted when EXIF has none',
+    p.identityRequired ? 'verified identity required' : 'no identity check',
+  ];
+  if (p.certificationRequired) parts.push('certification required');
+  return `tier ${p.tier}: ${parts.join(', ')}`;
+}
+
+/** The profile as snake_case data for ProofCheck.data and the check_proof evidence. */
+export function profileData(p: VerificationProfile): Record<string, unknown> {
+  return {
+    tier: p.tier,
+    confidence_threshold: p.confidenceThreshold,
+    min_photos: p.minPhotos,
+    exif_time_policy: p.exifTimePolicy,
+    identity_required: p.identityRequired,
+    certification_required: p.certificationRequired,
+    notes: p.notes,
+  };
+}

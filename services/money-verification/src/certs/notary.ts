@@ -5,6 +5,7 @@
  * commission number and name are then checked against the imported registry before they may take
  * a notarization job. We never ask for or store anything about a notary's journal (policy).
  */
+import { verifiedIdentityName } from '../identity.js';
 import type { Repo } from '../repo.js';
 import type { NotaryRecord, VerificationStatus } from '../types.js';
 import { matchNames, normalizeName, type NameMatch } from './names.js';
@@ -277,11 +278,18 @@ export interface VerifyNotaryInput {
 /** verifyNotary always reaches a decision: 'pending' is not a possible outcome. */
 export type NotaryVerificationStatus = Exclude<VerificationStatus, 'pending'>;
 
+export type NotaryNameSource = 'verified_identity' | 'typed';
+
 export interface VerifyNotaryResult {
   status: NotaryVerificationStatus;
   reasons: string[];
   record: NotaryRecord | null;
+  /** How the compared name relates to the name on the commission record. */
   nameMatch: NameMatch;
+  /** Which name was compared with the commission: the verified Stripe Identity name when one is on file, else the typed one. */
+  nameSource: NotaryNameSource;
+  /** The name on the verified ID, when it was used. */
+  nameOnId: string | null;
 }
 
 /** Calendar day of an instant in California, as UTC-midnight milliseconds comparable to listing dates. */
@@ -300,18 +308,27 @@ function californiaDay(instant: Date): number {
  * Check a worker's claimed commission against the imported registry and record the outcome in
  * worker_verifications.
  *
+ * Which name is compared: the name on the worker's verified Stripe Identity when one is on file (a
+ * typed name proves nothing; the ID does), otherwise the typed name. With an ID on file the typed
+ * name is only cross-checked, and a difference is flagged in `reasons` without changing the status.
+ *
  * Expiry rule: a commission is valid through the END of its expiration day. The job counts as
  * expired only if the job's California calendar day is after the expiration date. (California time,
  * not UTC, so a 5pm job on the last day is not wrongly rejected.) Expired always fails, whatever the name.
  * Only a full name match verifies automatically; a partial match needs human review.
  */
 export async function verifyNotary(
-  deps: { repo: Pick<Repo, 'getNotary' | 'upsertWorkerVerification'>; now?: () => Date },
+  deps: { repo: Pick<Repo, 'getNotary' | 'getWorkerVerification' | 'upsertWorkerVerification'>; now?: () => Date },
   input: VerifyNotaryInput,
 ): Promise<VerifyNotaryResult> {
   const now = deps.now ?? (() => new Date());
   const commission = normalizeCommissionNumber(input.commissionNumber);
   const record = commission === '' ? null : await deps.repo.getNotary(commission);
+
+  const nameOnId = verifiedIdentityName(await deps.repo.getWorkerVerification(input.workerId, 'identity'));
+  const nameSource: NotaryNameSource = nameOnId ? 'verified_identity' : 'typed';
+  const nameToCheck = nameOnId ?? input.name;
+  const typedVsId: NameMatch | null = nameOnId ? matchNames(input.name, nameOnId).match : null;
 
   let status: NotaryVerificationStatus;
   let reasons: string[];
@@ -321,7 +338,7 @@ export async function verifyNotary(
     status = 'failed';
     reasons = ['commission_not_found'];
   } else {
-    const match = matchNames(input.name, record.full_name);
+    const match = matchNames(nameToCheck, record.full_name);
     nameMatch = match.match;
     if (record.commission_expires === null) {
       status = 'needs_review';
@@ -340,6 +357,11 @@ export async function verifyNotary(
       reasons = ['name_mismatch'];
     }
   }
+  if (nameOnId && typedVsId !== 'full') {
+    reasons.push(
+      `typed_name_mismatch: the worker typed "${input.name}" but the verified ID reads "${nameOnId}" (${typedVsId} match); the ID name was compared with the commission`,
+    );
+  }
 
   await deps.repo.upsertWorkerVerification({
     worker_id: input.workerId,
@@ -349,8 +371,11 @@ export async function verifyNotary(
     details: {
       commission_number: commission,
       name_given: input.name,
+      name_used: nameSource,
+      name_on_id: nameOnId,
       name_on_record: record?.full_name ?? null,
       name_match: nameMatch,
+      typed_name_match: typedVsId,
       reasons,
       job_date: input.jobDate.toISOString(),
     },
@@ -358,5 +383,5 @@ export async function verifyNotary(
     expires_at: record?.commission_expires ?? null,
   });
 
-  return { status, reasons, record, nameMatch };
+  return { status, reasons, record, nameMatch, nameSource, nameOnId };
 }

@@ -4,6 +4,7 @@ import { recordDisputeEvent, idOf } from '../disputes.js';
 import { markAuthorized, markRefunded, markReleased, recordStripeRefund } from '../escrow.js';
 import { WebhookSignatureError } from '../errors.js';
 import { fire, type Hooks } from '../hooks.js';
+import { recordIdentityCanceled, recordIdentityRequiresInput, recordIdentityVerified, type IdentityOutcome } from '../identity.js';
 import { completePendingPayoutsForWorker } from '../payouts.js';
 import type { Repo } from '../repo.js';
 import type { StripeClient } from '../stripe-client.js';
@@ -26,6 +27,9 @@ export interface HandleResult {
 type Outcome = Pick<HandleResult, 'handled' | 'detail'>;
 
 const unhandled = (detail?: string): Outcome => ({ handled: false, ...(detail ? { detail } : {}) });
+
+/** Identity events: `changed` is whether a worker_verifications row was written (see identity.ts for the no-ops). */
+const identityOutcome = (o: IdentityOutcome): Outcome => ({ handled: o.changed, detail: o.detail });
 
 /** Checkout completed. Funds the job; works from metadata.job_id, falling back to the PaymentIntent's escrow. */
 async function onCheckoutCompleted(deps: WebhookDeps, session: Stripe.Checkout.Session): Promise<Outcome> {
@@ -106,6 +110,12 @@ export async function handleStripeEvent(deps: WebhookDeps, event: Stripe.Event):
         const d = await recordDisputeEvent(deps, event);
         return { handled: true, detail: `${d.id} ${d.status}` };
       }
+      case 'identity.verification_session.verified':
+        return identityOutcome(await recordIdentityVerified(deps, event.data.object as Stripe.Identity.VerificationSession));
+      case 'identity.verification_session.requires_input':
+        return identityOutcome(await recordIdentityRequiresInput(deps, event.data.object as Stripe.Identity.VerificationSession));
+      case 'identity.verification_session.canceled':
+        return identityOutcome(await recordIdentityCanceled(deps, event.data.object as Stripe.Identity.VerificationSession));
       default:
         return unhandled();
     }

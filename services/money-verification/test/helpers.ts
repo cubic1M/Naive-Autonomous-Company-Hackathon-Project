@@ -50,6 +50,7 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
     status: 'accepted',
     worker_id: WORKER_ID,
     risk_class: null,
+    certification_required: null,
     ...overrides,
   };
 }
@@ -189,5 +190,21 @@ export function webhookRequest(
     method: 'POST',
     headers: { 'content-type': 'application/json', 'stripe-signature': header },
     body,
+  });
+}
+
+/** A verified Stripe Identity row for the worker, as the identity.verification_session.verified webhook leaves it. */
+export async function seedVerifiedIdentity(
+  world: World,
+  opts: { workerId?: string; firstName?: string; lastName?: string } = {},
+): Promise<void> {
+  await world.repo.upsertWorkerVerification({
+    worker_id: opts.workerId ?? WORKER_ID,
+    kind: 'identity',
+    status: 'verified',
+    provider_ref: 'vs_test_seeded',
+    details: { attempts: 1, session_id: 'vs_test_seeded', type: 'document', first_name: opts.firstName ?? 'Pat', last_name: opts.lastName ?? 'Example' },
+    verified_at: world.clock.now(),
+    expires_at: null,
   });
 }

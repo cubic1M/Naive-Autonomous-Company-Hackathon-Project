@@ -14,7 +14,7 @@ const isoDateTime = z.string().datetime({ offset: true });
 const escrowStatus = z.enum(['pending', 'authorized', 'captured', 'released', 'refunded']);
 const proofDecision = z.enum(['approved', 'escalated', 'rejected']);
 const checkStatus = z.enum(['pass', 'fail', 'needs_review']);
-const proofCheck = z.object({ name: z.string(), status: checkStatus, pass: z.boolean(), detail: z.string() });
+const proofCheck = z.object({ name: z.string(), status: checkStatus, pass: z.boolean(), detail: z.string(), data: z.record(z.unknown()).optional() });
 const payoutResult = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('paid'),
@@ -144,19 +144,32 @@ export const toolSchemas = {
     output: z.object({ job_id: uuid, proof_id: uuid, decision: z.literal('escalated') }),
   },
   verify_notary: {
-    description: 'Check a notary commission against the California Secretary of State listing.',
+    description:
+      "Check a notary commission against the California Secretary of State listing. The name compared is the worker's verified Stripe Identity name when one is on file, else the typed name (name_source says which).",
     input: z.object({ worker_id: uuid, commission_number: z.string().min(1), name: z.string().min(1), job_date: isoDateTime }).strict(),
     output: z.object({
       worker_id: uuid,
       status: z.enum(['verified', 'needs_review', 'failed']),
       reasons: z.array(z.string()),
       commission_expires: isoDateTime.nullable(),
+      name_source: z.enum(['verified_identity', 'typed']),
+    }),
+  },
+  verify_identity: {
+    description:
+      "Start the worker's Stripe Identity verification (government ID plus a matching selfie): returns the hosted url to send the worker to, or status 'verified' with url null when the identity is already on file. Tier-2 jobs (over $150, or any certification) need it before a proof can be approved.",
+    input: z.object({ worker_id: uuid }).strict(),
+    output: z.object({
+      worker_id: uuid,
+      url: z.string().url().nullable(),
+      status: z.enum(['pending', 'verified', 'failed', 'needs_review']),
+      session_id: z.string().nullable(),
     }),
   },
   check_eligibility: {
-    description: 'Can this worker take this job (not suspended, tier, required certification verified)?',
+    description: "Can this worker take this job (not suspended, tier, required certification verified, verified identity on a tier-2 job)? Also returns the job's verification tier.",
     input: z.object({ worker_id: uuid, job_id: uuid }).strict(),
-    output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()) }),
+    output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()), tier: z.number().int().min(0).max(2) }),
   },
   get_dispute: {
     description: 'Evidence bundle for a chargeback: job, proof review, ledger lines.',

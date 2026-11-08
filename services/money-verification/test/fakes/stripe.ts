@@ -85,6 +85,26 @@ interface FakeDp {
   payment_intent: string | null;
 }
 
+interface FakeVS {
+  id: string;
+  object: 'identity.verification_session';
+  status: 'requires_input' | 'processing' | 'verified' | 'canceled';
+  type: string;
+  url: string | null;
+  client_secret: string | null;
+  client_reference_id: string | null;
+  created: number;
+  livemode: false;
+  metadata: Meta;
+  options: unknown;
+  return_url: string | null;
+  last_error: { code: string; reason: string } | null;
+  last_verification_report: string | null;
+  verified_outputs: Record<string, unknown> | null;
+  redaction: null;
+  related_customer: null;
+}
+
 export interface RecordedCall {
   method: string;
   params: unknown;
@@ -99,6 +119,7 @@ export class FakeStripe implements StripeClient {
   readonly trStore = new Map<string, FakeTr>();
   readonly rfStore = new Map<string, FakeRf>();
   readonly dpStore = new Map<string, FakeDp>();
+  readonly vsStore = new Map<string, FakeVS>();
   /** The real SDK's webhook signature code; `sk_test_fake` is never sent anywhere. */
   readonly webhooks = new Stripe('sk_test_fake').webhooks;
 
@@ -275,6 +296,59 @@ export class FakeStripe implements StripeClient {
     if (!dp) throw new Error(`No such dispute: ${disputeId}`);
     dp.status = status;
     return this.event('charge.dispute.closed', dp);
+  }
+
+  private verificationSession(sessionId: string): FakeVS {
+    const vs = this.vsStore.get(sessionId);
+    if (!vs) throw new Error(`No such identity verification session: ${sessionId}`);
+    return vs;
+  }
+
+  /**
+   * The worker passed the document and selfie checks. As observed against the real sandbox (API 2026-10-28), the
+   * identity.verification_session.verified payload does NOT carry verified_outputs: it is expandable and only
+   * comes back from retrieve(id, { expand: ['verified_outputs'] }). The fake mirrors that.
+   */
+  identityVerifiedEvent(sessionId: string, outputs: { first_name: string; last_name: string }): Stripe.Event {
+    const vs = this.verificationSession(sessionId);
+    vs.status = 'verified';
+    vs.url = null;
+    vs.last_error = null;
+    vs.last_verification_report = this.nextId('vr_test');
+    vs.verified_outputs = {
+      address: null,
+      email: null,
+      first_name: outputs.first_name,
+      last_name: outputs.last_name,
+      id_number_type: null,
+      phone: null,
+    };
+    return this.event('identity.verification_session.verified', this.wireSession(vs, false));
+  }
+
+  /** The session as the API serialises it: verified_outputs only when expanded. */
+  private wireSession(vs: FakeVS, expandOutputs: boolean): Record<string, unknown> {
+    const { verified_outputs, ...rest } = vs;
+    return expandOutputs ? { ...rest, verified_outputs } : rest;
+  }
+
+  /** A check failed and the worker must try again: requires_input with last_error set. */
+  identityRequiresInputEvent(
+    sessionId: string,
+    lastError: { code: string; reason: string } = { code: 'document_unverified_other', reason: 'The document could not be verified.' },
+  ): Stripe.Event {
+    const vs = this.verificationSession(sessionId);
+    vs.status = 'requires_input';
+    vs.last_error = lastError;
+    return this.event('identity.verification_session.requires_input', vs);
+  }
+
+  /** The session was canceled (by us or by Stripe). */
+  identityCanceledEvent(sessionId: string): Stripe.Event {
+    const vs = this.verificationSession(sessionId);
+    vs.status = 'canceled';
+    vs.url = null;
+    return this.event('identity.verification_session.canceled', vs);
   }
 
   // ---------------------------------------------------------------- StripeClient
@@ -463,15 +537,38 @@ export class FakeStripe implements StripeClient {
         this.record('identity.verificationSessions.create', params, options);
         return this.idempotent('identity.verificationSessions.create', params, options, () => {
           const id = this.nextId('vs_test');
-          return {
+          const vs: FakeVS = {
             id,
             object: 'identity.verification_session',
             status: 'requires_input',
+            type: params.type ?? 'document',
             url: `https://verify.stripe.test/${id}`,
             client_secret: `${id}_secret`,
+            client_reference_id: params.client_reference_id ?? null,
+            created: this.unix(),
+            livemode: false,
             metadata: (params.metadata ?? {}) as Meta,
-          } as unknown as Stripe.Identity.VerificationSession;
+            options: params.options ?? null,
+            return_url: params.return_url ?? null,
+            last_error: null,
+            last_verification_report: null,
+            verified_outputs: null,
+            redaction: null,
+            related_customer: null,
+          };
+          this.vsStore.set(id, vs);
+          return vs as unknown as Stripe.Identity.VerificationSession;
         });
+      },
+      retrieve: async (
+        id: string,
+        params?: Stripe.Identity.VerificationSessionRetrieveParams,
+        options?: Stripe.RequestOptions,
+      ): Promise<Stripe.Identity.VerificationSession> => {
+        this.record('identity.verificationSessions.retrieve', { id, params }, options);
+        const vs = this.verificationSession(id);
+        const expand = params?.expand ?? [];
+        return this.wireSession(vs, expand.includes('verified_outputs')) as unknown as Stripe.Identity.VerificationSession;
       },
     },
   };

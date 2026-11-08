@@ -1,6 +1,7 @@
 import type { Repo } from '../repo.js';
 import type { Job, Proof, ProofCheck, ProofCheckStatus, ProofMedia } from '../types.js';
 import { readExif as defaultReadExif, type ExifData, type ReadMedia } from './exif.js';
+import { verificationProfile, type ExifTimePolicy, type VerificationProfile } from './profile.js';
 
 export const DEFAULT_GEOFENCE_M = 150;
 export const GPS_DISAGREEMENT_M = 150;
@@ -65,23 +66,42 @@ export function geofenceChecks(job: Job, proof: Proof, exifs: MediaExif[]): Proo
   return out;
 }
 
+export interface TimeCheckOptions {
+  /** 'require' (default): a missing EXIF capture time is a review flag. 'device_fallback' (tier 0): the proof's device time stands in. */
+  exifTimePolicy?: ExifTimePolicy;
+  /** The proof's device-reported capture time (proofs.captured_at); used only under 'device_fallback'. */
+  deviceCapturedAt?: Date | null;
+}
+
 /**
  * Every photo must have been taken between acceptance and the deadline. A zone-less EXIF time that
- * lands outside is only "needs_review": we may have misread local time as UTC.
+ * lands outside is only "needs_review": we may have misread local time as UTC. Under the tier-0
+ * 'device_fallback' policy the proof's device captured_at covers images without an EXIF time; an EXIF
+ * time, when present, always decides.
  */
-export function timeCheck(job: Job, exifs: MediaExif[]): ProofCheck {
+export function timeCheck(job: Job, exifs: MediaExif[], opts: TimeCheckOptions = {}): ProofCheck {
   const end = job.deadline.getTime();
   const start = job.accepted_at ? job.accepted_at.getTime() - EARLY_TOLERANCE_MS : end - NO_ACCEPTED_AT_WINDOW_MS;
   const windowNote = job.accepted_at ? '' : ' (no accepted_at on the job; window is the 24h before the deadline)';
+  const inWindow = (t: number) => t >= start && t <= end;
+  const device = opts.exifTimePolicy === 'device_fallback' ? (opts.deviceCapturedAt ?? null) : null;
   const timed = exifs.filter((e) => e.exif?.capturedAt);
-  if (timed.length === 0) return check('time', 'needs_review', 'missing EXIF capture time');
+
+  if (timed.length === 0) {
+    if (opts.exifTimePolicy !== 'device_fallback') return check('time', 'needs_review', 'missing EXIF capture time');
+    if (!device) return check('time', 'needs_review', 'missing EXIF capture time and device captured_at');
+    const when = device.toISOString();
+    return inWindow(device.getTime())
+      ? check('time', 'pass', `device captured_at ${when} within window (no EXIF capture time; this tier accepts device time)${windowNote}`, { source: 'device' })
+      : check('time', 'fail', `device captured_at ${when} outside window (no EXIF capture time)${windowNote}`, { source: 'device' });
+  }
 
   let status: ProofCheckStatus = 'pass';
   const notes: string[] = [];
   for (const e of timed) {
     const exif = e.exif as ExifData;
     const t = (exif.capturedAt as Date).getTime();
-    if (t >= start && t <= end) continue;
+    if (inWindow(t)) continue;
     const when = (exif.capturedAt as Date).toISOString();
     if (exif.tzAssumed) {
       if (status === 'pass') status = 'needs_review';
@@ -93,21 +113,28 @@ export function timeCheck(job: Job, exifs: MediaExif[]): ProofCheck {
   }
   const missing = exifs.length - timed.length;
   if (missing > 0 && status === 'pass') {
-    status = 'needs_review';
-    notes.push(`${missing} image(s) missing EXIF capture time`);
+    if (device && inWindow(device.getTime())) {
+      notes.push(`${missing} image(s) without EXIF capture time covered by device captured_at ${device.toISOString()}`);
+    } else {
+      status = 'needs_review';
+      notes.push(`${missing} image(s) missing EXIF capture time`);
+    }
   }
-  if (notes.length === 0) return check('time', 'pass', `${timed.length} capture time(s) within window${windowNote}`);
-  return check('time', status, notes.join('; ') + windowNote);
+  const data = { source: 'exif' };
+  if (notes.length === 0) return check('time', 'pass', `${timed.length} capture time(s) within window${windowNote}`, data);
+  return check('time', status, notes.join('; ') + windowNote, data);
 }
 
 const FIELD_TYPES = new Set(['string', 'number', 'boolean']);
 
-/** Cheap structural check: enough photos, and every required field present with the right type. */
-export function completenessCheck(job: Job, proof: Proof): ProofCheck {
+/**
+ * Cheap structural check: enough photos, and every required field present with the right type.
+ * `minPhotos` is the tier minimum composed with the customer's photos.min (profile.minPhotos).
+ */
+export function completenessCheck(job: Job, proof: Proof, minPhotos: number = job.proof_schema.photos.min): ProofCheck {
   const problems: string[] = [];
   const images = proof.media.filter((m) => m.mime.startsWith('image/')).length;
-  const min = job.proof_schema.photos.min;
-  if (images < min) problems.push(`${images} image(s), need ${min}`);
+  if (images < minPhotos) problems.push(`${images} image(s), need ${minPhotos}`);
   for (const f of job.proof_schema.fields ?? []) {
     const v = proof.fields[f.name];
     if (v === undefined || v === null) problems.push(`missing field ${f.name}`);
@@ -151,13 +178,20 @@ export async function loadExif(deps: ChecksDeps, proof: Proof): Promise<MediaExi
   );
 }
 
+/** The deterministic checks under the job's verification profile (derived from the job when not given). */
 export async function runChecks(
   deps: ChecksDeps,
   job: Job,
   proof: Proof,
-): Promise<{ checks: ProofCheck[]; exifs: MediaExif[] }> {
+  profile: VerificationProfile = verificationProfile(job),
+): Promise<{ checks: ProofCheck[]; exifs: MediaExif[]; profile: VerificationProfile }> {
   const exifs = await loadExif(deps, proof);
   const reuse = await reuseCheck(deps.repo, proof);
-  const checks = [reuse, completenessCheck(job, proof), ...geofenceChecks(job, proof, exifs), timeCheck(job, exifs)];
-  return { checks, exifs };
+  const checks = [
+    reuse,
+    completenessCheck(job, proof, profile.minPhotos),
+    ...geofenceChecks(job, proof, exifs),
+    timeCheck(job, exifs, { exifTimePolicy: profile.exifTimePolicy, deviceCapturedAt: proof.captured_at }),
+  ];
+  return { checks, exifs, profile };
 }

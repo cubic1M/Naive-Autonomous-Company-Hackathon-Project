@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { matchNames, normalizeName, nameTokens } from '../src/certs/names.js';
 import { importNotaryListing, parseListingDate, parseNotaryListing, verifyNotary } from '../src/certs/notary.js';
 import type { NotaryRecord } from '../src/types.js';
-import { makeWorld, T0, WORKER_ID } from './helpers.js';
+import { makeWorld, seedVerifiedIdentity, T0, WORKER_ID } from './helpers.js';
 
 const csv = fs.readFileSync(new URL('./fixtures/notary-sample.csv', import.meta.url), 'utf8');
 const tsv = fs.readFileSync(new URL('./fixtures/notary-sample.tsv', import.meta.url), 'utf8');
@@ -211,5 +211,72 @@ describe('verifyNotary', () => {
     });
     const r = await verify('NOEXP1', 'Jane Doe', T0);
     expect(r).toMatchObject({ status: 'needs_review', reasons: ['expiry_unknown'] });
+  });
+});
+
+describe('verifyNotary with a verified Stripe Identity', () => {
+  async function setupWithId(id: { firstName: string; lastName: string } | 'pending' | null) {
+    const world = makeWorld();
+    await importNotaryListing(world.repo, csv);
+    if (id === 'pending') {
+      await world.repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status: 'pending', provider_ref: 'vs_1', details: {}, verified_at: null, expires_at: null });
+    } else if (id) {
+      await seedVerifiedIdentity(world, id);
+    }
+    const verify = (commissionNumber: string, name: string) =>
+      verifyNotary({ repo: world.repo, now: world.clock.now }, { workerId: WORKER_ID, commissionNumber, name, jobDate: T0 });
+    const stored = () => world.repo.getWorkerVerification(WORKER_ID, 'notary_commission');
+    return { world, verify, stored };
+  }
+
+  it('compares the ID name with the commission and flags a typed name that differs from the ID', async () => {
+    const { verify, stored } = await setupWithId({ firstName: 'Jane', lastName: 'Smith' });
+    const r = await verify('2301234', 'Mary Jones');
+    expect(r.status).toBe('verified');
+    expect(r.nameSource).toBe('verified_identity');
+    expect(r.nameOnId).toBe('Jane Smith');
+    expect(r.nameMatch).toBe('full');
+    expect(r.reasons).toHaveLength(1);
+    expect(r.reasons[0]).toMatch(/^typed_name_mismatch: /);
+    expect(r.reasons[0]).toContain('Mary Jones');
+    expect(r.reasons[0]).toContain('Jane Smith');
+    expect((await stored())?.details).toMatchObject({
+      name_used: 'verified_identity',
+      name_on_id: 'Jane Smith',
+      name_given: 'Mary Jones',
+      name_match: 'full',
+      typed_name_match: 'none',
+    });
+  });
+
+  it('a typed name that matches the ID raises no flag', async () => {
+    const { verify } = await setupWithId({ firstName: 'Jane', lastName: 'Smith' });
+    const r = await verify('2301234', 'jane smith');
+    expect(r).toMatchObject({ status: 'verified', reasons: [], nameSource: 'verified_identity', nameMatch: 'full' });
+  });
+
+  it('fails when the ID name does not match the commission even though the typed name does', async () => {
+    const { verify, stored } = await setupWithId({ firstName: 'Mary', lastName: 'Jones' });
+    const r = await verify('2301234', 'Jane A Smith');
+    expect(r.status).toBe('failed');
+    expect(r.reasons[0]).toBe('name_mismatch');
+    expect(r.nameSource).toBe('verified_identity');
+    expect((await stored())?.status).toBe('failed');
+  });
+
+  it('a partial match on the ID name goes to review even when the typed name would have matched in full', async () => {
+    const { verify } = await setupWithId({ firstName: 'Jane B', lastName: 'Smith' });
+    const r = await verify('2301234', 'Jane A Smith');
+    expect(r.status).toBe('needs_review');
+    expect(r.reasons[0]).toMatch(/^name_partial_match: /);
+    expect(r.reasons[1]).toMatch(/^typed_name_mismatch: .*partial match/);
+  });
+
+  it('without a verified identity the typed name is used; a pending identity does not count', async () => {
+    const none = await setupWithId(null);
+    expect(await none.verify('2301234', 'Jane A Smith')).toMatchObject({ status: 'verified', nameSource: 'typed', nameOnId: null, reasons: [] });
+    expect((await none.stored())?.details).toMatchObject({ name_used: 'typed', name_on_id: null, typed_name_match: null });
+    const pending = await setupWithId('pending');
+    expect(await pending.verify('2301234', 'Jane A Smith')).toMatchObject({ status: 'verified', nameSource: 'typed' });
   });
 });
