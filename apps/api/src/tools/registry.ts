@@ -7,6 +7,7 @@ import outreach from "@services/outreach/index";
 import verify from "@services/verify/index";
 import payments from "@services/payments/index";
 import * as paymentsModule from "@services/payments/index";
+import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
 import growth from "@services/growth/index";
 import { mocks } from "./mocks";
 import { getJob } from "./edwin";
@@ -35,5 +36,10 @@ export function toolSources() {
   return Object.fromEntries(INTERNAL_TOOLS.map((t) => [t, resolveTool(t).source]));
 }
 
-/** Cameron's Stripe hold, if implemented (services/payments exports createHold). */
-export const createHold = (paymentsModule as any).createHold as undefined | ((jobId: string) => Promise<{ escrow_url: string }>);
+/**
+ * Cameron's Stripe hold, if implemented (services/payments exports createHold): authorizes a passed or saved card in
+ * the call (funded: true, escrow_url null), else returns the Checkout URL.
+ */
+export const createHold = (paymentsModule as any).createHold as
+  | undefined
+  | ((jobId: string, opts?: CreateHoldOptions) => Promise<CreateHoldResult>);

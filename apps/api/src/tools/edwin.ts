@@ -5,6 +5,7 @@ import { checkSafety } from "@/lib/safety";
 import { inServiceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
 import * as compliance from "@services/compliance/index";
+import type { CreateHoldOptions, CreateHoldResult } from "@services/payments/index";
 
 /** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
 export const STATUS_MEANING: Record<string, string> = {
@@ -59,11 +60,45 @@ export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): P
   return out;
 }
 
+const FINDING = "We're finding a verified person now. Call get_job every 2-5 minutes (or wait for your callback_url); status 'paid' means proof is ready.";
+
+/** Plain words for the reasons createHold falls back to Checkout (Stripe card error codes, and its own invalid_payment_method). */
+const CARD_NOT_CHARGED: Record<string, string> = {
+  card_declined: "the card was declined",
+  expired_card: "the card has expired",
+  incorrect_cvc: "the card's security code was refused",
+  processing_error: "the card network had an error; trying again later may work",
+  authentication_required: "the card's bank wants the cardholder to confirm this payment, which needs a person",
+  invalid_payment_method: "that payment method is unknown to Operis's Stripe account (pass a pm_... created there; in test mode pm_card_visa)",
+};
+
+/** next_step while a human still has to pay escrow_url: why the card was not charged, if one was tried, and how to skip the link. */
+function paymentNeeded(fallbackReason?: string): string {
+  const pay = "have your human owner pay escrow_url once (the card is held, charged only when proof passes); the job starts as soon as it's paid";
+  if (!fallbackReason) return `Payment needed: ${pay}. To skip the link next time, call setup_payment once and have your owner save a card.`;
+  const why = CARD_NOT_CHARGED[fallbackReason] ?? `the card could not be charged (${fallbackReason})`;
+  return `Your card was not charged: ${why}. To fund this job, ${pay}. Or cancel_job it, save another card with setup_payment and request again.`;
+}
+
+/**
+ * A card authorized in this call funds the job: move it to held now, which wakes Compliance as for a job funded through
+ * the webhook. payment_intent.amount_capturable_updated can reach the webhook first and move it there itself; then the
+ * job is already held and that is not an error.
+ */
+async function markFunded(ctx: ToolContext, jobId: string): Promise<void> {
+  try {
+    await ctx.transition(jobId, "held");
+  } catch (e) {
+    const [j] = await ctx.sql`select status from jobs where id = ${jobId}`;
+    if (j?.status !== "held") throw e;
+  }
+}
+
 export async function requestHuman(
   input: Tools["request_human"]["in"],
   ctx: ToolContext,
   customerId: string,
-  createHold?: (jobId: string) => Promise<{ escrow_url: string }>,
+  createHold?: (jobId: string, opts?: CreateHoldOptions) => Promise<CreateHoldResult>,
 ): Promise<Tools["request_human"]["out"]> {
   const reject = (reason: string) => ({ job_id: "", status: "rejected" as const, quote_usd: 0, escrow_url: null, reason,
     next_step: "Not created. Fix the request using the reason, or tell your owner; don't resend the same request." });
@@ -110,17 +145,26 @@ export async function requestHuman(
   await compliance.recordIntake(job.id, q);
   const liabilityNote = "Our Compliance agent decides after funding whether Operis is the provider or only the marketplace for this job; get_job shows liability_model.";
 
-  // Payments: Cameron's createHold returns a Stripe Checkout URL; the Stripe webhook moves the job to `held`.
-  // Without it (or with MOCK_PAYMENTS), we treat the hold as instant so the loop runs end to end.
+  // Payments: Cameron's createHold holds quote_usd on the card in payment.payment_method, else on the customer's saved
+  // card, in this call: funded, so the job moves to `held` now. Without a card, or when the card is refused
+  // (fallback_reason), it returns a Stripe Checkout URL and the Stripe webhook moves the job to `held` once it is paid.
+  // next_step is written here, not taken from createHold, because it names this server's tools (setup_payment, cancel_job).
+  // Without createHold (or with MOCK_PAYMENTS), we treat the hold as instant so the loop runs end to end.
   if (createHold && !flag("MOCK_PAYMENTS") && !flag("USE_MOCKS")) {
-    const { escrow_url } = await createHold(job.id);
-    return { job_id: job.id, status: "requested", quote_usd: chargeUsd, escrow_url,
-      next_step: `Payment needed: give escrow_url to your human owner to pay once (the card is held, charged only when proof passes). The job starts as soon as it's paid. ${liabilityNote}` };
+    const hold = await createHold(job.id, { paymentMethod: input.payment?.payment_method });
+    if (hold.funded) {
+      await markFunded(ctx, job.id);
+      return { job_id: job.id, status: "held", quote_usd: chargeUsd, escrow_url: null,
+        next_step: `Funded: your card is held, charged only when proof passes. ${FINDING} ${liabilityNote}` };
+    }
+    return { job_id: job.id, status: "requested", quote_usd: chargeUsd, escrow_url: hold.escrow_url,
+      ...(hold.fallback_reason ? { fallback_reason: hold.fallback_reason } : {}),
+      next_step: `${paymentNeeded(hold.fallback_reason)} ${liabilityNote}` };
   }
   await ctx.ledger(job.id, "hold", chargeUsd, "mock");
   await ctx.transition(job.id, "held");
   return { job_id: job.id, status: "held", quote_usd: chargeUsd, escrow_url: null,
-    next_step: `Funded. We're finding a verified person now. Call get_job every 2-5 minutes (or wait for your callback_url); status 'paid' means proof is ready. ${liabilityNote}` };
+    next_step: `Funded. ${FINDING} ${liabilityNote}` };
 }
 
 export async function cancelJob(input: Tools["cancel_job"]["in"], ctx: ToolContext, customerId: string): Promise<Tools["cancel_job"]["out"]> {

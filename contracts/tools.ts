@@ -67,8 +67,19 @@ export interface Tools {
       certification_required: string | null;
       proof: ProofRequirement;
       callback_url?: string;
+      /** Optional: a Stripe PaymentMethod id (pm_...) that funds the job in this call, no payment link. Without it the card saved with setup_payment is used; without either, pay escrow_url. [proposed by Cameron] */
+      payment?: { payment_method: string };
     },
-    { job_id: string; status: "requested" | "held" | "rejected"; quote_usd: number; escrow_url: string | null; reason?: string; next_step?: string }
+    {
+      job_id: string;
+      status: "requested" | "held" | "rejected";
+      quote_usd: number;
+      escrow_url: string | null;
+      reason?: string;
+      /** Set when a passed or saved card could not be charged and escrow_url is the fallback: card_declined, authentication_required, invalid_payment_method, ... */
+      fallback_reason?: string;
+      next_step?: string;
+    }
   >;
 
   get_job: ToolSpec<
