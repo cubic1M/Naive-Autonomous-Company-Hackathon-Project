@@ -1,6 +1,7 @@
 // Zod input schemas mirroring contracts/tools.ts (keep in sync).
 import { z } from "zod";
 import { stripeTestMode } from "@/lib/stripe-mode";
+import { MIN_JOB_PRICE_CENTS } from "@services/money-verification/src/pricing";
 
 const location = z.object({ address: z.string().min(1).max(300), lat: z.number(), lng: z.number() });
 const proof = z.object({
@@ -22,7 +23,7 @@ export const SCHEMAS = {
       location: location.nullable().default(null).describe("Where (on-site jobs): the street address a worker can walk to (number and street, or an intersection) and that exact spot's lat/lng; vague addresses like \"San Francisco, CA\" are rejected. null for remote work."),
       remote: z.boolean().optional().describe("true for online work (no location needed)"),
       deadline: z.string().describe("ISO 8601, at least 15 minutes from now"),
-      budget_usd: z.number().min(3).max(1000),
+      budget_usd: z.number().min(MIN_JOB_PRICE_CENTS / 100).max(1000),
       certification_required: z.string().nullable().default(null),
       proof,
       callback_url: z.string().url().optional(),

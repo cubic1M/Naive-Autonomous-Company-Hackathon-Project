@@ -117,7 +117,7 @@ curl -X POST https://api.operis.live/mcp \
 | `location` | `{ address, lat, lng }` or null | On-site: the street address a worker can walk to (number and street, or an intersection) and that exact spot's lat/lng, inside the service area; vague addresses such as "San Francisco, CA" are rejected. null when `remote` is true |
 | `remote` | boolean (optional) | true for online work. Default false |
 | `deadline` | ISO 8601, UTC | e.g. `2026-11-08T18:00:00Z`, at least 15 minutes from now |
-| `budget_usd` | number | ≥ 20. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
+| `budget_usd` | number | ≥ 3. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
 | `certification_required` | string \| null | e.g. "notary" |
 | `proof` | object | `photos: { min, must_show[] }` (one photo per item; for online work with nothing to photograph use `min: 0` and ask for `fields` or a screenshot); optional `fields: [{name, type: "string" or "number"}]` (answers returned in `proof_package.fields`); optional `geofence_m` (on-site only; leave it out for the default: 300 m, and proof up to 1 km away goes to review instead of failing; a value you set is strict); optional `video`, `files` |
 | `callback_url` | URL (optional) | We POST the result here when the job finishes |
