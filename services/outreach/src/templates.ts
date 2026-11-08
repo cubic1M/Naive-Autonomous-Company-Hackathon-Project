@@ -21,6 +21,25 @@ export interface EmailMessage {
 export const EMAIL_FOOTER = 'Reply STOP to never hear from us again.';
 export const SMS_MAX = 320;
 
+/** Display name for greetings: "andrea greenberg" -> "Andrea Greenberg"; keeps "McDonald", "DeSantis", "Esq."; businesses untouched. */
+export function displayName(name: string | null, kind: 'person' | 'business' = 'person'): string | null {
+  if (!name) return null;
+  const n = name.replace(/\s+/g, ' ').trim();
+  if (!n) return null;
+  if (kind === 'business') return n;
+  return n
+    .split(' ')
+    .map((w) => (w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
+/** First name for a person's greeting, null for businesses with no person name. */
+export function greetingName(person: { name: string | null; kind: 'person' | 'business' }): string | null {
+  const d = displayName(person.name, person.kind);
+  if (!d) return null;
+  return person.kind === 'person' ? d.split(' ')[0]! : d;
+}
+
 export function workerPay(job: JobForOutreach): number {
   return Math.round((job.worker_pay_usd ?? job.budget_usd * 0.75) * 100) / 100;
 }
@@ -87,7 +106,7 @@ export function renderEmail(ctx: MessageContext): EmailMessage {
   const pay = money(ctx.payUsd);
   const when = formatDeadline(job.deadline);
   const lines = [
-    `Hi${person.name ? ` ${person.name}` : ''},`,
+    `Hi${greetingName(person) ? ` ${greetingName(person)}` : ''},`,
     '',
     'Operis connects people with paid short jobs from businesses.',
     '',
@@ -141,7 +160,7 @@ function clip(text: string, max: number): string {
  */
 export function renderDm(ctx: MessageContext, _platform: ManualPlatform): string {
   const { job, person } = ctx;
-  const first = person.name?.trim().split(/\s+/)[0];
+  const first = greetingName(person);
   const pay = money(ctx.payUsd);
   const where = job.remote ? 'Remote' : (job.address ?? '').split(',').slice(0, 2).join(',').trim();
   const headline = person.headline?.replace(/\s+/g, ' ').trim() ?? '';
@@ -173,7 +192,7 @@ export function renderRegularInvite(ctx: { person: Person; jobTitle: string }): 
     email: {
       subject: 'Thanks! Want more gigs like this?',
       text: [
-        `Hi${person.name ? ` ${person.name}` : ''},`,
+        `Hi${greetingName(person) ? ` ${greetingName(person)}` : ''},`,
         '',
         `Thanks for completing "${jobTitle}" with Operis. Operis connects people with paid short jobs from businesses.`,
         '',

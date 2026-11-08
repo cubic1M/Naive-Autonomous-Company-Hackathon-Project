@@ -236,7 +236,12 @@ export class PostgresRepo implements Repo {
     return rows.map(toOutreach);
   }
 
-  async touchContacted(personId: string, at: Date): Promise<void> {
+  async getOutreachByToken(token: string): Promise<OutreachRow | null> {
+    const rows = await this.sql<Row[]>`select * from outreach where token = ${token} limit 1`;
+    return rows[0] ? toOutreach(rows[0]) : null;
+  }
+
+    async touchContacted(personId: string, at: Date): Promise<void> {
     await this.sql`update worker_profiles set last_contacted_at = ${at}, updated_at = now() where worker_id = ${personId}`;
   }
 

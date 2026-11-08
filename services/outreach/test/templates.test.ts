@@ -132,3 +132,14 @@ describe('templates', () => {
     });
   });
 });
+
+describe('greeting names', () => {
+  it('capitalizes lowercase person names but keeps business names and mixed case', async () => {
+    const { displayName, greetingName } = await import('../src/templates.js');
+    expect(displayName('andrea greenberg')).toBe('Andrea Greenberg');
+    expect(displayName('Isaih Owens, Esq.')).toBe('Isaih Owens, Esq.');
+    expect(displayName('ruchika McDonald')).toBe('Ruchika McDonald');
+    expect(greetingName({ name: 'andrea greenberg', kind: 'person' })).toBe('Andrea');
+    expect(greetingName({ name: 'attack! event staffing', kind: 'business' })).toBe('attack! event staffing');
+  });
+});

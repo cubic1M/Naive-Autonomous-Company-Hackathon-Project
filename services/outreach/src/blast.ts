@@ -1,10 +1,9 @@
-import { randomBytes } from 'node:crypto';
 import { manualPlatform, manualProfile, pickChannel } from './channel.js';
 import type { Env } from './env.js';
 import type { Repo } from './repo.js';
 import type { EmailSender, SendResult, SmsSender } from './senders.js';
 import { renderDm, renderEmail, renderSms, workerPay } from './templates.js';
-import { jobLink, signJobToken } from './tokens.js';
+import { jobLink, signShortToken } from './tokens.js';
 import type { Channel, ManualPlatform, OutreachStatus, SendBlastInput, SendBlastOutput } from './types.js';
 
 export const MAX_BLAST = 50;
@@ -104,8 +103,7 @@ export async function sendBlastDetailed(input: SendBlastInput, deps: BlastDeps):
         return;
       }
       usedManual.set(platform, (usedManual.get(platform) ?? 0) + 1);
-      const nonce = randomBytes(9).toString('base64url');
-      const token = signJobToken({ job_id: job.id, worker_id: person.id, outreach_nonce: nonce }, env.LINK_SIGNING_SECRET, undefined, now());
+      const token = signShortToken(env.LINK_SIGNING_SECRET);
       const message = renderDm({ job, person, link: jobLink(env.PUBLIC_BASE_URL, token), payUsd: workerPay(job) }, platform);
       try {
         const row = await repo.insertOutreach({ job_id: job.id, worker_id: person.id, channel, token, status: 'queued' });
@@ -120,8 +118,7 @@ export async function sendBlastDetailed(input: SendBlastInput, deps: BlastDeps):
     const to = channel === 'sms' ? person.phone! : person.email!;
     const live = env.OUTREACH_LIVE || allow.has(to.toLowerCase());
 
-    const nonce = randomBytes(9).toString('base64url');
-    const token = signJobToken({ job_id: job.id, worker_id: person.id, outreach_nonce: nonce }, env.LINK_SIGNING_SECRET, undefined, now());
+    const token = signShortToken(env.LINK_SIGNING_SECRET);
     const link = jobLink(env.PUBLIC_BASE_URL, token);
     const ctx = { job, person, link, payUsd: workerPay(job) };
 

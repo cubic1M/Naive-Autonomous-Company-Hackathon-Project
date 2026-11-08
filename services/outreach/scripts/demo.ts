@@ -120,7 +120,7 @@ const ids = found.output.candidates.map((c) => c.candidate_id);
 if (ids.length) {
   const blast = await sendBlastDetailed({ job_id: 'demo-job', candidate_ids: ids }, { repo, env, email });
   const toYou = send ? `really emailed you: ${blast.sent}` : `to you (would really send with SEND=1): ${blast.sent}`;
-  console.log(`  ${toYou}   businesses (dry run, not sent): ${blast.dry_run}   failed: ${blast.failed}   skipped (opted out): ${blast.skipped_opted_out}`);
+  console.log(`  ${toYou}   candidates (dry run, not sent): ${blast.dry_run}   failed: ${blast.failed}   skipped (opted out): ${blast.skipped_opted_out}`);
 }
 
 const queue = await repo.listManualTasks({ job_id: 'demo-job', status: 'queued' });

@@ -177,6 +177,10 @@ export class InMemoryRepo implements Repo {
     return this.outreach.filter((o) => o.job_id === jobId);
   }
 
+  async getOutreachByToken(token: string): Promise<OutreachRow | null> {
+    return this.outreach.find((o) => o.token === token) ?? null;
+  }
+
   async touchContacted(personId: string, at: Date): Promise<void> {
     const p = this.people.get(personId);
     if (p) p.last_contacted_at = at.toISOString();

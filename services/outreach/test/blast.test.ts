@@ -3,7 +3,7 @@ import { sendBlast, sendBlastDetailed } from '../src/blast.js';
 import type { Env } from '../src/env.js';
 import { InMemoryRepo } from '../src/repo/memory.js';
 import { RecordingSender } from '../src/senders.js';
-import { verifyJobToken } from '../src/tokens.js';
+import { verifyShortToken } from '../src/tokens.js';
 
 const env = (o: Partial<Env> = {}): Env => ({
   MONID_API_KEY: 'k', MONID_BASE_URL: 'x', PUBLIC_BASE_URL: 'https://app.test', LINK_SIGNING_SECRET: 'sek',
@@ -41,8 +41,9 @@ describe('sendBlast', () => {
     expect(s.a.last_contacted_at).not.toBeNull();
     const rows = await s.repo.listOutreachForJob('job1');
     const link = s.email.sent[0]!.body.match(/\/j\/(\S+)/)![1]!;
-    const claims = verifyJobToken(link, 'sek');
-    expect(claims?.job_id).toBe('job1');
+    expect(verifyShortToken(link, 'sek')).toBe(true);
+    expect(link.length).toBeLessThanOrEqual(19);
+    expect((await s.repo.getOutreachByToken(link))?.job_id).toBe('job1');
     expect(rows.map((o) => o.token)).toContain(link);
   });
 
@@ -145,7 +146,9 @@ describe('sendBlast', () => {
       expect(tasks[0]).toMatchObject({ platform: 'linkedin', profile_url: li.url, status: 'queued', worker_id: 'li' });
       expect(tasks[0]!.message).toContain(`https://app.test/j/${row.token}`);
       expect(tasks[0]!.message.length).toBeLessThanOrEqual(500);
-      expect(verifyJobToken(row.token, 'sek')?.worker_id).toBe('li');
+      expect(verifyShortToken(row.token, 'sek')).toBe(true);
+      expect((await s.repo.getOutreachByToken(row.token))?.worker_id).toBe('li');
+      expect(tasks[0]!.message.length).toBeLessThanOrEqual(300); // fits a LinkedIn connection note now
       expect(s.repo.people.get('li')!.last_contacted_at).toBeNull();
       expect(s.email.sent).toHaveLength(0);
     });

@@ -43,6 +43,8 @@ export interface Repo {
 
   insertOutreach(row: { job_id: string; worker_id: string; channel: Channel; token: string; status: OutreachStatus }): Promise<OutreachRow>;
   listOutreachForJob(jobId: string): Promise<OutreachRow[]>;
+  /** The outreach row for a short link token (outreach.token), or null. */
+  getOutreachByToken(token: string): Promise<OutreachRow | null>;
   touchContacted(personId: string, at: Date): Promise<void>;
 
   // ---- manual DM queue (migrations/0002_people.sql: manual_outreach) ----

@@ -143,10 +143,13 @@ describe('websiteContact', () => {
 });
 
 describe('linkedinWorkEmail', () => {
-  const l = lead({ profiles: [prof('linkedin', 'https://www.linkedin.com/in/example-person', 'example-person')] });
-  it('is the expensive last resort: applies only to linkedin without an email', () => {
+  const l = lead({
+    profiles: [prof('linkedin', 'https://www.linkedin.com/in/example-person', 'example-person'), prof('website', 'https://acmelaw.com')],
+  });
+  it('is the expensive last resort: applies only to linkedin + own website without an email', () => {
     expect(linkedinWorkEmail.costEstimateUsd).toBe(0.1);
     expect(linkedinWorkEmail.applies!(l)).toBe(true);
+    expect(linkedinWorkEmail.applies!(lead({ profiles: [prof('linkedin', 'https://www.linkedin.com/in/x', 'x')] }))).toBe(false);
     expect(linkedinWorkEmail.applies!(lead({ ...l, email: 'a@b.co' }))).toBe(false);
     expect(linkedinWorkEmail.applies!(lead())).toBe(false);
   });
@@ -156,6 +159,10 @@ describe('linkedinWorkEmail', () => {
     expect(m.calls[0]!.input).toEqual({ queryParams: { profile: 'https://www.linkedin.com/in/example-person' } });
     expect(r.email).toBe('jane@acmelaw.com');
     expect(r.cost_usd).toBeCloseTo(0.1);
+  });
+  it('drops an employer email that is not on the person\'s own domain', async () => {
+    const m = new FakeMonid().override('contactout/v1/people/linkedin/work-email', { output: { profile: { work_email: ['priya@oracle.com'] } }, cost: 0.1 });
+    expect((await linkedinWorkEmail.enrich(l, m)).email).toBeNull();
   });
   it('ignores personal emails and treats a 404 miss as free/empty', async () => {
     const m = new FakeMonid().override('contactout/v1/people/linkedin/work-email', { output: { profile: { work_email: [], personal_email: ['me@gmail.com'], email: ['me@gmail.com'] } } });
