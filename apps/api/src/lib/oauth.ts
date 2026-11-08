@@ -4,7 +4,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { baseUrl } from "./env";
 
+const TRUSTED_ORIGINS = /^https:\/\/(www\.)?operis\.live$|^https:\/\/[a-z0-9-]+\.vercel\.app$|^http:\/\/localhost:\d+$/;
+
 export function publicOrigin(req: Request): string {
+  // Set by the website's proxy (apps/web/src/proxy.ts) when the client came through operis.live.
+  const via = req.headers.get("x-operis-public-origin");
+  if (via && TRUSTED_ORIGINS.test(via)) return via.replace("://www.", "://");
   const fwd = req.headers.get("x-forwarded-host");
   const proto = req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", "");
   if (fwd) return `${proto}://${fwd.split(",")[0].trim()}`;
