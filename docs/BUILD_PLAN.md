@@ -81,7 +81,7 @@ Gaps before the CEO-approval policy can run without a human (asks, not yet done)
 4. **Edwin / Cameron, errors:** have `serveMcp` return `describeToolError(err)` (code and message) so the agent sees `requires_approval`.
 5. **Prompts (not in this branch's files):** `ceo.md` and `finance.md` still say refunds need founder approval and "you never pay workers yourself"; `finance.md` says an `over_limit` payout needs a founder; Finance has no `send_to_agent` to reach the CEO.
 6. **Disputes agent:** add the member and its wake path, or document the CEO as the Disputes owner.
-7. **Stale code wording (Cameron):** `errors.ts` / `payouts.ts` / `disputes.ts` comments and the "payout ... human approval" message, and `webhooks/naive/route.ts` ("waiting for founder approval").
+7. **Stale wording (Edwin):** `apps/api/src/app/webhooks/naive/route.ts` says "waiting for founder approval" for an `ask` approval.
 
 ## 4. Certifications
 
