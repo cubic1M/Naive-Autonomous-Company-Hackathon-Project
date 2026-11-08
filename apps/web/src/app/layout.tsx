@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/lib/session";
 
-const inter = Inter({ subsets: ["latin"], variable: "--f-inter", display: "swap" });
-const interTight = Inter_Tight({ subsets: ["latin"], weight: ["500", "600"], variable: "--f-tight", display: "swap" });
+// Avenir comes from the visitor's device (Apple); Nunito Sans is the fallback everywhere else.
+const fallback = Nunito_Sans({ subsets: ["latin"], variable: "--f-fallback", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--f-mono", display: "swap" });
 
 export const metadata: Metadata = {
@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${interTight.variable} ${mono.variable}`}>
+    <html lang="en" className={`${fallback.variable} ${mono.variable}`}>
       <body>
         <div className="frame">
           <div className="paper">

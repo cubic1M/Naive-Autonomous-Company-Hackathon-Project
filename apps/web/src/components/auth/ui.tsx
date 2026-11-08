@@ -68,5 +68,11 @@ export const ERRORS: Record<string, string> = {
   too_many_tries: "Too many tries. Send a new code.",
   link_expired: "That link has expired. Request a new one.",
   network: "We couldn't reach Operis. Check your connection and try again.",
+  sms_unavailable: "Text codes aren't available yet. Use an email link or your password instead.",
+  google_unavailable: "Google sign-in isn't available yet. Create an account with your email instead.",
+  email_unavailable: "We couldn't send the email just now. Try again in a minute, or use your password.",
+  rate_limited: "Too many emails in a short time. Wait a few minutes and try again.",
+  login_required: "Log in to continue.",
+  identity_unavailable: "ID verification isn't available right now. Try again in a few minutes.",
 };
 export const errorText = (code: string) => ERRORS[code] ?? "Something went wrong. Please try again.";

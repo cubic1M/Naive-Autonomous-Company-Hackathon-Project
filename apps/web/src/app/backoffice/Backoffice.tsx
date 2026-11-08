@@ -1,11 +1,12 @@
 "use client";
 
 // Founders' backoffice (admin.operis.live). Same look as operis.live: warm paper, forest accents,
-// Inter Tight numbers, mono eyebrows, a dark ink panel for live agent activity.
+// Avenir throughout (globals.css --font), small caps labels, a dark ink panel for live agent activity.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Logo } from "@/components/SiteHeader";
 import { ago, usd } from "@/lib/format";
+import PasswordInput from "@/components/PasswordInput";
 
 const POLL_MS = 3000;
 
@@ -166,7 +167,7 @@ export default function Backoffice() {
             setMe(j.email); setKey(j.token); setAuthErr(false); first.current = true;
           }}>
             <Input type="email" required autoComplete="username" placeholder="Email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} autoFocus />
-            <Input type="password" required autoComplete="current-password" placeholder="Password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} />
+            <PasswordInput required autoComplete="current-password" placeholder="Password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} style={{ fontFamily: "inherit", fontSize: 15, padding: "13px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.card, color: C.text }} />
             <button disabled={signingIn} style={{ ...btn, background: C.accent, color: "#F7F4EE", minHeight: 50 }}>{signingIn ? "Signing in…" : "Sign in"}</button>
           </form>
         </div>
@@ -403,7 +404,7 @@ function Drawer({ x, onClose }: { x: Req; onClose: () => void }) {
           <div style={{ ...mono, color: C.sage }}>What the agents did</div>
           <FeedList items={(x.activity ?? []).slice().reverse().map((a) => ({ ...a, created_at: a.at }))} />
         </section>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: C.faint }}>job {x.id}</div>
+        <div style={{ fontFamily: "var(--font-code)", fontSize: 12, color: C.faint }}>job {x.id}</div>
       </aside>
     </div>
   );
