@@ -33,7 +33,8 @@ export async function GET(req: Request) {
     select c.id, c.name, c.contact_email, c.created_at,
            count(j.id)::int as requests,
            count(j.id) filter (where j.status = 'paid')::int as paid,
-           coalesce(sum(j.budget_usd) filter (where j.status = 'paid'), 0)::float as spend,
+           -- what the company was charged: worker pay + fee (connector jobs add the platform fee on top of the budget)
+           coalesce(sum(coalesce(j.worker_pay_usd + j.fee_usd, j.budget_usd)) filter (where j.status = 'paid'), 0)::float as spend,
            max(j.created_at) as last_request_at
     from customers c left join jobs j on j.customer_id = c.id
     where c.name <> 'smoke-test'
