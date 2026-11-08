@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { optional } from "./env";
 
 const NAIVE = "https://api.vetta.sh/v1";
-const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES"] as const;
+const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"] as const;
 const KEEP = new Set(["tool.started", "tool.completed", "tool.confirm", "message.completed", "handoff.sent", "session.idle", "budget.exceeded"]);
 
 async function get(path: string) {

@@ -1,11 +1,12 @@
 // Naïve "ask" approvals for our agents. Naïve pauses calls flagged read_people (find_people, board_write
 // with an assignee, approve_proof, payout...) for a human even when the tool is set to allow.
-// Pending = a tool.confirm event whose operator_preview still exists (404 once it's been answered).
+// Pending = the session stopped with stop_reason "awaiting_approval"; its waiting calls are the tool.confirm
+// events since the session last started running (operator_preview only covers ask_operator, not tool approvals).
 import { sql } from "./db";
 import { optional, list } from "./env";
 
 const NAIVE = "https://api.vetta.sh/v1";
-const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES"] as const;
+const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"] as const;
 
 function headers() {
   return { Authorization: `Bearer ${optional("NAIVE_API_KEY")}`, "Content-Type": "application/json" };
@@ -28,21 +29,21 @@ export async function listPending(maxSessions = 30): Promise<PendingApproval[]> 
   const names = agentNames();
   const { body } = await getJson(`${NAIVE}/sessions?limit=${maxSessions}`);
   const since = Date.now() - 24 * 3600e3;
-  const sessions = (body.data ?? []).filter((s: any) => names[s.agent_id] && new Date(s.created_at).getTime() > since);
+  const sessions = (body.data ?? []).filter((s: any) => names[s.agent_id] && new Date(s.created_at).getTime() > since && s.stop_reason === "awaiting_approval");
   const out: PendingApproval[] = [];
   await Promise.all(sessions.map(async (s: any) => {
-    const confirms: any[] = [];
+    const events: any[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 10; page++) {
       const { body: ev } = await getJson(`${NAIVE}/sessions/${s.id}/events?limit=100${cursor ? `&after_seq=${cursor}` : ""}`);
-      confirms.push(...(ev.data ?? []).filter((e: any) => e.type === "tool.confirm"));
+      events.push(...(ev.data ?? []));
       if (!ev.has_more || !ev.next_cursor) break;
       cursor = ev.next_cursor;
     }
-    for (const c of confirms) {
-      const id = c.data?.tool_call_id;
-      const { status } = await getJson(`${NAIVE}/sessions/${s.id}/operator_preview?tool_call_id=${encodeURIComponent(id)}`);
-      if (status === 200) out.push({ session_id: s.id, agent: names[s.agent_id], tool: c.data?.name, tool_call_id: id, args: c.data?.args ?? {}, requested_at: c.created_at });
+    let lastRun = -1;
+    events.forEach((e, i) => { if (e.type === "session.running") lastRun = i; });
+    for (const c of events.slice(lastRun + 1).filter((e) => e.type === "tool.confirm")) {
+      out.push({ session_id: s.id, agent: names[s.agent_id], tool: c.data?.name, tool_call_id: c.data?.tool_call_id, args: c.data?.args ?? {}, requested_at: c.created_at });
     }
   }));
   return out.sort((a, b) => a.requested_at.localeCompare(b.requested_at));

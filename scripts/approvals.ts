@@ -16,20 +16,21 @@ const decide = async (s: string, c: string, d: string, why: string) => {
 };
 
 async function pending() {
-  const ids = new Map(["CEO", "OPS", "VERIFIER", "FINANCE", "SALES"].map((r) => [process.env[`NAIVE_AGENT_${r}`], r.toLowerCase()]));
-  const sessions = ((await get(`${NAIVE}/sessions?limit=30`)).body.data ?? []).filter((s: any) => ids.has(s.agent_id));
+  const ids = new Map(["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"].map((r) => [process.env[`NAIVE_AGENT_${r}`], r.toLowerCase()]));
+  // waiting = session stopped with stop_reason "awaiting_approval"; its calls are the tool.confirm events since it last ran
+  const sessions = ((await get(`${NAIVE}/sessions?limit=30`)).body.data ?? []).filter((s: any) => ids.has(s.agent_id) && s.stop_reason === "awaiting_approval");
   const out: any[] = [];
   for (const s of sessions) {
-    let cursor = "";
+    let cursor = ""; const events: any[] = [];
     for (let p = 0; p < 10; p++) {
       const ev = (await get(`${NAIVE}/sessions/${s.id}/events?limit=100${cursor ? `&after_seq=${cursor}` : ""}`)).body;
-      for (const e of (ev.data ?? []).filter((e: any) => e.type === "tool.confirm")) {
-        const live = (await get(`${NAIVE}/sessions/${s.id}/operator_preview?tool_call_id=${e.data?.tool_call_id}`)).status === 200;
-        if (live) out.push({ session: s.id, agent: ids.get(s.agent_id), tool: e.data?.name, call: e.data?.tool_call_id, args: e.data?.args });
-      }
+      events.push(...(ev.data ?? []));
       if (!ev.has_more || !ev.next_cursor) break;
       cursor = ev.next_cursor;
     }
+    let lastRun = -1; events.forEach((e, i) => { if (e.type === "session.running") lastRun = i; });
+    for (const e of events.slice(lastRun + 1).filter((e) => e.type === "tool.confirm"))
+      out.push({ session: s.id, agent: ids.get(s.agent_id), tool: e.data?.name, call: e.data?.tool_call_id, args: e.data?.args });
   }
   return out;
 }
