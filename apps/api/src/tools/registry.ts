@@ -19,7 +19,7 @@ const REAL: ServiceModule = { ...outreach, ...verify, ...payments, ...growth };
 export const INTERNAL_TOOLS: ToolName[] = [
   "get_job", "find_people", "send_blast", "check_proof", "approve_proof", "escalate",
   "capture_payment", "payout", "refund", "ledger", "refund_large", "release_payout_large",
-  "list_prospects", "send_marketing", "suppress_contact", "recruit_search", "recruit_invite", "growth_report", "redeem_promo",
+  "list_prospects", "send_marketing", "suppress_contact", "post_social", "recruit_search", "recruit_invite", "growth_report", "redeem_promo",
   "reddit_research",
 ];
 

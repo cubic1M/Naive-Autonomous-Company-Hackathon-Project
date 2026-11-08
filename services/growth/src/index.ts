@@ -10,6 +10,8 @@ export { decide, RECENT_DAYS, type Decision } from './guard.js';
 export { cleanPersonalLine, renderInvite, renderMarketing } from './templates.js';
 export { joinUrl, signLink, unsubscribeUrl, verifyLink } from './links.js';
 export { createGrowthTools, type GrowthTools } from './tools.js';
+export { DISCLOSURE, postSocial, type PublishOutcome, type SocialPostResult, type SocialPublisher, type SocialStatus } from './social.js';
+export { ZernioPublisher, type ZernioConfig } from './zernio.js';
 export { joinAction, joinPage, unsubscribePage, type PageResult } from './pages.js';
 export { growthReport, type GrowthReport } from './report.js';
 export { classifyJob, demandFrom, targetFor } from './demand.js';

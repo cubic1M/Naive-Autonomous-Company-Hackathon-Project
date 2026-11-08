@@ -111,3 +111,46 @@ export interface VerificationRow {
   kind: string;
   status: string;
 }
+
+/** Where post_social may post: Operis's own account on each. */
+export const SOCIAL_PLATFORMS = ['x', 'threads', 'bluesky'] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+/**
+ * One post_social attempt (growth_social_posts, migrations/0002_social.sql). pending: handed to the provider, outcome
+ * not recorded yet; unknown: it may be live (timeout, provider 5xx, post held). Both count as posted for every rule.
+ */
+export type SocialPostStatus = 'pending' | 'posted' | 'unknown' | 'dry_run' | 'skipped' | 'failed';
+
+export interface SocialPost {
+  id: string;
+  platform: SocialPlatform;
+  status: SocialPostStatus;
+  reason: string | null;
+  /** Exactly what was, or would have been, posted: the disclosure line included. */
+  body: string;
+  /** sha256 of the normalized text (social.ts): the exact-repeat check. */
+  body_hash: string;
+  /** Who posted it ('zernio'), its post id there and the live post's URL, once known. */
+  provider: string | null;
+  provider_post_id: string | null;
+  url: string | null;
+  created_at: Date;
+}
+
+export interface NewSocialPost {
+  platform: SocialPlatform;
+  status: SocialPostStatus;
+  reason?: string | null;
+  body: string;
+  body_hash: string;
+}
+
+/** How a pending attempt ended. */
+export interface SocialPostOutcome {
+  status: 'posted' | 'unknown' | 'failed';
+  reason?: string | null;
+  provider?: string | null;
+  provider_post_id?: string | null;
+  url?: string | null;
+}

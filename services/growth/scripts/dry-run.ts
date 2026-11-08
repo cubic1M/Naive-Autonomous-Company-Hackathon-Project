@@ -42,6 +42,13 @@ const env: GrowthEnv = {
   GROWTH_SALES_NAIVE_INBOX_ID: null,
   GROWTH_SALES_AGENTMAIL_INBOX: null,
   GROWTH_RECRUIT_AGENTMAIL_INBOX: null,
+  GROWTH_SOCIAL_LIVE: [],
+  GROWTH_SOCIAL_PAUSE: false,
+  GROWTH_SOCIAL_DAILY_CAP: 3,
+  ZERNIO_API_KEY: null,
+  ZERNIO_X_ACCOUNT_ID: null,
+  ZERNIO_THREADS_ACCOUNT_ID: null,
+  ZERNIO_BLUESKY_ACCOUNT_ID: null,
 };
 
 const person = (name: string, email: string, headline: string, handle: string): Lead => ({

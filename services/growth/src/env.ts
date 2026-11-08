@@ -1,7 +1,9 @@
 /**
- * Configuration for services/growth (the Sales agent's marketing email, the Recruiter's invites). Only
- * growthEnvFromProcess() reads process.env, so tests build a GrowthEnv by hand. Secret values are never logged.
+ * Configuration for services/growth (the Sales agent's marketing email and social posts, the Recruiter's invites).
+ * Only growthEnvFromProcess() reads process.env, so tests build a GrowthEnv by hand. Secret values are never logged.
  */
+import { SOCIAL_PLATFORMS, type SocialPlatform } from './types.js';
+
 export type LiveKind = 'sales' | 'recruit';
 
 export interface GrowthEnv {
@@ -42,7 +44,23 @@ export interface GrowthEnv {
   GROWTH_SALES_AGENTMAIL_INBOX: string | null;
   /** Invite sender: an AgentMail inbox through Monid. Defaults to AGENTMAIL_INBOX (Andrew's ops@mail.operis.live). */
   GROWTH_RECRUIT_AGENTMAIL_INBOX: string | null;
+
+  /** Platforms where post_social really posts. Empty (the default): every post is a dry run, logged and never sent. */
+  GROWTH_SOCIAL_LIVE: SocialPlatform[];
+  /** Kill switch: GROWTH_SOCIAL_PAUSE=true skips every post_social call. GROWTH_PAUSE (and PAUSE_OUTREACH) stop it too. */
+  GROWTH_SOCIAL_PAUSE: boolean;
+  /** Posts (real, unknown outcome and dry runs) per platform per Pacific day. Never above SOCIAL_DAILY_CAP_MAX. */
+  GROWTH_SOCIAL_DAILY_CAP: number;
+  /** Zernio (docs.zernio.com) holds the platform tokens; Operis keeps only this key, server-side. */
+  ZERNIO_API_KEY: string | null;
+  /** The Zernio account (_id from GET /v1/accounts) of Operis's own profile on each platform; nothing else is posted to. */
+  ZERNIO_X_ACCOUNT_ID: string | null;
+  ZERNIO_THREADS_ACCOUNT_ID: string | null;
+  ZERNIO_BLUESKY_ACCOUNT_ID: string | null;
 }
+
+/** However GROWTH_SOCIAL_DAILY_CAP is set: far below every platform's limit (Threads allows 250 API posts a day). */
+export const SOCIAL_DAILY_CAP_MAX = 10;
 
 export const GROWTH_DEFAULTS = {
   GROWTH_SALES_DAILY_CAP: 25,
@@ -54,6 +72,7 @@ export const GROWTH_DEFAULTS = {
   GROWTH_PROMO_DAYS: 14,
   MONID_BASE_URL: 'https://api.monid.ai',
   NAIVE_BASE_URL: 'https://api.vetta.sh',
+  GROWTH_SOCIAL_DAILY_CAP: 3,
 } as const;
 
 const text = (v: string | undefined): string | null => (v !== undefined && v.trim() !== '' ? v.trim() : null);
@@ -69,6 +88,12 @@ function num(name: string, v: string | undefined, fallback: number): number {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) throw new Error(`${name} must be a non-negative number`);
   return n;
+}
+
+function platforms(v: string | undefined): SocialPlatform[] {
+  const out = list(v);
+  for (const p of out) if (!(SOCIAL_PLATFORMS as readonly string[]).includes(p)) throw new Error(`GROWTH_SOCIAL_LIVE: unknown platform "${p}" (use ${SOCIAL_PLATFORMS.join(', ')})`);
+  return out as SocialPlatform[];
 }
 
 function required(name: string, v: string | undefined): string {
@@ -103,5 +128,12 @@ export function growthEnvFromProcess(src: NodeJS.ProcessEnv = process.env): Grow
     GROWTH_SALES_NAIVE_INBOX_ID: text(src.GROWTH_SALES_NAIVE_INBOX_ID),
     GROWTH_SALES_AGENTMAIL_INBOX: text(src.GROWTH_SALES_AGENTMAIL_INBOX),
     GROWTH_RECRUIT_AGENTMAIL_INBOX: text(src.GROWTH_RECRUIT_AGENTMAIL_INBOX) ?? text(src.AGENTMAIL_INBOX),
+    GROWTH_SOCIAL_LIVE: platforms(src.GROWTH_SOCIAL_LIVE),
+    GROWTH_SOCIAL_PAUSE: flag(src.GROWTH_SOCIAL_PAUSE),
+    GROWTH_SOCIAL_DAILY_CAP: Math.min(SOCIAL_DAILY_CAP_MAX, num('GROWTH_SOCIAL_DAILY_CAP', src.GROWTH_SOCIAL_DAILY_CAP, d.GROWTH_SOCIAL_DAILY_CAP)),
+    ZERNIO_API_KEY: text(src.ZERNIO_API_KEY),
+    ZERNIO_X_ACCOUNT_ID: text(src.ZERNIO_X_ACCOUNT_ID),
+    ZERNIO_THREADS_ACCOUNT_ID: text(src.ZERNIO_THREADS_ACCOUNT_ID),
+    ZERNIO_BLUESKY_ACCOUNT_ID: text(src.ZERNIO_BLUESKY_ACCOUNT_ID),
   };
 }

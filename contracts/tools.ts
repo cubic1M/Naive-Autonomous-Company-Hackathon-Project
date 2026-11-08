@@ -41,6 +41,9 @@ export interface GrowthProspect {
   contact_id: string; name: string | null; org: string | null; email_domain: string; notes: string | null; found_via: string; free_first_job: boolean;
 }
 export interface GrowthDemand { last_7d: number; prior_7d: number; projected_next_7d: number; unfilled_7d: number }
+export type GrowthSocialPlatform = "x" | "threads" | "bluesky";
+/** post_social: posted (live), dry_run (platform not live), skipped (a rule said no), failed (not live), unknown (may be live). */
+export type GrowthPostStatus = "posted" | "dry_run" | "skipped" | "failed" | "unknown";
 export interface GrowthReport {
   day: string;
   live: { sales: boolean; recruit: boolean };
@@ -183,6 +186,11 @@ export interface Tools {
     { contact_id: string; status: GrowthSendStatus; reason?: string; promo?: { granted: boolean; cap_usd?: number; expires_at?: string; reason?: string } }
   >;
   suppress_contact: ToolSpec<{ email: string; reason: string }, { suppressed: true; matched_contacts: number; matched_workers: number }>;
+  /** One post from Operis's own account; the code adds the AI disclosure line and enforces caps, links, length and no repeats. */
+  post_social: ToolSpec<
+    { platform: GrowthSocialPlatform; text: string },
+    { platform: GrowthSocialPlatform; status: GrowthPostStatus; reason?: string; text: string; url?: string; used_today: number; daily_cap: number }
+  >;
   recruit_search: ToolSpec<
     { family: GrowthFamily; limit?: number },
     {
@@ -225,6 +233,7 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   list_prospects:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   send_marketing:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   suppress_contact: { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
+  post_social:      { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
   recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter", "sales"] },
   growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
