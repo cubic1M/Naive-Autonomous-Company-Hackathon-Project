@@ -195,7 +195,7 @@ See `.env.example`. Never commit real values.
 
 ## Database
 
-`migrations/0001_money_verification.sql` is idempotent plain SQL (`create table if not exists`, `drop constraint if exists` + `add constraint`) and creates only this package's tables: `escrows`, `ledger`, `stripe_events`, `payouts`, `proof_reviews`, `worker_verifications`, `notary_registry`, `disputes`. It never creates or alters `jobs` / `workers` / `proofs`. `migrations/0002_customer_payment.sql` adds `customers.stripe_customer_id` and `customers.default_payment_method_id` (`alter table ... add column if not exists`), the card on file; `PostgresRepo` reads `customers` with `select *`, so until it has run the code behaves as "no card on file" instead of failing. The writes to teammates' tables are `workers.stripe_connect_account` and those two columns.
+`migrations/0001_money_verification.sql` is idempotent plain SQL (`create table if not exists`, `drop constraint if exists` + `add constraint`) and creates only this package's tables: `escrows`, `ledger`, `stripe_events`, `payouts`, `proof_reviews`, `worker_verifications`, `notary_registry`, `disputes`. It never creates or alters `jobs` / `workers` / `proofs`. `migrations/0002_customer_payment.sql` adds `customers.stripe_customer_id` and `customers.default_payment_method_id` (`alter table ... add column if not exists`), the card on file; `PostgresRepo` finds a job's card on file with `select c.* from jobs j join customers c on c.id = j.customer_id`, so until the migration has run the code behaves as "no card on file" instead of failing; the `Job` view and `mapJob` are unchanged. The writes to teammates' tables are `workers.stripe_connect_account` and those two columns.
 
 Run by hand, after Edwin has reviewed it:
 

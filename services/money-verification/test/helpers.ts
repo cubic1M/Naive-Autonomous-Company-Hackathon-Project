@@ -38,7 +38,6 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
   const q = quote(overrides.budget_cents ?? 6_000);
   return {
     id: JOB_ID,
-    customer_id: CUSTOMER_ID,
     task_type: 'inspection',
     budget_cents: q.priceCents,
     worker_pay_cents: q.workerPayCents,

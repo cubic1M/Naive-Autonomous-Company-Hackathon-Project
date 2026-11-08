@@ -25,6 +25,8 @@ import type {
 export class InMemoryRepo implements Repo {
   jobs = new Map<string, Job>();
   customers = new Map<string, CustomerPayment>();
+  /** jobs.customer_id, which the Job view does not carry: job id -> customer id. */
+  jobCustomers = new Map<string, string>();
   workers = new Map<string, Worker>();
   proofs = new Map<string, Proof>();
   escrows = new Map<string, Escrow>();
@@ -50,6 +52,10 @@ export class InMemoryRepo implements Repo {
   seedCustomer(customer: CustomerPayment): CustomerPayment {
     this.customers.set(customer.customer_id, { ...customer });
     return customer;
+  }
+  /** The job was requested by this customer (jobs.customer_id). */
+  linkJobToCustomer(jobId: string, customerId: string): void {
+    this.jobCustomers.set(jobId, customerId);
   }
   seedProof(proof: Proof): Proof {
     this.proofs.set(proof.id, proof);
@@ -83,6 +89,10 @@ export class InMemoryRepo implements Repo {
   async getCustomerPayment(customerId: string) {
     const c = this.customers.get(customerId);
     return c ? { ...c } : null;
+  }
+  async getCustomerPaymentForJob(jobId: string) {
+    const customerId = this.jobCustomers.get(jobId);
+    return customerId ? this.getCustomerPayment(customerId) : null;
   }
   async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
     const c = this.customers.get(customerId);

@@ -51,11 +51,10 @@ interface Instrument {
   customer?: string;
 }
 
-/** The instrument that can fund the job without Checkout: the one passed in the call, else the customer's card on file. */
+/** The instrument that can fund the job without Checkout: the one passed in the call, else the requester's card on file. */
 async function chooseInstrument(repo: Repo, job: Job, opts: CreateEscrowOptions): Promise<Instrument | null> {
   if (opts.paymentMethod) return { paymentMethod: opts.paymentMethod };
-  if (!job.customer_id) return null;
-  const c = await repo.getCustomerPayment(job.customer_id);
+  const c = await repo.getCustomerPaymentForJob(job.id);
   if (!c?.default_payment_method_id) return null;
   return { paymentMethod: c.default_payment_method_id, ...(c.stripe_customer_id ? { customer: c.stripe_customer_id } : {}) };
 }

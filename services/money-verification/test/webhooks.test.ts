@@ -289,6 +289,7 @@ describe('checkout.session.completed in setup mode (card on file)', () => {
     const world = makeWorld();
     const { link } = await saveCard(world);
     const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
     const r = await createEscrow(world.deps, job);
     expect(r).toMatchObject({ url: null, funded: true });
     expect(world.stripe.callsTo('paymentIntents.create')[0]?.params).toMatchObject({ customer: link.stripeCustomerId, payment_method: 'pm_saved_1' });

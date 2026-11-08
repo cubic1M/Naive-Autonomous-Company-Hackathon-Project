@@ -249,6 +249,7 @@ describe('create_escrow with a card on file', () => {
     const { world, tools } = worldWithTools();
     world.repo.seedJob(makeJob({ status: 'requested' }));
     world.repo.seedCustomer({ customer_id: CUSTOMER_ID, name: null, email: null, stripe_customer_id: 'cus_acme', default_payment_method_id: 'pm_saved_acme' });
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
     const held = await tools.create_escrow({ job_id: JOB_ID });
     expect(held).toEqual({ job_id: JOB_ID, checkout_url: null, amount_cents: 6000, status: 'authorized', funded: true });
     expect(toolSchemas.create_escrow.output.parse(held)).toEqual(held);

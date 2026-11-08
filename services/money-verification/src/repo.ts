@@ -43,6 +43,8 @@ export interface Repo {
   setWorkerConnectAccount(workerId: string, accountId: string): Promise<void>;
   /** The customer's card on file: customers.stripe_customer_id / default_payment_method_id (migration 0002). */
   getCustomerPayment(customerId: string): Promise<CustomerPayment | null>;
+  /** The card on file of the customer who requested the job (jobs.customer_id); null when the job has none. */
+  getCustomerPaymentForJob(jobId: string): Promise<CustomerPayment | null>;
   /** The other write to a teammates' table: the Stripe Customer and default PaymentMethod ids this package saves. */
   setCustomerPayment(
     customerId: string,

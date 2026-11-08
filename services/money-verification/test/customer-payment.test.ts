@@ -14,6 +14,14 @@ describe('InMemoryRepo: customers', () => {
     expect(await repo.getCustomerPayment(CUSTOMER_ID)).toMatchObject({ customer_id: CUSTOMER_ID, stripe_customer_id: null });
   });
 
+  it('getCustomerPaymentForJob follows the job to its customer, null for an unlinked job', async () => {
+    const repo = new InMemoryRepo();
+    repo.seedCustomer({ ...noCard, default_payment_method_id: 'pm_1' });
+    expect(await repo.getCustomerPaymentForJob('job-1')).toBeNull();
+    repo.linkJobToCustomer('job-1', CUSTOMER_ID);
+    expect(await repo.getCustomerPaymentForJob('job-1')).toMatchObject({ customer_id: CUSTOMER_ID, default_payment_method_id: 'pm_1' });
+  });
+
   it('setCustomerPayment merges only the given fields', async () => {
     const repo = new InMemoryRepo();
     repo.seedCustomer({ ...noCard, stripe_customer_id: 'cus_1' });

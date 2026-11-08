@@ -98,7 +98,6 @@ function mapJob(r: Row): Job {
   }
   return {
     id: String(r.id),
-    customer_id: r.customer_id == null ? null : String(r.customer_id),
     task_type: taskTypeOf(r),
     budget_cents,
     worker_pay_cents,
@@ -305,6 +304,13 @@ export class PostgresRepo implements Repo {
   }
   getCustomerPayment(customerId: string) {
     return this.one('select * from customers where id = $1', [customerId], mapCustomerPayment);
+  }
+  getCustomerPaymentForJob(jobId: string) {
+    return this.one(
+      'select c.* from jobs j join customers c on c.id = j.customer_id where j.id = $1',
+      [jobId],
+      mapCustomerPayment,
+    );
   }
   async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
     await this.sql.query(

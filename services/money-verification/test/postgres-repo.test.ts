@@ -115,13 +115,13 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
 const CUSTOMER = '00000000-0000-4000-8000-0000000000c1';
 
 describe('PostgresRepo: customers (card on file, migration 0002)', () => {
-  const jobRow = { id: JOB, title: 'x', lat: 0, lng: 0, deadline: new Date(), budget_usd: '60', proof_requirement: {}, status: 'requested' };
-
-  it('maps customer_id from the jobs row, null when the column is absent', async () => {
-    const withCustomer = fakeSql([{ match: 'from jobs', rows: [{ ...jobRow, customer_id: CUSTOMER }] }]);
-    expect((await new PostgresRepo(withCustomer).getJob(JOB))?.customer_id).toBe(CUSTOMER);
-    const without = fakeSql([{ match: 'from jobs', rows: [jobRow] }]);
-    expect((await new PostgresRepo(without).getJob(JOB))?.customer_id).toBeNull();
+  it('finds the card on file of the customer who requested the job through jobs.customer_id', async () => {
+    const sql = fakeSql([{ match: 'join customers', rows: [{ id: CUSTOMER, name: 'Acme Agent', contact_email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' }] }]);
+    const c = await new PostgresRepo(sql).getCustomerPaymentForJob(JOB);
+    expect(c).toEqual({ customer_id: CUSTOMER, name: 'Acme Agent', email: null, stripe_customer_id: 'cus_1', default_payment_method_id: 'pm_1' });
+    expect(sql.calls[0]?.text).toMatch(/select c\.\* from jobs j join customers c on c\.id = j\.customer_id where j\.id = \$1/);
+    expect(sql.calls[0]?.params).toEqual([JOB]);
+    expect(await new PostgresRepo(fakeSql([])).getCustomerPaymentForJob(JOB)).toBeNull();
   });
 
   it('reads customers with select *, so a row from before the migration means no card on file', async () => {

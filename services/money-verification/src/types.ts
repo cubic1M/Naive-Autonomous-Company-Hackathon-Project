@@ -28,8 +28,6 @@ export interface ProofSchema {
 /** Read-only view of teammates' `jobs` table. */
 export interface Job {
   id: string;
-  /** The customer whose agent requested the job (jobs.customer_id); its card on file funds the escrow without Checkout. */
-  customer_id: string | null;
   task_type: TaskType;
   budget_cents: number;
   worker_pay_cents: number;

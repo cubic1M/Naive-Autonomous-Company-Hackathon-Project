@@ -26,6 +26,7 @@ const dashboardRefund = async (w: World, paymentIntentId: string, amount: number
 
 const DAY_MS = 24 * HOUR_MS;
 const JOB_B = '00000000-0000-4000-8000-0000000000b2';
+const OTHER_CUSTOMER = '00000000-0000-4000-8000-0000000000c2';
 
 interface CheckoutParams {
   mode: string;
@@ -845,6 +846,7 @@ describe('createEscrow: direct hold against a payment instrument (agent-payable 
     const world = makeWorld();
     world.repo.seedCustomer(CUSTOMER);
     const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
     const r = await createEscrow(world.deps, job);
     expect(r).toMatchObject({ url: null, funded: true });
     expect(piCalls(world)[0]?.params).toMatchObject({ customer: 'cus_acme', payment_method: 'pm_saved_acme', off_session: true });
@@ -855,16 +857,30 @@ describe('createEscrow: direct hold against a payment instrument (agent-payable 
     const world = makeWorld();
     world.repo.seedCustomer(CUSTOMER);
     const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
     await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
     const params = piCalls(world)[0]?.params;
     expect(params).toMatchObject({ payment_method: 'pm_card_visa' });
     expect(params).not.toHaveProperty('customer');
   });
 
+  it("never charges another customer's card: the job's own customer has none, so Checkout", async () => {
+    const world = makeWorld();
+    world.repo.seedCustomer(CUSTOMER);
+    world.repo.seedCustomer({ ...CUSTOMER, customer_id: OTHER_CUSTOMER, stripe_customer_id: null, default_payment_method_id: null });
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, OTHER_CUSTOMER);
+    const r = await createEscrow(world.deps, job);
+    expect(r.funded).toBe(false);
+    expect(r.url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
+    expect(piCalls(world)).toHaveLength(0);
+  });
+
   it('no instrument: the Checkout path is unchanged and reports not funded', async () => {
     const world = makeWorld();
     world.repo.seedCustomer({ ...CUSTOMER, default_payment_method_id: null });
     const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.linkJobToCustomer(JOB_ID, CUSTOMER_ID);
     const r = await createEscrow(world.deps, job);
     expect(r.funded).toBe(false);
     expect(r.fallback_reason).toBeUndefined();
