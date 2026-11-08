@@ -105,8 +105,8 @@ export function createTools(deps: ToolDeps): Tools {
     async create_escrow(raw) {
       const { job_id } = parse('create_escrow', raw);
       const job = await requireJob(deps.repo, job_id);
-      const { url, escrow } = await createEscrow(escrowDeps, job);
-      return { job_id, checkout_url: url, amount_cents: escrow.amount_cents, status: escrow.status };
+      const { url, escrow, funded } = await createEscrow(escrowDeps, job);
+      return { job_id, checkout_url: url, amount_cents: escrow.amount_cents, status: escrow.status, funded };
     },
     async capture_escrow(raw) {
       const { job_id } = parse('capture_escrow', raw);

@@ -159,3 +159,12 @@ describe('FakeStripe: direct PaymentIntents, customers, setup-mode sessions', ()
     expect(() => world.stripe.amountCapturableUpdatedEvent('pi_missing')).toThrow(/No such payment intent/);
   });
 });
+
+describe('FakeStripe: unknown payment methods', () => {
+  it('answers an id that is not a PaymentMethod with invalid_request_error / resource_missing, as Stripe does', async () => {
+    const world = makeWorld();
+    await expect(
+      world.stripe.paymentIntents.create({ amount: 100, currency: 'usd', confirm: true, payment_method: 'tok_not_a_pm' }),
+    ).rejects.toMatchObject({ rawType: 'invalid_request_error', code: 'resource_missing', param: 'payment_method' });
+  });
+});

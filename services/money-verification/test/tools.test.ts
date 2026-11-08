@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
 import { callTool, createTools, describeToolError, resolveToolName, TOOL_NAMES, toolSchemas } from '../src/tools.js';
 import type { VisionScorer } from '../src/proof/vision.js';
-import { JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
+import { CUSTOMER_ID, JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
 
 const passingScorer: VisionScorer = {
   async score(input) {
@@ -241,5 +241,26 @@ describe('tool layer', () => {
     expect(resolveToolName('capture_payment')).toBe('capture_escrow');
     expect(TOOL_NAMES).toHaveLength(Object.keys(toolSchemas).length);
     for (const name of TOOL_NAMES) expect(toolSchemas[name].description.length).toBeGreaterThan(10);
+  });
+});
+
+describe('create_escrow with a card on file', () => {
+  it('funds the job directly: checkout_url null, status authorized, funded true, onJobFunded fired', async () => {
+    const { world, tools } = worldWithTools();
+    world.repo.seedJob(makeJob({ status: 'requested' }));
+    world.repo.seedCustomer({ customer_id: CUSTOMER_ID, name: null, email: null, stripe_customer_id: 'cus_acme', default_payment_method_id: 'pm_saved_acme' });
+    const held = await tools.create_escrow({ job_id: JOB_ID });
+    expect(held).toEqual({ job_id: JOB_ID, checkout_url: null, amount_cents: 6000, status: 'authorized', funded: true });
+    expect(toolSchemas.create_escrow.output.parse(held)).toEqual(held);
+    expect(world.fired.filter((f) => f.name === 'onJobFunded')).toHaveLength(1);
+  });
+
+  it('without one, the Checkout answer carries funded false and still validates', async () => {
+    const { world, tools } = worldWithTools();
+    world.repo.seedJob(makeJob({ status: 'requested' }));
+    const held = await tools.create_escrow({ job_id: JOB_ID });
+    expect(held).toMatchObject({ status: 'pending', funded: false });
+    expect(held.checkout_url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
+    expect(toolSchemas.create_escrow.output.parse(held)).toEqual(held);
   });
 });

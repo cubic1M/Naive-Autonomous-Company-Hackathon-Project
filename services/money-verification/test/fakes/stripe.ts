@@ -515,6 +515,14 @@ export class FakeStripe implements StripeClient {
       this.record('paymentIntents.create', params, options);
       return this.idempotent('paymentIntents.create', params, options, () => {
         const pm = params.payment_method ?? null;
+        if (pm !== null && !pm.startsWith('pm_')) {
+          throw new Stripe.errors.StripeInvalidRequestError({
+            type: 'invalid_request_error',
+            code: 'resource_missing',
+            param: 'payment_method',
+            message: `No such PaymentMethod: '${pm}'`,
+          });
+        }
         const pi: FakePI = {
           id: this.nextId('pi_test'),
           object: 'payment_intent',

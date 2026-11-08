@@ -12,9 +12,11 @@ import {
   refund,
   releaseEscrow,
 } from '../src/escrow.js';
+import Stripe from 'stripe';
 import { DailyCapExceededError, InvalidStateError, RequiresApprovalError } from '../src/errors.js';
+import type { StripeClient } from '../src/stripe-client.js';
 import type { Job } from '../src/types.js';
-import { HOUR_MS, JOB_ID, MINUTE_MS, T0, fundAndCapture, makeJob, makeWorld, type World } from './helpers.js';
+import { CUSTOMER_ID, HOUR_MS, JOB_ID, MINUTE_MS, T0, fundAndCapture, makeJob, makeWorld, type World } from './helpers.js';
 
 /** The most recent refund the fake created, in the shape the refund.created webhook delivers it. */
 const lastStripeRefund = (w: World) => [...w.stripe.rfStore.values()].at(-1) as unknown as Parameters<typeof recordStripeRefund>[1];
@@ -717,5 +719,167 @@ describe('expireStaleEscrows', () => {
     await createAndAuthorize(world, job);
     world.clock.advance(7 * DAY_MS - MINUTE_MS);
     expect(await expireStaleEscrows(world.deps)).toEqual([]);
+  });
+});
+
+describe('createEscrow: direct hold against a payment instrument (agent-payable escrow)', () => {
+  const fundedHooks = (world: World) => world.fired.filter((f) => f.name === 'onJobFunded');
+  const piCalls = (world: World) => world.stripe.callsTo('paymentIntents.create');
+  const checkoutCalls = (world: World) => world.stripe.callsTo('checkout.sessions.create');
+  const CUSTOMER = {
+    customer_id: CUSTOMER_ID,
+    name: 'Acme Agent',
+    email: 'ops@acme.test',
+    stripe_customer_id: 'cus_acme',
+    default_payment_method_id: 'pm_saved_acme',
+  };
+
+  it('authorizes a passed payment_method off-session: no Checkout, escrow authorized, hold line, funded, onJobFunded', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+
+    expect(r.url).toBeNull();
+    expect(r.funded).toBe(true);
+    expect(r.fallback_reason).toBeUndefined();
+    expect(checkoutCalls(world)).toHaveLength(0);
+    const call = piCalls(world)[0];
+    expect(call?.params).toMatchObject({
+      amount: 6000,
+      currency: 'usd',
+      payment_method: 'pm_card_visa',
+      off_session: true,
+      confirm: true,
+      capture_method: 'manual',
+      transfer_group: `job:${JOB_ID}`,
+      metadata: { job_id: JOB_ID },
+    });
+    expect(call?.params).not.toHaveProperty('customer');
+    expect(call?.idempotencyKey).toBe(`escrow:${JOB_ID}:pi`);
+
+    const row = await world.repo.getEscrow(JOB_ID);
+    expect(row).toMatchObject({ status: 'authorized', stripe_checkout_session_id: null, amount_cents: 6000 });
+    expect(row?.stripe_payment_intent_id).toMatch(/^pi_test_/);
+    expect(row?.authorization_expires_at?.getTime()).toBe(T0.getTime() + AUTHORIZATION_TTL_MS);
+    expect(r.escrow).toEqual(row);
+    expect(world.repo.ledger.map((l) => [l.kind, l.amount_cents, l.idempotency_key, l.stripe_ref])).toEqual([
+      ['escrow_hold', 6000, `escrow_hold:${JOB_ID}`, row?.stripe_payment_intent_id],
+    ]);
+    expect(fundedHooks(world).map((f) => f.args)).toEqual([[JOB_ID]]);
+  });
+
+  it('a retry returns the same funded escrow with no second Stripe call, line or hook', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const first = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    const again = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    expect(again).toMatchObject({ url: null, funded: true });
+    expect(again.escrow.stripe_payment_intent_id).toBe(first.escrow.stripe_payment_intent_id);
+    expect(piCalls(world)).toHaveLength(1);
+    expect(world.repo.ledger.filter((l) => l.kind === 'escrow_hold')).toHaveLength(1);
+    expect(fundedHooks(world)).toHaveLength(1);
+  });
+
+  it('a declined card falls back to Checkout with the reason, under the Checkout key', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_chargeDeclined' });
+    expect(r.funded).toBe(false);
+    expect(r.fallback_reason).toBe('card_declined');
+    expect(r.url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
+    expect(piCalls(world)[0]?.idempotencyKey).toBe(`escrow:${JOB_ID}:pi`);
+    expect(checkoutCalls(world)[0]?.idempotencyKey).toBe(`escrow:${JOB_ID}`);
+    const row = await world.repo.getEscrow(JOB_ID);
+    expect(row?.status).toBe('pending');
+    expect(row?.stripe_checkout_session_id).toMatch(/^cs_test_/);
+    const declined = [...world.stripe.piStore.values()].find((p) => p.payment_method === 'pm_card_chargeDeclined');
+    expect(declined?.status).toBe('requires_payment_method');
+    expect(row?.stripe_payment_intent_id).not.toBe(declined?.id);
+    expect(fundedHooks(world)).toHaveLength(0);
+  });
+
+  it('a card that needs authentication falls back with authentication_required', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_authenticationRequired' });
+    expect(r).toMatchObject({ funded: false, fallback_reason: 'authentication_required' });
+    expect(r.url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
+  });
+
+  it('an id that is not a PaymentMethod falls back with invalid_payment_method', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job, { paymentMethod: 'tok_visa' });
+    expect(r).toMatchObject({ funded: false, fallback_reason: 'invalid_payment_method' });
+    expect((await world.repo.getEscrow(JOB_ID))?.status).toBe('pending');
+  });
+
+  it('any other Stripe failure propagates: no silent fallback, no escrow row', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const broken: StripeClient = {
+      ...world.stripe,
+      paymentIntents: {
+        ...world.stripe.paymentIntents,
+        create: async () => {
+          throw new Stripe.errors.StripeAPIError({ type: 'api_error', message: 'stripe is down' });
+        },
+      },
+    };
+    await expect(createEscrow({ ...world.deps, stripe: broken }, job, { paymentMethod: 'pm_card_visa' })).rejects.toThrow('stripe is down');
+    expect(await world.repo.getEscrow(JOB_ID)).toBeNull();
+    expect(checkoutCalls(world)).toHaveLength(0);
+  });
+
+  it('the daily cap applies before any Stripe call on the direct path too', async () => {
+    const world = makeWorld();
+    const jobA = world.repo.seedJob(makeJob({ budget_cents: 150_000, status: 'requested' }));
+    const jobB = world.repo.seedJob(makeJob({ id: JOB_B, budget_cents: 60_000, status: 'requested' }));
+    await createEscrow(world.deps, jobA, { paymentMethod: 'pm_card_visa' });
+    await expect(createEscrow(world.deps, jobB, { paymentMethod: 'pm_card_visa' })).rejects.toBeInstanceOf(DailyCapExceededError);
+    expect(piCalls(world)).toHaveLength(1);
+    expect(await world.repo.getEscrow(JOB_B)).toBeNull();
+  });
+
+  it('card on file: funds from the saved instrument and Stripe Customer with no option passed', async () => {
+    const world = makeWorld();
+    world.repo.seedCustomer(CUSTOMER);
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job);
+    expect(r).toMatchObject({ url: null, funded: true });
+    expect(piCalls(world)[0]?.params).toMatchObject({ customer: 'cus_acme', payment_method: 'pm_saved_acme', off_session: true });
+    expect(checkoutCalls(world)).toHaveLength(0);
+  });
+
+  it('a payment_method passed in the call wins over the card on file and is charged without the Customer', async () => {
+    const world = makeWorld();
+    world.repo.seedCustomer(CUSTOMER);
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    const params = piCalls(world)[0]?.params;
+    expect(params).toMatchObject({ payment_method: 'pm_card_visa' });
+    expect(params).not.toHaveProperty('customer');
+  });
+
+  it('no instrument: the Checkout path is unchanged and reports not funded', async () => {
+    const world = makeWorld();
+    world.repo.seedCustomer({ ...CUSTOMER, default_payment_method_id: null });
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const r = await createEscrow(world.deps, job);
+    expect(r.funded).toBe(false);
+    expect(r.fallback_reason).toBeUndefined();
+    expect(r.url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
+    expect(piCalls(world)).toHaveLength(0);
+    expect(fundedHooks(world)).toHaveLength(0);
+  });
+
+  it('an existing pending Checkout escrow keeps its session even when an instrument is passed later', async () => {
+    const world = makeWorld();
+    const job = world.repo.seedJob(makeJob({ status: 'requested' }));
+    const first = await createEscrow(world.deps, job);
+    const second = await createEscrow(world.deps, job, { paymentMethod: 'pm_card_visa' });
+    expect(second.url).toBe(first.url);
+    expect(second.funded).toBe(false);
+    expect(piCalls(world)).toHaveLength(0);
   });
 });
