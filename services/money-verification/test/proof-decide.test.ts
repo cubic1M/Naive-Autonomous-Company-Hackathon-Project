@@ -60,6 +60,8 @@ function setup(opts: Setup = {}) {
 const check = (r: { checks: { name: string }[] }, name: string) => r.checks.find((c) => c.name === name) as
   | { name: string; status: string; detail: string }
   | undefined;
+/** The checks that kept a review from passing, so a test can pin the one reason it escalated. */
+const flagged = (r: { checks: { name: string; status: string }[] }) => r.checks.filter((c) => c.status !== 'pass').map((c) => c.name);
 
 describe('reviewProof', () => {
   it('(a) approves when everything passes', async () => {
@@ -102,29 +104,35 @@ describe('reviewProof', () => {
 
   it('(d) escalates when the file has no EXIF (device GPS inside the fence)', async () => {
     const scorer = new FakeScorer({ confidence: 0.95, mustShowFound: {}, notes: '' });
-    const { deps } = setup({ scorer });
+    const { world, deps } = setup({ scorer });
+    await seedVerifiedIdentity(world); // so the missing EXIF time is the only reason to escalate
     const real: DecideDeps = { ...deps, readExif: undefined, readMedia: async () => new Uint8Array(64).fill(7) };
     const review = await reviewProof(real, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['time']);
     expect(check(review, 'time')?.status).toBe('needs_review');
     expect(check(review, 'geofence')?.status).toBe('pass');
   });
 
   it('(e) escalates at confidence 0.7', async () => {
-    const { deps } = setup({ scorer: new FakeScorer({ confidence: 0.7, mustShowFound: {}, notes: '' }) });
+    const { world, deps } = setup({ scorer: new FakeScorer({ confidence: 0.7, mustShowFound: {}, notes: '' }) });
+    await seedVerifiedIdentity(world);
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['vision']);
     expect(review.confidence).toBe(0.7);
     expect(check(review, 'vision')?.status).toBe('needs_review');
   });
 
   it('(f) escalates when a must_show item is not found', async () => {
-    const { deps } = setup({
+    const { world, deps } = setup({
       job: { proof_schema: { photos: { min: 1, must_show: ['sign', 'corner'] }, geofence_m: 150 } },
       scorer: new FakeScorer({ confidence: 0.95, mustShowFound: { sign: true, corner: false }, notes: '' }),
     });
+    await seedVerifiedIdentity(world);
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['vision']);
     expect(check(review, 'vision')?.detail).toContain('corner');
   });
 
@@ -145,16 +153,20 @@ describe('reviewProof', () => {
   });
 
   it('(h) a VisionError escalates instead of crashing', async () => {
-    const { deps } = setup({ scorer: new FakeScorer(new VisionError('vision request failed: HTTP 500')) });
+    const { world, deps } = setup({ scorer: new FakeScorer(new VisionError('vision request failed: HTTP 500')) });
+    await seedVerifiedIdentity(world); // a verified worker: the scorer outage alone must stop the auto-approval
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['vision']);
     expect(check(review, 'vision')?.detail).toContain('HTTP 500');
   });
 
   it('escalates when no scorer is configured', async () => {
-    const { deps } = setup();
+    const { world, deps } = setup();
+    await seedVerifiedIdentity(world);
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['vision']);
     expect(check(review, 'vision')?.detail).toBe('no vision scorer configured');
   });
 });

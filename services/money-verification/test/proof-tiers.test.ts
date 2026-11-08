@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createContractTools } from '../src/contract-tools.js';
+import { createTools } from '../src/tools.js';
 import { checkEligibility } from '../src/eligibility.js';
 import { approveProof, reviewProof, type DecideDeps } from '../src/proof/decide.js';
 import type { IdentityGate } from '../src/env.js';
@@ -23,6 +24,8 @@ class CountingScorer implements VisionScorer {
 const img = (n: number) => ({ url: `https://blob.test/${n}.jpg`, sha256: String(n).repeat(64).slice(0, 64), mime: 'image/jpeg' });
 const twoPhotos = { media: [img(1), img(2)] };
 const check = (r: { checks: ProofCheck[] }, name: string) => r.checks.find((c) => c.name === name);
+/** The checks that kept a review from passing, so a test can pin the one reason it escalated. */
+const flagged = (r: { checks: ProofCheck[] }) => r.checks.filter((c) => c.status !== 'pass').map((c) => c.name);
 
 function setup(opts: { job?: Partial<Job>; proof?: Partial<Proof>; exif?: ExifData; confidence?: number; gate?: IdentityGate } = {}) {
   const world = makeWorld();
@@ -54,9 +57,11 @@ describe('tier 0 (under $50): device data is enough', () => {
   });
 
   it('the same proof at tier 1 ($60) escalates: EXIF capture time is required', async () => {
-    const { deps } = setup({ job: { budget_cents: 6000 }, exif: NO_EXIF, confidence: 0.95 });
+    const { world, deps } = setup({ job: { budget_cents: 6000 }, exif: NO_EXIF, confidence: 0.95 });
+    await seedVerifiedIdentity(world); // so the EXIF time is the only reason to escalate
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['time']);
     expect(check(review, 'profile')?.data).toMatchObject({ tier: 1, exif_time_policy: 'require' });
     expect(check(review, 'time')).toMatchObject({ status: 'needs_review' });
     expect(check(review, 'time')?.detail).toMatch(/missing EXIF capture time/);
@@ -71,16 +76,20 @@ describe('tier 0 (under $50): device data is enough', () => {
   });
 
   it('tier 0 still escalates when the device captured_at is missing too', async () => {
-    const { deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: null }, exif: NO_EXIF });
+    const { world, deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: null }, exif: NO_EXIF });
+    await seedVerifiedIdentity(world);
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['time']);
     expect(check(review, 'time')).toMatchObject({ status: 'needs_review' });
   });
 
   it('tier 0 escalates when the device captured_at is after the deadline', async () => {
-    const { deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: new Date(T0.getTime() + 5 * HOUR_MS) }, exif: NO_EXIF });
+    const { world, deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: new Date(T0.getTime() + 5 * HOUR_MS) }, exif: NO_EXIF });
+    await seedVerifiedIdentity(world); // a verified worker: the late capture alone must stop the auto-approval
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['time']);
     expect(check(review, 'time')).toMatchObject({ status: 'fail' });
   });
 
@@ -302,6 +311,54 @@ describe('every tier: no payment for a worker without a verified identity', () =
     const out = await checkEligibility({ repo: world.repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
     expect(out).toMatchObject({ eligible: true, tier: 0 });
     expect(out.reasons).toEqual([expect.stringMatching(/^identity_not_verified: every job requires a verified identity; .*not enforced \(IDENTITY_GATE=log\)$/)]);
+  });
+
+  it('a remote job needs a verified identity too: check_eligibility refuses and the review escalates on the identity alone', async () => {
+    const remote = { budget_cents: 3000, lat: null, lng: null };
+    const world = makeWorld();
+    world.repo.seedJob(makeJob(remote));
+    world.repo.seedWorker(makeWorker());
+    expect(await checkEligibility({ repo: world.repo }, { workerId: WORKER_ID, jobId: JOB_ID })).toMatchObject({ eligible: false, tier: 0 });
+    const { deps } = setup({ job: remote, proof: { gps_lat: 40.7128, gps_lng: -74.006 }, exif: NO_EXIF, confidence: 0.9 });
+    const review = await reviewProof(deps, PROOF_ID);
+    expect(check(review, 'geofence')).toMatchObject({ status: 'pass', data: { remote: true } });
+    expect(review.decision).toBe('escalated');
+    expect(flagged(review)).toEqual(['identity']);
+  });
+
+  it('IDENTITY_GATE=log on a tier-1 job: eligible with the advisory reason, the review records the identity, an agent can approve', async () => {
+    const world = makeWorld();
+    world.repo.seedJob(makeJob({ budget_cents: 6000 }));
+    world.repo.seedWorker(makeWorker());
+    const out = await checkEligibility({ repo: world.repo, env: { IDENTITY_GATE: 'log' } }, { workerId: WORKER_ID, jobId: JOB_ID });
+    expect(out).toMatchObject({ eligible: true, tier: 1 });
+    expect(out.reasons).toEqual([expect.stringMatching(/^identity_not_verified: .*not enforced \(IDENTITY_GATE=log\)$/)]);
+    const { deps } = setup({ job: { budget_cents: 6000 }, confidence: 0.95, gate: 'log' });
+    const review = await reviewProof(deps, PROOF_ID);
+    expect(review.decision).toBe('approved');
+    expect(check(review, 'identity')).toMatchObject({ status: 'pass', data: { enforced: false, verified: false, status: null } });
+    const low = setup({ job: { budget_cents: 6000 }, confidence: 0.8, gate: 'log' });
+    expect((await approveProof(low.deps, { proofId: PROOF_ID, reviewer: 'verifier-agent', override: true })).decision).toBe('approved');
+  });
+
+  it('only recordFounderDecision waives the identity: a reviewer named "founder" with override is still refused', async () => {
+    const { world, deps } = setup({ job: { budget_cents: 3000 }, exif: NO_EXIF, confidence: 0.95 });
+    await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'founder', override: true })).rejects.toThrow(/^identity_unverified/);
+    const tools = createTools({ ...world.deps, vision: new CountingScorer(0.95) });
+    await expect(tools.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '', reviewer: 'founder', override: true })).rejects.toThrow(/^identity_unverified/);
+    expect(world.fired.filter((f) => f.name === 'onProofDecision' && f.args[2] === 'approved')).toHaveLength(0);
+  });
+
+  it('a failed or needs_review identity is not a verified one', async () => {
+    for (const status of ['failed', 'needs_review'] as const) {
+      const { world, deps } = setup({ job: { budget_cents: 3000 }, exif: NO_EXIF, confidence: 0.95 });
+      await world.repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status, provider_ref: 'vs_1', details: {}, verified_at: null, expires_at: null });
+      const out = await checkEligibility({ repo: world.repo }, { workerId: WORKER_ID, jobId: JOB_ID });
+      expect(out.eligible).toBe(false);
+      expect(out.reasons[0]).toContain(`identity verification is ${status}`);
+      expect(check(await reviewProof(deps, PROOF_ID), 'identity')).toMatchObject({ status: 'needs_review', data: { status, verified: false } });
+      await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'verifier-agent', override: true })).rejects.toThrow(/^identity_unverified/);
+    }
   });
 });
 
