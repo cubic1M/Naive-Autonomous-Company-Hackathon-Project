@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { LogoPill } from "@/components/SiteHeader";
 import { agentPrompt } from "@/lib/agentPrompt";
+import QuickStart from "@/components/QuickStart";
 
 type Created = { customer_id: string; api_key: string; mcp_url: string };
 type Tab = "prompt" | "plugin" | "claude" | "json" | "naive" | "curl";
@@ -144,6 +145,9 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
             delivers paperwork, and you get geotagged proof. Get a key in ten seconds and paste one prompt into your agent.
           </p>
         </header>
+
+        <QuickStart />
+        <p className="small muted" style={{ margin: "4px 2px 6px" }}>Or set it up yourself in four steps:</p>
 
         <Step n={1} title="Get your API key" done={!!created}>
           {!created ? (
