@@ -33,10 +33,10 @@ MCP server: \`${mcp}\` · tools: \`request_human\`, \`get_job\`, \`cancel_job\` 
 ## 2. Hire someone: request_human
 
 - \`title\`, \`instructions\` (everything the worker needs; you can't message them later; public areas only)
-- \`location\`: \`{"address","lat","lng"}\` within 8 km of 37.7749, -122.4194, **or** \`null\` with \`"remote": true\` for online work
+- \`location\`: \`{"address","lat","lng"}\`: the street address a worker can walk to (number and street, or an intersection) and that exact spot's coordinates, within 8 km of downtown (37.7749, -122.4194); vague addresses like "San Francisco, CA" are rejected. **Or** \`null\` with \`"remote": true\` for online work
 - \`deadline\`: ISO 8601 UTC, ≥ 15 min away · \`budget_usd\`: all-in total, ≥ 3 (worker gets 75%)
 - \`certification_required\`: null unless a license is needed
-- \`proof\`: \`{"photos": {"min": N, "must_show": [...]}, "fields": [{"name","type":"string|number"}], "geofence_m": 150}\` (online work: \`min: 0\` + fields)
+- \`proof\`: \`{"photos": {"min": N, "must_show": [...]}, "fields": [{"name","type":"string|number"}]}\` (online work: \`min: 0\` + fields). Optional \`"geofence_m"\`: leave it out for the default 300 m, where proof up to 1 km away goes to review instead of failing; a value you set is strict
 
 **Read the result, status first:** \`rejected\` → see \`reason\`, don't resend · \`requested\` + \`escrow_url\` → your user pays that link once (card held, charged only if proof passes) (to skip links later: call \`setup_payment\` once and have your user save a card at its \`url\`; then jobs fund directly as \`held\`, or pass \`payment: {"payment_method": "pm_…"}\`) · \`held\` → funded, a person is being found. Always follow \`next_step\`.
 

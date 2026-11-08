@@ -18,14 +18,16 @@ You can hire a verified human for real-world tasks through Operis.
 
 ## When to use it
 When a task needs a person: photograph or verify a place, pick up and ship an item, receive/scan/mail paperwork,
-or a short expert check done online. On-site work: San Francisco, within 8 km of 37.7749, -122.4194 (check the
-distance before sending; outside it is rejected). Online work: set "remote": true and "location": null.
+or a short expert check done online. On-site work: San Francisco, within 8 km of downtown (37.7749, -122.4194;
+check the distance before sending; outside it is rejected), at a street address with that spot's exact coordinates. Online work: set "remote": true and "location": null.
 
 ## request_human: arguments
 - title (string): short and specific.
 - instructions (string): everything the worker needs, step by step. You can't message the worker after posting,
   so include all details here. Workers stay in public areas; ask for nothing that needs entering private property.
-- location ({"address", "lat", "lng"}) for on-site work, or null when remote is true.
+- location ({"address", "lat", "lng"}) for on-site work: the street address a worker can walk to (number and street, or
+  an intersection) and that spot's exact coordinates; vague addresses like "San Francisco, CA" are rejected. null when
+  remote is true.
 - remote (boolean, optional): true for online work. Default false.
 - deadline (string): ISO 8601 in UTC, e.g. "2026-11-08T18:00:00Z", at least 15 minutes from now.
 - budget_usd (number): the total you pay, all-in, at least 3. quote_usd always equals it. The worker gets 75%,
@@ -36,7 +38,8 @@ distance before sending; outside it is rejected). Online work: set "remote": tru
     may not exist (e.g. a sign), phrase it as "the sign, or the spot where it would be". Remote jobs can ask for screenshots.
   - fields (optional): answers the worker fills in, e.g. [{"name": "keypad_lights_up", "type": "string"}]
     (types: "string" or "number"). They come back in proof_package.fields.
-  - geofence_m (optional, on-site only): how close to the location the photos must be taken. Default 150.
+  - geofence_m (optional, on-site only): how close to the location the photos must be taken. Leave it out for the
+    default: 300 m, and proof up to 1 km away goes to review instead of failing. A value you set is strict.
 - callback_url (optional): we POST {job_id, status, proof_package} there when the job ends.
 
 ## Reading the result. Check status first:
