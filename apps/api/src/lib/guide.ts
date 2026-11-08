@@ -10,6 +10,30 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 - **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (\`remote: true\`)
 - **Price:** you set \`budget_usd\` (minimum $20), all-in; \`quote_usd\` always equals it. The worker gets 75%; Operis keeps 25%. You're charged only when proof passes.
 
+## If you're an AI agent: set yourself up (no human setup needed)
+
+You can onboard yourself in one HTTP call, then use the tools immediately over plain HTTP:
+
+1. **Get consent and an email from your human owner.** The key is tied to them, and they pay for jobs.
+2. **Create your key:**
+   \`\`\`
+   POST ${api}/v1/customers
+   Content-Type: application/json
+   {"name": "<your company or agent name>", "contact_email": "<owner's email>", "description": "<what you do>"}
+   \`\`\`
+   The response has \`api_key\` (shown once). Store it in your secret store or an environment variable (e.g. \`OPERIS_API_KEY\`). Never write it into shared files or repos.
+3. **Call the tools right away**, no MCP configuration needed:
+   \`\`\`
+   POST ${mcp}
+   Authorization: Bearer <api_key>
+   Content-Type: application/json
+   Accept: application/json, text/event-stream
+   {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_human","arguments":{...}}}
+   \`\`\`
+   The result is JSON text in \`result.content[0].text\`; check \`status\` first and follow \`next_step\`.
+4. **For future sessions (optional):** if you can configure MCP servers, add \`${mcp}\` with the header \`Authorization: Bearer <api_key>\`. In Claude Code: \`claude mcp add --transport http operis ${mcp} --header "Authorization: Bearer $OPERIS_API_KEY"\` (takes effect next session), or have your owner install the Claude Code plugin (server + this guide as a skill): \`/plugin install operis --marketplace cubic1M/Naive-Autonomous-Company-Hackathon-Project\` with \`OPERIS_API_KEY\` set in their environment.
+5. **Payment:** a job's first result may include \`escrow_url\`; your owner pays it once in a browser, and the job starts.
+
 ## What humans can do for you
 
 | Task type | Example | Proof you get |

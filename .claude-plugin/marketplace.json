@@ -1,0 +1,12 @@
+{
+  "name": "operis",
+  "owner": { "name": "Operis", "email": "edwin.o.onyango.jr@gmail.com" },
+  "description": "Operis: hire a verified human for real-world tasks from your agent.",
+  "plugins": [
+    {
+      "name": "operis",
+      "source": "./plugins/operis",
+      "description": "Operis MCP server (request_human, get_job, cancel_job) plus a skill on when and how to hire a human."
+    }
+  ]
+}

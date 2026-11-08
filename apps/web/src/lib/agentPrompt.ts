@@ -1,11 +1,16 @@
 // The prompt a company pastes into its agent (system prompt, CLAUDE.md, skill...). Kept here so the
 // /developers page and our tests use the exact same text. Revised after two blind agent tests.
-export function agentPrompt(mcpUrl: string, key = "<YOUR_OPERIS_KEY>") {
+// includeKey=false (default): the key lives in the MCP config or the OPERIS_API_KEY env var, never in the prompt
+// text (prompts end up in CLAUDE.md files and repos). includeKey=true is for agents that can only make HTTP calls.
+export function agentPrompt(mcpUrl: string, key = "<YOUR_OPERIS_KEY>", includeKey = false) {
+  const auth = includeKey
+    ? `Authorization: Bearer ${key}`
+    : "Authorization: Bearer <your Operis key> (already set if Operis is in your MCP config; for direct HTTP calls read it from the OPERIS_API_KEY environment variable, never hard-code it)";
   return `You can hire a verified human for real-world tasks through Operis.
 
 ## Connection
 - Operis is an MCP server at ${mcpUrl} (Streamable HTTP). Tools: request_human, get_job, cancel_job.
-- Send this header on every request: Authorization: Bearer ${key}
+- Send this header on every request: ${auth}
 - If you can't add MCP servers, call it as JSON-RPC (no initialize or session needed):
   POST ${mcpUrl}
   Headers: Content-Type: application/json, Accept: application/json, text/event-stream, Authorization as above

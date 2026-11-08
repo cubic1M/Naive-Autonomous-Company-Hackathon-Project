@@ -23,6 +23,7 @@ async function handle(req: Request) {
     return Response.json({
       error: "unauthorized: send Authorization: Bearer <your Operis key>",
       get_a_key: `curl -X POST ${apiBaseUrl()}/v1/customers -H 'Content-Type: application/json' -d '{"name":"Your agent","contact_email":"you@example.com"}'`,
+      agents: "AI agents can sign themselves up: POST /v1/customers (with your owner's email), then call this endpoint with the key. Steps: /llms.txt",
       guide: `${apiBaseUrl()}/llms.txt`,
     }, { status: 401 });
   const ctx = makeContext();
