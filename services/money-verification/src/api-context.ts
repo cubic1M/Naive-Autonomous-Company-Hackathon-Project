@@ -137,7 +137,8 @@ export function hooksFromApiContext(ctx: ApiContext, repo: Repo): Hooks {
 /** Deps for a tool call made by the API: its database client, its transition(), process.env for the rest. */
 export function depsFromApiContext(ctx: ApiContext, overrides: Partial<ApiDeps> = {}): ApiDeps {
   // The repo hides Stripe ids of the other mode than STRIPE_SECRET_KEY's (test -> live cutover, see PostgresRepo).
-  const repo = overrides.repo ?? new PostgresRepo(sqlClientFromPostgresJs(ctx.sql), { stripeMode: stripeModeFromEnv() });
+  const stripeMode = overrides.stripeMode ?? stripeModeFromEnv();
+  const repo = overrides.repo ?? new PostgresRepo(sqlClientFromPostgresJs(ctx.sql), { stripeMode });
   const env = overrides.env ?? envFor(ctx.baseUrl);
   return {
     stripe: overrides.stripe ?? lazyStripe(() => stripeClientFromEnv()),
@@ -148,6 +149,7 @@ export function depsFromApiContext(ctx: ApiContext, overrides: Partial<ApiDeps> 
     readMedia: overrides.readMedia ?? fetchMedia(),
     frameExtractor: overrides.frameExtractor,
     now: overrides.now,
+    stripeMode,
   };
 }
 

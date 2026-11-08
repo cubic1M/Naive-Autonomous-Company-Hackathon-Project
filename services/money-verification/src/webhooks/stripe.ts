@@ -9,6 +9,7 @@ import { recordIdentityCanceled, recordIdentityRequiresInput, recordIdentityVeri
 import { completePendingPayoutsForWorker } from '../payouts.js';
 import type { Repo } from '../repo.js';
 import type { StripeClient } from '../stripe-client.js';
+import type { StripeMode } from '../stripe-mode.js';
 
 export interface WebhookDeps {
   stripe: StripeClient;
@@ -16,6 +17,8 @@ export interface WebhookDeps {
   env: Env;
   hooks?: Hooks;
   now?: () => Date;
+  /** Mode of STRIPE_SECRET_KEY. When set, events of the other mode are acknowledged and ignored. */
+  stripeMode?: StripeMode;
 }
 
 export interface HandleResult {
@@ -162,14 +165,36 @@ export async function handleStripeEvent(deps: WebhookDeps, event: Stripe.Event):
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-/** Verify the signature over the RAW body; the message never echoes the secret or the payload. */
+/**
+ * STRIPE_WEBHOOK_SECRET is one secret or a comma-separated list. Live needs two: the account endpoint and the Connect
+ * ("connected accounts") endpoint that carries the workers' account.updated, each with its own signing secret.
+ */
+const webhookSecrets = (env: Pick<Env, 'STRIPE_WEBHOOK_SECRET'>): string[] =>
+  env.STRIPE_WEBHOOK_SECRET.split(',').map((s) => s.trim()).filter(Boolean);
+
+/** Verify the signature over the RAW body against each secret; the message never echoes a secret or the payload. */
 function verify(deps: WebhookDeps, rawBody: string, header: string | null): Stripe.Event {
   if (!header) throw new WebhookSignatureError('missing stripe-signature header');
-  try {
-    return deps.stripe.webhooks.constructEvent(rawBody, header, deps.env.STRIPE_WEBHOOK_SECRET);
-  } catch {
-    throw new WebhookSignatureError('signature verification failed');
+  for (const secret of webhookSecrets(deps.env)) {
+    try {
+      return deps.stripe.webhooks.constructEvent(rawBody, header, secret);
+    } catch {
+      // try the next secret
+    }
   }
+  throw new WebhookSignatureError('signature verification failed');
+}
+
+/**
+ * An event from the other mode than the key's names objects this key cannot see (resource_missing on every
+ * follow-up call), e.g. the sandbox endpoint still pointed at a deployment that now runs a live key. 200 so Stripe
+ * stops retrying; logged so the stale endpoint gets noticed.
+ */
+function otherModeEvent(deps: WebhookDeps, event: Stripe.Event): string | null {
+  if (!deps.stripeMode) return null;
+  const eventMode: StripeMode = event.livemode ? 'live' : 'test';
+  if (eventMode === deps.stripeMode) return null;
+  return `${eventMode}-mode event; this deployment uses a ${deps.stripeMode} key`;
 }
 
 /**
@@ -185,6 +210,11 @@ export async function handleStripeWebhook(deps: WebhookDeps, req: Request): Prom
   } catch (err) {
     if (err instanceof WebhookSignatureError) return json(400, { error: err.message });
     throw err;
+  }
+  const ignored = otherModeEvent(deps, event);
+  if (ignored) {
+    console.warn(`[stripe webhook] ${event.type} ${event.id} ignored: ${ignored}`);
+    return json(200, { received: true, type: event.type, duplicate: false, handled: false, ignored });
   }
   try {
     if (await deps.repo.hasStripeEvent(event.id)) {
