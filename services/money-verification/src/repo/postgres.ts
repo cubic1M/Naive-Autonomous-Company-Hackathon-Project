@@ -1,6 +1,7 @@
 import { FEE_BPS } from '../pricing.js';
 import type { Repo, LedgerQuery } from '../repo.js';
 import type {
+  CustomerPayment,
   Dispute,
   Escrow,
   EscrowStatus,
@@ -172,6 +173,16 @@ function mapWorker(r: Row): Worker {
     suspended: Boolean(r.suspended),
   };
 }
+/** `select *` on purpose: before migration 0002 the two payment columns are absent and map to "no card on file". */
+function mapCustomerPayment(r: Row): CustomerPayment {
+  return {
+    customer_id: String(r.id),
+    name: r.name == null ? null : String(r.name),
+    email: r.contact_email == null ? null : String(r.contact_email),
+    stripe_customer_id: r.stripe_customer_id == null ? null : String(r.stripe_customer_id),
+    default_payment_method_id: r.default_payment_method_id == null ? null : String(r.default_payment_method_id),
+  };
+}
 function mapProof(r: Row): Proof {
   return {
     id: String(r.id),
@@ -316,6 +327,25 @@ export class PostgresRepo implements Repo {
   }
   async setWorkerConnectAccount(workerId: string, accountId: string) {
     await this.sql.query('update workers set stripe_connect_account = $2 where id = $1', [workerId, accountId]);
+  }
+  getCustomerPayment(customerId: string) {
+    return this.one('select * from customers where id = $1', [customerId], mapCustomerPayment);
+  }
+  getCustomerPaymentForJob(jobId: string) {
+    return this.one(
+      'select c.* from jobs j join customers c on c.id = j.customer_id where j.id = $1',
+      [jobId],
+      mapCustomerPayment,
+    );
+  }
+  async setCustomerPayment(customerId: string, patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>) {
+    await this.sql.query(
+      `update customers set
+         stripe_customer_id = coalesce($2, stripe_customer_id),
+         default_payment_method_id = coalesce($3, default_payment_method_id)
+       where id = $1`,
+      [customerId, patch.stripe_customer_id ?? null, patch.default_payment_method_id ?? null],
+    );
   }
 
   getEscrow(jobId: string) {

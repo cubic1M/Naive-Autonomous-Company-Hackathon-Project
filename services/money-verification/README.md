@@ -126,6 +126,24 @@ Geofence and media reuse stay hard failures at every tier (**rejected**, never a
 
 Stripe charges per completed verification, not per session. The row keeps only the names and ids above, never the document images; the proof review records only that an identity is verified.
 
+## Agent-payable escrow (card on file, `payment_method` in the call)
+
+The Checkout link presumes a human with a browser and a card. An autonomous customer has neither, so `createEscrow(deps, job, { paymentMethod? })` can place the hold directly and returns `{ url, escrow, funded, fallback_reason? }`:
+
+| Instrument | What happens | `request_human` answer |
+|---|---|---|
+| `payment.payment_method` passed in the call (a Stripe PaymentMethod id, `pm_...`) | PaymentIntent created and confirmed off-session, manual capture; escrows row inserted `authorized` (7-day expiry); `escrow_hold` line; `onJobFunded` fires | `status: held`, `escrow_url: null`, funded in the same call |
+| none passed, the customer has a card on file (`customers.default_payment_method_id`, charged on `customers.stripe_customer_id`) | same | same |
+| neither, or the instrument is declined / needs authentication / is unknown | the Checkout session as before (`fallback_reason`: `card_declined`, `authentication_required`, `expired_card`, `invalid_payment_method`, ...); the webhook funds the job when it is paid | `status: requested`, `escrow_url` to pay |
+
+Any Stripe error that is not about the card propagates: no silent fallback, no row written. The daily cap applies before any Stripe call on both paths. Idempotency: Stripe binds a key to one endpoint and replays the first answer (a decline included), so the PaymentIntent uses `escrow:<jobId>:pi` and the Checkout session keeps `escrow:<jobId>`; a retry after a direct hold returns the same funded escrow without a Stripe call; a pending Checkout escrow returns its session again and is never upgraded to a direct hold; the ledger key is `escrow_hold:<jobId>` either way. The package never moves the job: `services/payments` `createHold(jobId, { paymentMethod? })` returns `{ escrow_url, funded, next_step, fallback_reason? }` and `request_human` transitions to `held` when `funded` (hooks do the same for the internal `create_escrow` tool, whose `checkout_url` is now nullable with a `funded` flag).
+
+**Card on file.** `createPaymentSetupLink(deps, customerId)` (shim: `createPaymentSetupLink(customerId)` for a `POST /v1/customers/payment-setup` route under the customer's key) creates the Stripe Customer on first use (`customer:<id>`, stored in `customers.stripe_customer_id`, with the row's email and name) and a setup-mode Checkout session (`payment_method_types: card`, key `payment_setup:<id>:<current pm or none>` so a retry gets the same session and a replacement card a new one; return URL `<PUBLIC_BASE_URL>/customers/<id>/payment/done`). A human opens it once. `checkout.session.completed` with `mode: setup` retrieves the SetupIntent (the event only carries its id) and stores its `payment_method` in `customers.default_payment_method_id`; from then on every `createEscrow` for that customer funds directly.
+
+**`payment_intent.amount_capturable_updated`** (add it to the webhook endpoint) marks the escrow authorized and fires `onJobFunded` when the escrow was still pending (a Checkout hold: it usually lands before `checkout.session.completed`, which then adds no second hook) or when the escrow is authorized but the job is still `requested` (belt and braces for a `request_human` whose own transition failed). A PaymentIntent of ours whose escrow row is not written yet answers 500 so Stripe retries; one that is not the escrow's is reported unhandled.
+
+Shared Payment Tokens from the Agentic Commerce Protocol are not PaymentMethod ids (they go in `payment_method_data.shared_payment_granted_token` under a preview API version) and are not accepted yet.
+
 ## Contract adapters (`contracts/tools.ts`)
 
 `src/contract-tools.ts` (`createContractTools(deps)`) exposes the same code under the exact names and shapes in `contracts/tools.ts`, so Edwin's registry can swap each mock for the real tool without reshaping anything: `check_proof`, `approve_proof`, `escalate`, `capture_payment`, `payout`, `refund`, `ledger`. USD numbers at that boundary, cents inside.
@@ -140,9 +158,9 @@ Stripe charges per completed verification, not per session. The row keeps only t
 
 `services/payments/index.ts` and `services/verify/index.ts` export real `ToolImpl`s (contracts/runtime.ts) backed by this package, so `apps/api/src/tools/registry.ts` picks them over the mocks with no other change: `check_proof`, `approve_proof`, `escalate`, `capture_payment`, `payout`, `refund`, `ledger`. `src/api-context.ts` does the binding: `depsFromApiContext(ctx)` builds the deps from the API's postgres.js client and `process.env`, and turns the hooks into `ctx.transition()` calls (`held`, `approved` / `escalated` / `rejected`, `paid`, and `refunded` for any hold release or refund) while mirroring `proofs.status / verifier_score / verifier_notes / reviewed_by` and `workers.jobs_done`, as the mocks did. A refused transition is logged, never thrown.
 
-- `createHold(jobId)` (exported from `services/payments`) is what `request_human` calls through `registry.createHold`; `createPayoutLink(workerId)` is what `POST /v1/worker/payout-setup` calls for Dora's `/payout` screen; `createIdentityLink(workerId)` (a named export of `services/verify`, read with `import * as verify` like `createPayoutLink` since PR #15) is for a `POST /v1/worker/identity` route: the job page shows it before proof upload on a tier-2 job. All use a process-wide Neon pool from `DATABASE_URL` and need `STRIPE_SECRET_KEY`.
+- `createHold(jobId, { paymentMethod? })` (exported from `services/payments`) is what `request_human` calls through `registry.createHold`; `createPaymentSetupLink(customerId)` is for a `POST /v1/customers/payment-setup` route (card on file); `createPayoutLink(workerId)` is what `POST /v1/worker/payout-setup` calls for Dora's `/payout` screen; `createIdentityLink(workerId)` (a named export of `services/verify`, read with `import * as verify` like `createPayoutLink` since PR #15) is for a `POST /v1/worker/identity` route: the job page shows it before proof upload on a tier-2 job. All use a process-wide Neon pool from `DATABASE_URL` and need `STRIPE_SECRET_KEY`.
 - **Merging the branch flips the registry from mocks to these real tools at once.** Before that: run the migration on Neon, set the env vars on Vercel, and add `npm ci` for `services/money-verification` to the install step. Otherwise merge with `MOCK_PAYMENTS=true` and `MOCK_TOOLS=check_proof,approve_proof,escalate,capture_payment,payout,refund,ledger` set, and remove them when ready.
-- `stripeWebhook(req, ctx)` (same file) is a drop-in body for `apps/api/src/app/webhooks/stripe/route.ts`: it verifies over the raw body, dedupes on event id, handles all seven events and moves the job to `held` with `stripe_payment_intent`, exactly as the current route does, plus the rest.
+- `stripeWebhook(req, ctx)` (same file) is a drop-in body for `apps/api/src/app/webhooks/stripe/route.ts`: it verifies over the raw body, dedupes on event id, handles every event listed under Stripe dashboard setup and moves the job to `held` with `stripe_payment_intent`, exactly as the current route does, plus the rest.
 - The shims import `../money-verification/src/index`, whose dependencies live in `services/money-verification/node_modules`: the install step must run `npm ci` there (as for `services/outreach`). They typecheck under bundler resolution; they have not yet been compiled inside the Next app.
 
 ## Hooks (Edwin wires these)
@@ -151,7 +169,7 @@ This package never writes the `jobs` table or talks to Naïve. It fires these ho
 
 | Hook | Fired when | Expected reaction |
 |---|---|---|
-| `onJobFunded(jobId)` | `checkout.session.completed` authorized the card | job → `held`; wake CEO |
+| `onJobFunded(jobId)` | the card was authorized: `checkout.session.completed`, `payment_intent.amount_capturable_updated`, or a direct hold in `createEscrow` | job → `held`; wake CEO (a repeat for an already held job is refused and logged) |
 | `onProofDecision(jobId, proofId, decision)` | a review was written (automated or manual) | job → `approved` / `escalated` / `rejected`; wake Finance on approved |
 | `onWorkerPaid(jobId, workerId, transferId)` | the worker transfer was created | job → `paid`; customer callback |
 | `onWorkerPayoutReady(workerId)` | Connect onboarding finished (`account.updated`) | informational |
@@ -178,13 +196,16 @@ See `.env.example`. Never commit real values.
 
 ## Database
 
-`migrations/0001_money_verification.sql` is idempotent plain SQL (`create table if not exists`, `drop constraint if exists` + `add constraint`) and creates only this package's tables: `escrows`, `ledger`, `stripe_events`, `payouts`, `proof_reviews`, `worker_verifications`, `notary_registry`, `disputes`. It never creates or alters `jobs` / `workers` / `proofs`. The one write to a teammate's table is `workers.stripe_connect_account`, which the shared schema already defines.
+`migrations/0001_money_verification.sql` is idempotent plain SQL (`create table if not exists`, `drop constraint if exists` + `add constraint`) and creates only this package's tables: `escrows`, `ledger`, `stripe_events`, `payouts`, `proof_reviews`, `worker_verifications`, `notary_registry`, `disputes`. It never creates or alters `jobs` / `workers` / `proofs`. `migrations/0002_customer_payment.sql` adds `customers.stripe_customer_id` and `customers.default_payment_method_id` (`alter table ... add column if not exists`), the card on file; `PostgresRepo` finds a job's card on file with `select c.* from jobs j join customers c on c.id = j.customer_id`, so until the migration has run the code behaves as "no card on file" instead of failing; the `Job` view and `mapJob` are unchanged. The writes to teammates' tables are `workers.stripe_connect_account` and those two columns.
 
 Run by hand, after Edwin has reviewed it:
 
 ```sh
 psql "$DATABASE_URL" -f services/money-verification/migrations/0001_money_verification.sql
+psql "$DATABASE_URL" -f services/money-verification/migrations/0002_customer_payment.sql
 ```
+
+(or add both to `MIGRATIONS` in `scripts/migrate.ts`; the first is already there.)
 
 No `drizzle-kit push`.
 
@@ -204,6 +225,7 @@ No `drizzle-kit push`.
 - Make `serveMcp` return `describeToolError(err)` (the code as well as the message), so an agent sees the stable code `requires_approval` / `idempotency_conflict`, not only the message text.
 - Add a Disputes agent (member in `agents.json`, `AgentRole`, `Agent`, wake on dispute) or make the CEO its owner, and register `get_proof_review`, `get_dispute`, `submit_dispute_evidence` for it.
 - Verification tiers: `POST /v1/worker/identity` (`createIdentityLink`) and the `verification_tier` / `identity_required` / `identity_verified` fields on `GET /v1/worker/jobs/[token]` are in (241ae39). Left: the identity step on the job page before proof upload when `identity_required` is true and `identity_verified` false (then Cameron sets `IDENTITY_GATE=enforce`); add `identity.verification_session.verified`, `identity.verification_session.requires_input` and `identity.verification_session.canceled` to the webhook endpoint; optionally add `jobs.risk_class text` so Ops can override the budget tier (not `jobs.required_tier`: that is the worker-tier gate in `check_eligibility`, and with no `workers.tier` column a value above 0 refuses every worker). The Verifier prompt already trusts `check_proof`'s `decision` (241ae39); the bar it should name is `profile.confidence_threshold` (0.80 / 0.85 / 0.90), a field of `check_proof`'s output, not one of its `flags` (a passing check is never a flag). `escalate` on an approved proof answers `error: 'already_approved'` (#26).
+- Agent-payable escrow: `payment?: { payment_method }` on `request_human` in `contracts/tools.ts` and `apps/api/src/mcp/schemas.ts`; `createHold(job.id, { paymentMethod })` plus `transition(job.id, 'held')` and `status: 'held'` when `funded`; a `POST /v1/customers/payment-setup` route calling `createPaymentSetupLink(customer.id)`; `0002_customer_payment.sql` in `scripts/migrate.ts`; the guide text for `payment` and the setup route (paste-ready snippets in the PR).
 - Done: `apps/api/src/app/webhooks/stripe/route.ts` delegates to `stripeWebhook` from `@services/payments`, and the root `workspaces` include `services/money-verification`, so the root install covers it. The seven contract tools are already exported from `services/payments` and `services/verify`; the rest (`create_escrow`, `release_escrow`, `refund_large`, `release_payout_large`, `settle_job`, `get_proof_review`, `verify_notary`, `verify_identity`, `check_eligibility`, `get_dispute`, `submit_dispute_evidence`) are available through `createTools(depsFromApiContext(ctx))` when the registry grows.
 
 ## Stripe dashboard setup (test mode)
@@ -211,7 +233,7 @@ No `drizzle-kit push`.
 1. Enable Checkout.
 2. Enable Connect with Express accounts (Settings → Connect). Set the platform name and branding: workers see the onboarding page.
 3. Enable Identity (required for tier-2 jobs: over $150 or with a certification). Document checks with a matching selfie; no dashboard template is needed, the session is configured by the API call.
-4. Add a webhook endpoint `https://<app>/webhooks/stripe` with these events: `checkout.session.completed`, `payment_intent.canceled`, `charge.refunded`, `refund.created`, `refund.updated`, `account.updated`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, `identity.verification_session.canceled`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`. `refund.created` is what puts dashboard or CLI refunds in the ledger; `charge.refunded` only reconciles the escrow status.
+4. Add a webhook endpoint `https://<app>/webhooks/stripe` with these events: `checkout.session.completed`, `payment_intent.amount_capturable_updated`, `payment_intent.canceled`, `charge.refunded`, `refund.created`, `refund.updated`, `account.updated`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, `identity.verification_session.canceled`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`. `refund.created` is what puts dashboard or CLI refunds in the ledger; `charge.refunded` only reconciles the escrow status; `payment_intent.amount_capturable_updated` is the belt-and-braces funding signal for direct holds (not on the current `operis-api` endpoint yet).
 5. Card authorizations expire after about 7 days. Schedule `expireStaleEscrows()` (a cron route) to release stale holds.
 
 ## End-to-end test with the Stripe CLI (Cameron)

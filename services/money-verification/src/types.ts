@@ -61,6 +61,18 @@ export interface Worker {
   suspended: boolean;
 }
 
+/**
+ * Read-only view of teammates' `customers` table plus the two columns migration 0002 adds for this package:
+ * the Stripe Customer and the default PaymentMethod saved through the payment-setup Checkout session.
+ */
+export interface CustomerPayment {
+  customer_id: string;
+  name: string | null;
+  email: string | null;
+  stripe_customer_id: string | null;
+  default_payment_method_id: string | null;
+}
+
 export interface ProofMedia {
   url: string;
   sha256: string;

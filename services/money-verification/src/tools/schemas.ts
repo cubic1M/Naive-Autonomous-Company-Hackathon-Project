@@ -53,9 +53,10 @@ const disputeEvidence = z
 
 export const toolSchemas = {
   create_escrow: {
-    description: "Hold the customer's card for a job (Stripe Checkout, manual capture). Returns the URL the customer agent must pay at.",
+    description:
+      "Hold the customer's card for a job (manual capture). With a card on file the hold is placed at once (checkout_url null, funded true); otherwise returns the Stripe Checkout URL the customer agent must pay at.",
     input: z.object({ job_id: uuid }).strict(),
-    output: z.object({ job_id: uuid, checkout_url: z.string().url(), amount_cents: cents, status: escrowStatus }),
+    output: z.object({ job_id: uuid, checkout_url: z.string().url().nullable(), amount_cents: cents, status: escrowStatus, funded: z.boolean() }),
   },
   capture_escrow: {
     description: 'Charge the held card after proof approval.',

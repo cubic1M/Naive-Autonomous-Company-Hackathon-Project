@@ -1,8 +1,9 @@
 import type Stripe from 'stripe';
 import type { Env } from '../env.js';
+import { recordSavedPaymentMethod } from '../customer-payment.js';
 import { recordDisputeEvent, idOf } from '../disputes.js';
 import { markAuthorized, markRefunded, markReleased, recordStripeRefund } from '../escrow.js';
-import { WebhookSignatureError } from '../errors.js';
+import { NotFoundError, WebhookSignatureError } from '../errors.js';
 import { fire, type Hooks } from '../hooks.js';
 import { recordIdentityCanceled, recordIdentityRequiresInput, recordIdentityVerified, type IdentityOutcome } from '../identity.js';
 import { completePendingPayoutsForWorker } from '../payouts.js';
@@ -31,8 +32,19 @@ const unhandled = (detail?: string): Outcome => ({ handled: false, ...(detail ? 
 /** Identity events: `changed` is whether a worker_verifications row was written (see identity.ts for the no-ops). */
 const identityOutcome = (o: IdentityOutcome): Outcome => ({ handled: o.changed, detail: o.detail });
 
-/** Checkout completed. Funds the job; works from metadata.job_id, falling back to the PaymentIntent's escrow. */
+/** A customer agent's owner saved a card (setup-mode Checkout): store it as the default for future direct holds. */
+async function onSetupCompleted(deps: WebhookDeps, session: Stripe.Checkout.Session): Promise<Outcome> {
+  const saved = await recordSavedPaymentMethod(deps, session);
+  if (!saved) return unhandled('setup session is not an Operis payment setup');
+  return { handled: true, detail: `customer ${saved.customerId}` };
+}
+
+/**
+ * Checkout completed. Payment mode funds the job (from metadata.job_id, falling back to the PaymentIntent's escrow);
+ * setup mode saves the customer's card.
+ */
 async function onCheckoutCompleted(deps: WebhookDeps, session: Stripe.Checkout.Session): Promise<Outcome> {
+  if (session.mode === 'setup') return onSetupCompleted(deps, session);
   if (session.mode !== 'payment') return unhandled('not a payment-mode session');
   const piId = idOf(session.payment_intent);
   // NOTE: do not gate on payment_status === 'paid'. With manual capture it stays 'unpaid' until capture,
@@ -46,6 +58,28 @@ async function onCheckoutCompleted(deps: WebhookDeps, session: Stripe.Checkout.S
   // Fire only on the real pending -> authorized transition. A retry after a failed hook is lost, an accepted
   // trade-off versus double-waking the CEO agent.
   if (before?.status === 'pending') await fire(deps.hooks, 'onJobFunded', jobId);
+  return { handled: true, detail: jobId };
+}
+
+/**
+ * The manual-capture PaymentIntent became capturable. For a Checkout hold this often arrives before
+ * checkout.session.completed and funds the job first; for a direct hold the row is already authorized. onJobFunded
+ * fires when this event authorizes the escrow, and also when the escrow is authorized but the job never left
+ * `requested` (the caller's own transition to held failed): belt and braces for the synchronous path.
+ * A PaymentIntent of ours whose escrow row is not written yet (direct hold in flight) throws, so Stripe retries.
+ */
+async function onAmountCapturableUpdated(deps: WebhookDeps, pi: Stripe.PaymentIntent): Promise<Outcome> {
+  const byPi = await deps.repo.getEscrowByPaymentIntent(pi.id);
+  const jobId = byPi?.job_id ?? pi.metadata?.job_id ?? null;
+  if (!jobId) return unhandled(`no escrow for ${pi.id}`);
+  const before = byPi ?? (await deps.repo.getEscrow(jobId));
+  if (!before) throw new NotFoundError('escrow', jobId);
+  if (before.stripe_payment_intent_id && before.stripe_payment_intent_id !== pi.id) {
+    return unhandled(`escrow ${jobId} is held by ${before.stripe_payment_intent_id}, not ${pi.id}`);
+  }
+  await markAuthorized(deps, jobId, pi.id);
+  const job = await deps.repo.getJob(jobId);
+  if (before.status === 'pending' || job?.status === 'requested') await fire(deps.hooks, 'onJobFunded', jobId);
   return { handled: true, detail: jobId };
 }
 
@@ -95,6 +129,8 @@ export async function handleStripeEvent(deps: WebhookDeps, event: Stripe.Event):
     switch (event.type) {
       case 'checkout.session.completed':
         return onCheckoutCompleted(deps, event.data.object as Stripe.Checkout.Session);
+      case 'payment_intent.amount_capturable_updated':
+        return onAmountCapturableUpdated(deps, event.data.object as Stripe.PaymentIntent);
       case 'payment_intent.canceled':
         return onPaymentIntentCanceled(deps, event.data.object as Stripe.PaymentIntent);
       case 'charge.refunded':

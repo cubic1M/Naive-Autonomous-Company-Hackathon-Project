@@ -27,24 +27,141 @@ export function escrowAmountCents(job: Job): number {
   return total;
 }
 
+export interface CreateEscrowOptions {
+  /** Stripe PaymentMethod id (pm_...) the customer agent passed with the request. Wins over the card on file. */
+  paymentMethod?: string;
+}
+
+export interface EscrowResult {
+  /** Checkout URL for someone to pay at, or null when the card was authorized in this call. */
+  url: string | null;
+  escrow: Escrow;
+  /** The card is authorized: the job can move to `held` now, without waiting for a webhook. */
+  funded: boolean;
+  /**
+   * Set when an instrument was available but Checkout had to be used: the Stripe card error code (card_declined,
+   * authentication_required, expired_card, ...), invalid_payment_method, or an unexpected PaymentIntent status.
+   */
+  fallback_reason?: string;
+}
+
+interface Instrument {
+  paymentMethod: string;
+  /** The Stripe Customer the saved method is attached to; a method passed in the call is charged on its own. */
+  customer?: string;
+}
+
+/** The instrument that can fund the job without Checkout: the one passed in the call, else the requester's card on file. */
+async function chooseInstrument(repo: Repo, job: Job, opts: CreateEscrowOptions): Promise<Instrument | null> {
+  if (opts.paymentMethod) return { paymentMethod: opts.paymentMethod };
+  const c = await repo.getCustomerPaymentForJob(job.id);
+  if (!c?.default_payment_method_id) return null;
+  return { paymentMethod: c.default_payment_method_id, ...(c.stripe_customer_id ? { customer: c.stripe_customer_id } : {}) };
+}
+
 /**
- * Create a Stripe Checkout Session that AUTHORIZES (manual capture) the customer's card for
- * worker_pay + fee, write the escrows row (pending) and an escrow_hold ledger line.
- * Idempotent per job: Stripe idempotency key `escrow:<jobId>` + ledger key `escrow_hold:<jobId>`.
- * Enforces the rolling-24h DAILY_ESCROW_CAP_CENTS using escrow_hold ledger totals.
+ * Why: a declined, unauthenticated or unknown card is the customer's to fix, and Checkout lets a human do that;
+ * every other failure (our params, Stripe down, rate limits) must surface, or the caller would hand out a Checkout
+ * link for a problem that is ours.
  */
-export async function createEscrow(deps: EscrowDeps, job: Job): Promise<{ url: string; escrow: Escrow }> {
+function checkoutFallbackReason(err: unknown): string | null {
+  const e = err as { rawType?: string; code?: string; param?: string };
+  if (e.rawType === 'card_error') return e.code ?? 'card_error';
+  if (e.rawType === 'invalid_request_error' && (e.param === 'payment_method' || e.code === 'resource_missing')) {
+    return 'invalid_payment_method';
+  }
+  return null;
+}
+
+type DirectHold = { ok: true; paymentIntent: Stripe.PaymentIntent } | { ok: false; reason: string };
+
+/**
+ * Authorize worker_pay + fee on the instrument: off-session, confirmed at once, manual capture. A Stripe idempotency
+ * key is bound to one endpoint, so this one is `escrow:<jobId>:pi`; `escrow:<jobId>` stays with the Checkout session
+ * that may follow a decline.
+ */
+async function authorizeDirect(deps: EscrowDeps, job: Job, amount: number, instrument: Instrument): Promise<DirectHold> {
+  try {
+    const pi = await deps.stripe.paymentIntents.create(
+      {
+        amount,
+        currency: 'usd',
+        payment_method_types: ['card'],
+        payment_method: instrument.paymentMethod,
+        ...(instrument.customer ? { customer: instrument.customer } : {}),
+        off_session: true,
+        confirm: true,
+        capture_method: 'manual',
+        transfer_group: transferGroup(job.id),
+        metadata: { job_id: job.id },
+        description: `Operis: ${job.task_type} (job ${job.id})`,
+      },
+      { idempotencyKey: `escrow:${job.id}:pi` },
+    );
+    return pi.status === 'requires_capture' ? { ok: true, paymentIntent: pi } : { ok: false, reason: pi.status };
+  } catch (err) {
+    const reason = checkoutFallbackReason(err);
+    if (reason === null) throw err;
+    return { ok: false, reason };
+  }
+}
+
+/** A direct hold is already an authorization: the row starts `authorized`, exactly as markAuthorized leaves a Checkout one. */
+async function recordDirectHold(deps: EscrowDeps, job: Job, amount: number, pi: Stripe.PaymentIntent, now: Date): Promise<EscrowResult> {
+  const escrow = await deps.repo.insertEscrow({
+    job_id: job.id,
+    stripe_checkout_session_id: null,
+    stripe_payment_intent_id: pi.id,
+    amount_cents: amount,
+    status: 'authorized',
+    authorization_expires_at: new Date(now.getTime() + AUTHORIZATION_TTL_MS),
+  });
+  await ledger.record(deps.repo, {
+    jobId: job.id,
+    kind: 'escrow_hold',
+    amountCents: amount,
+    idempotencyKey: `escrow_hold:${job.id}`,
+    stripeRef: pi.id,
+  });
+  await fire(deps.hooks, 'onJobFunded', job.id);
+  return { url: null, escrow, funded: true };
+}
+
+/**
+ * Fund a job: hold worker_pay + fee on the customer's card (manual capture), write the escrows row and the
+ * escrow_hold ledger line.
+ *
+ * With an instrument (payment_method passed in the call, else the customer's card on file) the hold is placed
+ * directly and the job is funded when this returns (`url: null, funded: true`; the row starts `authorized`).
+ * Without one, or when the instrument is declined, needs authentication or is unknown (`fallback_reason`), a
+ * Checkout Session is created for a human to pay and the webhook funds the job later (row `pending`).
+ * Enforces the rolling-24h DAILY_ESCROW_CAP_CENTS on every new hold, before any Stripe call.
+ * Idempotent per job: a retry of a direct hold returns the authorized escrow without calling Stripe; a pending
+ * Checkout escrow returns its session again (Stripe key `escrow:<jobId>`) and is not upgraded to a direct hold;
+ * the ledger key is `escrow_hold:<jobId>` either way.
+ */
+export async function createEscrow(deps: EscrowDeps, job: Job, opts: CreateEscrowOptions = {}): Promise<EscrowResult> {
   const now = deps.now?.() ?? new Date();
   const amount = escrowAmountCents(job);
   const existing = await deps.repo.getEscrow(job.id);
+  if (existing?.status === 'authorized' && !existing.stripe_checkout_session_id) {
+    return { url: null, escrow: existing, funded: true }; // direct hold already placed; the caller lost the answer
+  }
   if (existing && existing.status !== 'pending') {
     throw new InvalidStateError(`escrow for job ${job.id} is already ${existing.status}`);
   }
+  let fallback: string | undefined;
   if (!existing) {
     // listLedger's upper bound is exclusive; +1 ms so a hold written at this same instant still counts.
     const heldToday = await ledger.sumKind(deps.repo, 'escrow_hold', new Date(now.getTime() - DAY_MS), new Date(now.getTime() + 1));
     if (heldToday + amount > deps.env.DAILY_ESCROW_CAP_CENTS) {
       throw new DailyCapExceededError(amount, heldToday, deps.env.DAILY_ESCROW_CAP_CENTS);
+    }
+    const instrument = await chooseInstrument(deps.repo, job, opts);
+    if (instrument) {
+      const hold = await authorizeDirect(deps, job, amount, instrument);
+      if (hold.ok) return recordDirectHold(deps, job, amount, hold.paymentIntent, now);
+      fallback = hold.reason;
     }
   }
   const base = deps.env.PUBLIC_BASE_URL;
@@ -95,7 +212,7 @@ export async function createEscrow(deps: EscrowDeps, job: Job): Promise<{ url: s
       stripeRef: session.id,
     });
   }
-  return { url: session.url, escrow };
+  return { url: session.url, escrow, funded: false, ...(fallback ? { fallback_reason: fallback } : {}) };
 }
 
 /** Called by the webhook on checkout.session.completed. */

@@ -9,6 +9,7 @@ export * from './hooks.js';
 export * from './pricing.js';
 export * as ledger from './ledger.js';
 export * from './escrow.js';
+export * from './customer-payment.js';
 export * from './payouts.js';
 export * from './settle.js';
 export * from './disputes.js';

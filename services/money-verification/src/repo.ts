@@ -1,4 +1,5 @@
 import type {
+  CustomerPayment,
   Dispute,
   Escrow,
   EscrowStatus,
@@ -38,8 +39,17 @@ export interface Repo {
   getProofsForJob(jobId: string): Promise<Proof[]>;
   /** Proofs (any job) whose media array contains the given sha256. */
   findProofsByMediaSha256(sha256: string): Promise<Proof[]>;
-  /** The ONE write to a teammates' table: persist the Connect account id created by payouts.ts. */
+  /** One of the two writes to teammates' tables: persist the Connect account id created by payouts.ts. */
   setWorkerConnectAccount(workerId: string, accountId: string): Promise<void>;
+  /** The customer's card on file: customers.stripe_customer_id / default_payment_method_id (migration 0002). */
+  getCustomerPayment(customerId: string): Promise<CustomerPayment | null>;
+  /** The card on file of the customer who requested the job (jobs.customer_id); null when the job has none. */
+  getCustomerPaymentForJob(jobId: string): Promise<CustomerPayment | null>;
+  /** The other write to a teammates' table: the Stripe Customer and default PaymentMethod ids this package saves. */
+  setCustomerPayment(
+    customerId: string,
+    patch: Partial<Pick<CustomerPayment, 'stripe_customer_id' | 'default_payment_method_id'>>,
+  ): Promise<void>;
 
   // ---- escrows ----
   getEscrow(jobId: string): Promise<Escrow | null>;

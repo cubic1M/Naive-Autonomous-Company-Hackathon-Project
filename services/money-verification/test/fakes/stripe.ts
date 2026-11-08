@@ -25,6 +25,10 @@ interface FakePI {
   metadata: Meta;
   latest_charge: string | null;
   amount_received: number;
+  amount_capturable: number;
+  payment_method: string | null;
+  customer: string | null;
+  last_payment_error: Record<string, unknown> | null;
   cancellation_reason?: string;
 }
 interface FakeCS {
@@ -32,7 +36,9 @@ interface FakeCS {
   object: 'checkout.session';
   mode: string;
   url: string;
-  payment_intent: string;
+  payment_intent: string | null;
+  setup_intent: string | null;
+  customer: string | null;
   metadata: Meta;
   payment_status: string;
   status: string;
@@ -85,6 +91,40 @@ interface FakeDp {
   payment_intent: string | null;
 }
 
+interface FakeCust {
+  id: string;
+  object: 'customer';
+  email: string | null;
+  name: string | null;
+  metadata: Meta;
+  created: number;
+}
+interface FakeSI {
+  id: string;
+  object: 'setup_intent';
+  status: string;
+  payment_method: string | null;
+  customer: string | null;
+  usage: string;
+  metadata: Meta;
+}
+
+/**
+ * Stripe's test PaymentMethods that fail an off-session confirmation (https://docs.stripe.com/testing): the fake
+ * throws the SDK's StripeCardError with the documented code/decline_code. Anything else (pm_card_visa, a saved pm_...)
+ * authorizes.
+ */
+const TEST_CARD_FAILURES: Record<string, { code: string; decline_code: string; message: string }> = {
+  pm_card_chargeDeclined: { code: 'card_declined', decline_code: 'generic_decline', message: 'Your card was declined.' },
+  pm_card_chargeDeclinedInsufficientFunds: { code: 'card_declined', decline_code: 'insufficient_funds', message: 'Your card has insufficient funds.' },
+  pm_card_chargeDeclinedExpiredCard: { code: 'expired_card', decline_code: 'expired_card', message: 'Your card has expired.' },
+  pm_card_authenticationRequired: {
+    code: 'authentication_required',
+    decline_code: 'authentication_required',
+    message: 'Your card was declined. This transaction requires authentication.',
+  },
+};
+
 interface FakeVS {
   id: string;
   object: 'identity.verification_session';
@@ -120,11 +160,13 @@ export class FakeStripe implements StripeClient {
   readonly rfStore = new Map<string, FakeRf>();
   readonly dpStore = new Map<string, FakeDp>();
   readonly vsStore = new Map<string, FakeVS>();
+  readonly customerStore = new Map<string, FakeCust>();
+  readonly setiStore = new Map<string, FakeSI>();
   /** The real SDK's webhook signature code; `sk_test_fake` is never sent anywhere. */
   readonly webhooks = new Stripe('sk_test_fake').webhooks;
 
   private readonly idCounters = new Map<string, number>();
-  private readonly idempotencyCache = new Map<string, { body: string; result: unknown }>();
+  private readonly idempotencyCache = new Map<string, { method: string; body: string; result?: unknown; error?: unknown }>();
 
   constructor(private readonly now: () => Date = () => new Date()) {}
 
@@ -143,27 +185,40 @@ export class FakeStripe implements StripeClient {
   }
 
   /**
-   * Same method + key + params -> the stored result object; no key -> always a fresh object.
-   * Same key with DIFFERENT params throws idempotency_error, as real Stripe does, so a test
-   * cannot pass a retry sequence that production Stripe would reject.
+   * Same key + params -> the stored outcome, result OR error (Stripe saves the first response once the endpoint
+   * started executing, a declined card included); no key -> always a fresh object. The same key on a different
+   * endpoint, or with DIFFERENT params, throws idempotency_error as real Stripe does, so a test cannot pass a
+   * retry sequence that production Stripe would reject.
    */
   private idempotent<T>(method: string, params: unknown, options: Stripe.RequestOptions | undefined, factory: () => T): T {
     const key = options?.idempotencyKey;
     if (key === undefined) return factory();
-    const ck = `${method}:${key}`;
     const body = JSON.stringify(canonical(params));
-    const cached = this.idempotencyCache.get(ck);
+    const cached = this.idempotencyCache.get(key);
     if (cached !== undefined) {
+      if (cached.method !== method) {
+        throw new Stripe.errors.StripeIdempotencyError({
+          type: 'idempotency_error',
+          message: `Keys for idempotent requests can only be used for the same endpoint they were first used for ('${cached.method}'). Try using a key other than '${key}' if you meant to execute a different request.`,
+        });
+      }
       if (cached.body !== body) {
         throw new Stripe.errors.StripeIdempotencyError({
           type: 'idempotency_error',
           message: `Keys for idempotent requests can only be used with the same parameters they were first used with. Try using a key other than '${key}' if you meant to execute a different request.`,
         });
       }
+      if ('error' in cached) throw cached.error;
       return cached.result as T;
     }
-    const result = factory();
-    this.idempotencyCache.set(ck, { body, result });
+    let result: T;
+    try {
+      result = factory();
+    } catch (error) {
+      this.idempotencyCache.set(key, { method, body, error });
+      throw error;
+    }
+    this.idempotencyCache.set(key, { method, body, result });
     return result;
   }
 
@@ -195,15 +250,26 @@ export class FakeStripe implements StripeClient {
    * Customer paid on the Checkout page: PI becomes capturable (manual) or succeeded (automatic).
    * NOTE: with capture_method 'manual', real Stripe leaves session.payment_status = 'unpaid' until capture,
    * so handlers must not gate on payment_status === 'paid'. The fake mirrors that.
+   * A setup-mode session instead saves `opts.paymentMethod` (default: a fresh pm_test id) on its SetupIntent.
    */
-  completeCheckout(sessionId: string): Stripe.Event {
+  completeCheckout(sessionId: string, opts: { paymentMethod?: string } = {}): Stripe.Event {
     const cs = this.csStore.get(sessionId);
     if (!cs) throw new Error(`No such checkout session: ${sessionId}`);
-    const pi = this.piStore.get(cs.payment_intent);
+    if (cs.mode === 'setup') {
+      const seti = cs.setup_intent ? this.setiStore.get(cs.setup_intent) : undefined;
+      if (!seti) throw new Error(`Setup session ${sessionId} has no setup intent`);
+      seti.status = 'succeeded';
+      seti.payment_method = opts.paymentMethod ?? this.nextId('pm_test');
+      cs.status = 'complete';
+      cs.payment_status = 'no_payment_required';
+      return this.event('checkout.session.completed', cs);
+    }
+    const pi = cs.payment_intent ? this.piStore.get(cs.payment_intent) : undefined;
     let paid = false;
     if (pi) {
       if (pi.capture_method === 'manual') {
         pi.status = 'requires_capture';
+        pi.amount_capturable = pi.amount;
       } else {
         pi.status = 'succeeded';
         pi.latest_charge = this.nextId('ch_test');
@@ -222,6 +288,13 @@ export class FakeStripe implements StripeClient {
     if (!pi) throw new Error(`No such payment intent: ${paymentIntentId}`);
     pi.status = 'canceled';
     return this.event('payment_intent.canceled', pi);
+  }
+
+  /** The manual-capture PaymentIntent became capturable (Checkout paid or direct hold): Stripe sends this before/with checkout.session.completed. */
+  amountCapturableUpdatedEvent(paymentIntentId: string): Stripe.Event {
+    const pi = this.piStore.get(paymentIntentId);
+    if (!pi) throw new Error(`No such payment intent: ${paymentIntentId}`);
+    return this.event('payment_intent.amount_capturable_updated', pi);
   }
 
   /** A refund happened outside our code (e.g. the Stripe dashboard): emits charge.refunded for the PI's charge. */
@@ -362,6 +435,36 @@ export class FakeStripe implements StripeClient {
         this.record('checkout.sessions.create', params, options);
         return this.idempotent('checkout.sessions.create', params, options, () => {
           const id = this.nextId('cs_test');
+          const customer = params.customer ?? null;
+          if (params.mode === 'setup') {
+            const seti: FakeSI = {
+              id: this.nextId('seti_test'),
+              object: 'setup_intent',
+              status: 'requires_payment_method',
+              payment_method: null,
+              customer,
+              usage: 'off_session',
+              metadata: (params.setup_intent_data?.metadata ?? {}) as Meta,
+            };
+            this.setiStore.set(seti.id, seti);
+            const setup: FakeCS = {
+              id,
+              object: 'checkout.session',
+              mode: 'setup',
+              url: `https://checkout.stripe.test/${id}`,
+              payment_intent: null,
+              setup_intent: seti.id,
+              customer,
+              metadata: (params.metadata ?? {}) as Meta,
+              payment_status: 'no_payment_required',
+              status: 'open',
+              amount_total: 0,
+              success_url: params.success_url,
+              cancel_url: params.cancel_url,
+            };
+            this.csStore.set(id, setup);
+            return setup as unknown as Stripe.Checkout.Session;
+          }
           const piId = this.nextId('pi_test');
           const amount_total = (params.line_items ?? []).reduce(
             (s, li) => s + (li.price_data?.unit_amount ?? 0) * (li.quantity ?? 1),
@@ -378,6 +481,10 @@ export class FakeStripe implements StripeClient {
             metadata: (params.payment_intent_data?.metadata ?? {}) as Meta,
             latest_charge: null,
             amount_received: 0,
+            amount_capturable: 0,
+            payment_method: null,
+            customer,
+            last_payment_error: null,
           };
           this.piStore.set(piId, pi);
           const cs: FakeCS = {
@@ -386,6 +493,8 @@ export class FakeStripe implements StripeClient {
             mode: params.mode ?? 'payment',
             url: `https://checkout.stripe.test/${id}`,
             payment_intent: piId,
+            setup_intent: null,
+            customer,
             metadata: (params.metadata ?? {}) as Meta,
             payment_status: 'unpaid',
             status: 'open',
@@ -401,6 +510,60 @@ export class FakeStripe implements StripeClient {
   };
 
   readonly paymentIntents = {
+    /** Direct creation. With confirm + a payment_method the fake settles the outcome at once, as Stripe does synchronously for cards. */
+    create: async (params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent> => {
+      this.record('paymentIntents.create', params, options);
+      return this.idempotent('paymentIntents.create', params, options, () => {
+        const pm = params.payment_method ?? null;
+        if (pm !== null && !pm.startsWith('pm_')) {
+          throw new Stripe.errors.StripeInvalidRequestError({
+            type: 'invalid_request_error',
+            code: 'resource_missing',
+            param: 'payment_method',
+            message: `No such PaymentMethod: '${pm}'`,
+          });
+        }
+        const pi: FakePI = {
+          id: this.nextId('pi_test'),
+          object: 'payment_intent',
+          amount: params.amount,
+          currency: params.currency,
+          status: 'requires_payment_method',
+          capture_method: params.capture_method ?? 'automatic',
+          transfer_group: params.transfer_group ?? null,
+          metadata: (params.metadata ?? {}) as Meta,
+          latest_charge: null,
+          amount_received: 0,
+          amount_capturable: 0,
+          payment_method: pm,
+          customer: params.customer ?? null,
+          last_payment_error: null,
+        };
+        this.piStore.set(pi.id, pi);
+        if (params.confirm && pm) {
+          const failure = TEST_CARD_FAILURES[pm];
+          if (failure) {
+            pi.last_payment_error = { ...failure, payment_method: { id: pm, object: 'payment_method' } };
+            throw new Stripe.errors.StripeCardError({
+              type: 'card_error',
+              code: failure.code,
+              decline_code: failure.decline_code,
+              message: failure.message,
+              payment_intent: pi as unknown as Stripe.PaymentIntent,
+            });
+          }
+          if (pi.capture_method === 'manual') {
+            pi.status = 'requires_capture';
+            pi.amount_capturable = pi.amount;
+          } else {
+            pi.status = 'succeeded';
+            pi.latest_charge = this.nextId('ch_test');
+            pi.amount_received = pi.amount;
+          }
+        }
+        return pi as unknown as Stripe.PaymentIntent;
+      });
+    },
     capture: async (
       id: string,
       params?: Stripe.PaymentIntentCaptureParams,
@@ -415,6 +578,7 @@ export class FakeStripe implements StripeClient {
         pi.status = 'succeeded';
         pi.latest_charge = this.nextId('ch_test');
         pi.amount_received = params?.amount_to_capture ?? pi.amount;
+        pi.amount_capturable = 0;
         return pi as unknown as Stripe.PaymentIntent;
       });
     },
@@ -525,6 +689,33 @@ export class FakeStripe implements StripeClient {
           expires_at: created + 300,
         } as unknown as Stripe.AccountLink;
       });
+    },
+  };
+
+  readonly customers = {
+    create: async (params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer> => {
+      this.record('customers.create', params, options);
+      return this.idempotent('customers.create', params, options, () => {
+        const cust: FakeCust = {
+          id: this.nextId('cus_test'),
+          object: 'customer',
+          email: params.email ?? null,
+          name: params.name ?? null,
+          metadata: (params.metadata ?? {}) as Meta,
+          created: this.unix(),
+        };
+        this.customerStore.set(cust.id, cust);
+        return cust as unknown as Stripe.Customer;
+      });
+    },
+  };
+
+  readonly setupIntents = {
+    retrieve: async (id: string, params?: Stripe.SetupIntentRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.SetupIntent> => {
+      this.record('setupIntents.retrieve', { id, params }, options);
+      const seti = this.setiStore.get(id);
+      if (!seti) throw new Error(`No such setup intent: ${id}`);
+      return seti as unknown as Stripe.SetupIntent;
     },
   };
 
