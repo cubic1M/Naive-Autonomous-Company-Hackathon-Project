@@ -40,14 +40,72 @@ export const FAMILIES: Family[] = [
   { key: 'photo', title: 'Event photographer needed', instructions: 'Photograph a 2 hour event.', remote: false, hints: { roles: ['event photographer', 'photographer'] } },
   { key: 'notary', title: 'Mobile notary for a signing', instructions: 'Notarize documents on site.', remote: false, hints: { roles: ['mobile notary', 'notary public'], credential: 'notary public' } },
   { key: 'courier', title: 'Courier for a same-day delivery', instructions: 'Pick up and deliver a package.', remote: false, hints: { roles: ['courier', 'delivery driver'] } },
+  { key: 'nextjs', title: 'Fix a Next.js deploy bug in person', instructions: 'Hackathon team needs a TypeScript/Next.js developer at the YC office in SF.', remote: false, hints: { roles: ['Next.js developer', 'TypeScript developer'], skills: ['Next.js', 'TypeScript', 'Vercel'] } },
 ];
+
+/** Extra search phrasings per family (--variants): different titles/skills reach different people. */
+export const VARIANTS: Record<string, Family['hints'][]> = {
+  legal: [
+    { roles: ['technology attorney', 'tech lawyer'], skills: ['software licensing', 'startups'] },
+    { roles: ['freelance lawyer', 'solo attorney'], skills: ['contracts', 'small business'] },
+    { roles: ['privacy attorney'], skills: ['GDPR', 'CCPA', 'privacy policy'] },
+    { roles: ['startup lawyer'], skills: ['SaaS agreements', 'terms and conditions'] },
+  ],
+  react: [
+    { roles: ['freelance web developer'], skills: ['React', 'JavaScript'] },
+    { roles: ['Next.js developer'], skills: ['Next.js', 'Vercel'] },
+    { roles: ['full stack developer'], skills: ['Node.js', 'TypeScript'] },
+    { roles: ['frontend engineer'], skills: ['React', 'Tailwind'] },
+  ],
+  design: [
+    { roles: ['freelance graphic designer'], skills: ['Illustrator', 'branding'] },
+    { roles: ['UI designer', 'product designer'], skills: ['Figma', 'UI'] },
+    { roles: ['illustrator'], skills: ['illustration', 'logo'] },
+  ],
+  copy: [
+    { roles: ['freelance writer'], skills: ['SEO', 'content marketing'] },
+    { roles: ['technical writer'], skills: ['documentation', 'SaaS'] },
+    { roles: ['ghostwriter'], skills: ['blog posts', 'LinkedIn'] },
+  ],
+  translate: [
+    { roles: ['freelance translator'], skills: ['English to Spanish', 'localization'] },
+    { roles: ['certified translator'], skills: ['Spanish', 'legal translation'] },
+    { roles: ['interpreter'], skills: ['Spanish', 'interpretation'] },
+  ],
+  bookkeeping: [
+    { roles: ['freelance bookkeeper'], skills: ['Xero', 'reconciliation'] },
+    { roles: ['virtual bookkeeper'], skills: ['QuickBooks Online', 'small business'] },
+    { roles: ['CPA'], skills: ['tax', 'accounting'] },
+  ],
+  data: [
+    { roles: ['freelance data analyst'], skills: ['Python', 'pandas'] },
+    { roles: ['BI analyst', 'business intelligence developer'], skills: ['Tableau', 'Power BI'] },
+    { roles: ['data scientist'], skills: ['SQL', 'machine learning'] },
+  ],
+  video: [
+    { roles: ['freelance video editor'], skills: ['DaVinci Resolve', 'YouTube'] },
+    { roles: ['motion designer', 'motion graphics artist'], skills: ['After Effects'] },
+    { roles: ['videographer'], skills: ['video production'] },
+  ],
+  ambassador: [{ roles: ['promotional model', 'event staff'] }, { roles: ['street team', 'flyer distributor'] }, { roles: ['event promoter'] }],
+  photo: [{ roles: ['freelance photographer'] }, { roles: ['headshot photographer', 'portrait photographer'] }, { roles: ['videographer'] }],
+  notary: [{ roles: ['loan signing agent'] }, { roles: ['notary signing agent'] }],
+  courier: [{ roles: ['bike messenger'] }, { roles: ['errand runner', 'TaskRabbit tasker'] }],
+  nextjs: [{ roles: ['React developer'], skills: ['React'] }, { roles: ['hackathon developer'], skills: ['TypeScript'] }],
+};
 
 const argv = process.argv.slice(2);
 const dry = argv.includes('--dry');
 const fi = argv.indexOf('--families');
 const wanted = fi >= 0 ? (argv[fi + 1] ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : null;
 const e = process.env;
-const selected = wanted ? FAMILIES.filter((f) => wanted.some((w) => f.key === w || f.key.startsWith(w))) : FAMILIES;
+const base = wanted ? FAMILIES.filter((f) => wanted.some((w) => f.key === w || f.key.startsWith(w))) : FAMILIES;
+const useVariants = argv.includes('--variants');
+const selected: Family[] = useVariants
+  ? base.flatMap((f) => [f, ...(VARIANTS[f.key] ?? []).map((h, i) => ({ ...f, key: `${f.key}#${i + 2}`, hints: { ...f.hints, ...h } }))])
+  : base;
+/** Hard stop for the whole run (USD). */
+const totalBudget = Number(process.env.TOTAL_BUDGET ?? Infinity);
 if (wanted && selected.length === 0) {
   console.error(`No family matches ${wanted.join(',')}. Available: ${FAMILIES.map((f) => f.key).join(', ')}`);
   process.exit(1);
@@ -118,6 +176,10 @@ const toLead = (p: Person): Lead => ({
 let total = 0;
 let totalPeople = 0;
 for (const f of selected) {
+  if (total + maxSpend > totalBudget) {
+    console.log(`  stopping: TOTAL_BUDGET $${totalBudget} reached (spent $${total.toFixed(2)})`);
+    break;
+  }
   // A fresh scratch repo per family so the pool never short-circuits the live search.
   const scratch = new InMemoryRepo();
   const id = `warm-${f.key}`;
