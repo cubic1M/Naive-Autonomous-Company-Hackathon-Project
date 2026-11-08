@@ -36,6 +36,12 @@ export async function wake(role: AgentRole, jobId: string, event: string, messag
     insert into wake_events (job_id, event) values (${jobId}, ${event})
     on conflict do nothing returning job_id`;
   if (claimed.length === 0) return { skipped: "duplicate" as const };
+  // Agents work against production; a local server's jobs don't exist there, so don't wake them from localhost.
+  const local = /localhost|127\.0\.0\.1/.test(process.env.API_BASE_URL ?? "http://localhost");
+  if (local && process.env.WAKE_FROM_LOCAL !== "true") {
+    console.warn(`[wake] local server: skipped waking ${role} for job ${jobId} (${event}); set WAKE_FROM_LOCAL=true to override`);
+    return { skipped: "local" as const };
+  }
   if (!agentId || !key) {
     console.warn(`[wake] ${role} not configured (${AGENT_ENV[role]}); job ${jobId} event ${event} recorded only`);
     return { skipped: "not_configured" as const };

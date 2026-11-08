@@ -1,7 +1,9 @@
 // GET: data for Dora's live dashboard.
 import { sql } from "@/lib/db";
+import { authAdmin } from "@/lib/auth";
 export const dynamic = "force-dynamic";
-export async function GET() {
+export async function GET(req: Request) {
+  if (!authAdmin(req)) return Response.json({ error: "unauthorized: admin key required" }, { status: 401 });
   const jobs = await sql`
     select id, title, status, address, lat, lng, budget_usd, worker_id, updated_at from jobs
     order by created_at desc limit 20`;

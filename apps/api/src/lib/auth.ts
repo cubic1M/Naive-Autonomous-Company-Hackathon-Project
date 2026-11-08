@@ -28,3 +28,12 @@ export function authInternal(req: Request): boolean {
   const got = bearer(req) ?? new URL(req.url).searchParams.get("key");
   return got === expected;
 }
+
+/** Founders only: ADMIN_KEY as Bearer, ?key=, or the operis_admin cookie (set by /admin?key=…). */
+export function authAdmin(req: Request): boolean {
+  const expected = optional("ADMIN_KEY");
+  if (!expected) return false;
+  const cookie = (req.headers.get("cookie") ?? "").match(/(?:^|;\s*)operis_admin=([^;]+)/)?.[1];
+  const got = bearer(req) ?? new URL(req.url).searchParams.get("key") ?? (cookie ? decodeURIComponent(cookie) : null);
+  return got === expected;
+}
