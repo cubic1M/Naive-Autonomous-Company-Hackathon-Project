@@ -6,7 +6,7 @@ import type { ProofDecision, VerificationStatus } from './types.js';
  * Every hook is optional and awaited; a throwing hook does NOT roll back the money/DB write that preceded it.
  */
 export interface Hooks {
-  /** Checkout completed: card authorized (not captured). Job should move quoted -> funded. */
+  /** Card authorized, not captured (Checkout paid, a capturable PaymentIntent, or a direct hold). Job should move requested -> held. */
   onJobFunded?: (jobId: string) => Promise<void> | void;
   /** Connect account has payouts_enabled = true; the worker can now be offered jobs. */
   onWorkerPayoutReady?: (workerId: string) => Promise<void> | void;
