@@ -32,7 +32,7 @@ interface Seed {
 const DEFAULT: Seed[] = [
   {
     name: 'Andrew Li',
-    email: 'azli@stanford.edu',
+    email: 'laz.andrewli@gmail.com',
     headline: 'Full-stack TypeScript / React / Next.js developer, Stanford. Available in SF this weekend.',
     skills: ['TypeScript', 'React', 'Next.js', 'Node.js', 'web developer', 'software engineer', 'deploy', 'Vercel'],
   },
