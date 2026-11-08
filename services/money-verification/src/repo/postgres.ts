@@ -110,6 +110,7 @@ function mapJob(r: Row): Job {
     status: r.status as Job['status'],
     worker_id: r.worker_id == null ? null : String(r.worker_id),
     risk_class: r.risk_class == null ? null : String(r.risk_class),
+    certification_required: r.certification_required == null ? null : String(r.certification_required),
   };
 }
 

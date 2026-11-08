@@ -48,6 +48,7 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
       fee_cents: 1500,
       worker_pay_cents: 4500,
       accepted_at: null,
+      certification_required: null,
       proof_schema: { photos: { min: 2, must_show: ['YC sign'] }, geofence_m: 150 },
       required_tier: 0,
       status: 'proof_submitted',
@@ -62,7 +63,7 @@ describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
       },
     ]);
     const job = await new PostgresRepo(sql).getJob(JOB);
-    expect(job).toMatchObject({ task_type: 'notarization', budget_cents: 10000, fee_cents: 2500, worker_pay_cents: 7500, proof_schema: { photos: { min: 0, must_show: [] } } });
+    expect(job).toMatchObject({ task_type: 'notarization', certification_required: 'CA notary public', budget_cents: 10000, fee_cents: 2500, worker_pay_cents: 7500, proof_schema: { photos: { min: 0, must_show: [] } } });
   });
 
   it('maps contract media rows {url, kind, exif} to ProofMedia and skips hashless reuse lookups', async () => {

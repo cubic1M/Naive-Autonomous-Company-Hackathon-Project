@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { handleStripeWebhook } from '../src/webhooks/stripe.js';
 import { callTool, createTools, describeToolError, resolveToolName, TOOL_NAMES, toolSchemas } from '../src/tools.js';
 import type { VisionScorer } from '../src/proof/vision.js';
-import { JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, webhookRequest } from './helpers.js';
+import { JOB_ID, PROOF_ID, WORKER_ID, approvedReview, makeJob, makeProof, makeWorker, makeWorld, seedVerifiedIdentity, webhookRequest } from './helpers.js';
 
 const passingScorer: VisionScorer = {
   async score(input) {
@@ -132,17 +132,20 @@ describe('tool layer', () => {
     expect((out.payout as { onboarding_url: string }).onboarding_url).toMatch(/^https:\/\/connect\.stripe\.test\/onboard\//);
   });
 
-  it('check_eligibility: suspended, tier, and notary requirement', async () => {
+  it('check_eligibility: suspended, tier, notary requirement, and the tier-2 identity', async () => {
     const { world, tools } = worldWithTools();
     world.repo.seedJob(makeJob({ task_type: 'notarization', required_tier: 1 }));
     world.repo.seedWorker(makeWorker({ tier: 0, suspended: true }));
     const r = await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID });
     expect(r.eligible).toBe(false);
+    expect(r.tier).toBe(2); // a notarization job is tier 2 whatever its budget
     expect(r.reasons.join(' ')).toMatch(/worker_suspended/);
     expect(r.reasons.join(' ')).toMatch(/tier_too_low/);
     expect(r.reasons.join(' ')).toMatch(/notary_not_verified/);
+    expect(r.reasons.join(' ')).toMatch(/identity_not_verified/);
 
     world.repo.seedWorker(makeWorker({ tier: 1 }));
+    await seedVerifiedIdentity(world);
     await world.repo.upsertWorkerVerification({
       worker_id: WORKER_ID,
       kind: 'notary_commission',
@@ -152,7 +155,7 @@ describe('tool layer', () => {
       verified_at: world.clock.now(),
       expires_at: new Date('2030-01-01T00:00:00Z'),
     });
-    expect(await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID })).toEqual({ eligible: true, reasons: [] });
+    expect(await tools.check_eligibility({ worker_id: WORKER_ID, job_id: JOB_ID })).toEqual({ eligible: true, reasons: [], tier: 2 });
   });
 
   it('get_dispute and submit_dispute_evidence over a real dispute', async () => {

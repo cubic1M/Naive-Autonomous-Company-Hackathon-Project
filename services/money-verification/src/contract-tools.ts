@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { InvalidStateError, NotFoundError, RequiresApprovalError } from './errors.js';
 import { reviewProof } from './proof/decide.js';
+import type { VerificationTier } from './proof/profile.js';
 import { createTools, type ToolDeps } from './tools.js';
 import type { ProofCheck, ProofDecision, ProofReview } from './types.js';
 
@@ -31,9 +32,13 @@ export interface CheckProofOut {
   overall_score: number;
   /** Every check that did not pass, as "name: detail". */
   flags: string[];
-  // additive fields beyond contracts/tools.ts: the automated decision and the full check list
+  // additive fields beyond contracts/tools.ts: the automated decision, the full check list, and the verification
+  // tier that applied (null for reviews recorded before tiers existed)
   decision: ProofDecision;
   checks: ProofCheck[];
+  tier: VerificationTier | null;
+  /** The 'profile' check's data: tier, confidence_threshold, min_photos, exif_time_policy, identity_required, notes. */
+  profile: Record<string, unknown> | null;
 }
 
 export type ApproveProofOut = { job_id: string; status: 'approved' } | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' };
@@ -65,6 +70,8 @@ function evidenceOf(review: ProofReview): CheckProofOut {
   const find = (name: string) => review.checks.find((c) => c.name === name);
   const geofence = find('geofence');
   const vision = find('vision');
+  const profile = find('profile');
+  const tier = profile?.data?.tier;
   const distance = geofence?.data?.distance_m;
   const found = (vision?.data?.must_show_found ?? {}) as Record<string, boolean>;
   const confidence = review.confidence ?? 0;
@@ -77,6 +84,8 @@ function evidenceOf(review: ProofReview): CheckProofOut {
     flags: review.checks.filter((c) => c.status !== 'pass').map((c) => `${c.name}: ${c.detail}`),
     decision: review.decision,
     checks: review.checks,
+    tier: tier === 0 || tier === 1 || tier === 2 ? tier : null,
+    profile: profile?.data ?? null,
   };
 }
 

@@ -177,3 +177,59 @@ describe('runChecks', () => {
     expect(byName(checks, 'geofence')?.status).toBe('pass'); // device GPS fallback
   });
 });
+
+describe('timeCheck with the device fallback (tier 0)', () => {
+  const job = makeJob(); // accepted T0 - 1h, deadline T0 + 4h
+  const proof = makeProof(); // device captured_at T0 - 30min
+  const fallback = { exifTimePolicy: 'device_fallback' as const, deviceCapturedAt: proof.captured_at };
+
+  it('passes on the device captured_at when EXIF has no time', () => {
+    const c = timeCheck(job, withExif(proof, exifAt(null, null)), fallback);
+    expect(c.status).toBe('pass');
+    expect(c.detail).toMatch(/device captured_at/);
+    expect(c.data).toMatchObject({ source: 'device' });
+  });
+
+  it('fails when the device captured_at is outside the window', () => {
+    const late = { ...fallback, deviceCapturedAt: new Date(job.deadline.getTime() + MINUTE_MS) };
+    expect(timeCheck(job, withExif(proof, exifAt(null, null)), late).status).toBe('fail');
+  });
+
+  it('needs review when neither EXIF nor device time exists', () => {
+    const c = timeCheck(job, withExif(proof, exifAt(null, null)), { ...fallback, deviceCapturedAt: null });
+    expect(c.status).toBe('needs_review');
+    expect(c.detail).toMatch(/device captured_at/);
+  });
+
+  it('EXIF time still decides when present; untimed images are covered by the device time', () => {
+    const two = makeProof({ media: [proof.media[0] as (typeof proof.media)[0], { url: 'https://blob.test/2.jpg', sha256: 'b'.repeat(64), mime: 'image/jpeg' }] });
+    const exifs: MediaExif[] = [
+      { media: two.media[0] as (typeof two.media)[0], exif: exifAt(null, null, new Date(T0.getTime() - 20 * MINUTE_MS)) },
+      { media: two.media[1] as (typeof two.media)[0], exif: exifAt(null, null) },
+    ];
+    const c = timeCheck(job, exifs, fallback);
+    expect(c.status).toBe('pass');
+    expect(c.detail).toMatch(/covered by device captured_at/);
+    expect(c.data).toMatchObject({ source: 'exif' });
+    // an EXIF time outside the window is still a failure, whatever the device says
+    const bad: MediaExif[] = [{ media: two.media[0] as (typeof two.media)[0], exif: exifAt(null, null, new Date(job.deadline.getTime() + HOUR_MS)) }];
+    expect(timeCheck(job, bad, fallback).status).toBe('fail');
+  });
+
+  it('the default require policy ignores the device time', () => {
+    expect(timeCheck(job, withExif(proof, exifAt(null, null))).status).toBe('needs_review');
+    expect(timeCheck(job, withExif(proof, exifAt(null, null)), { exifTimePolicy: 'require', deviceCapturedAt: proof.captured_at }).status).toBe('needs_review');
+  });
+});
+
+describe('completenessCheck with a tier minimum', () => {
+  const photo = (n: number) => ({ url: `https://blob.test/t${n}.jpg`, sha256: String(n).repeat(64).slice(0, 64), mime: 'image/jpeg' });
+  it('uses the minimum it is given instead of the customer minimum', () => {
+    const job = makeJob({ proof_schema: { photos: { min: 1, must_show: [] } } });
+    const one = completenessCheck(job, makeProof({ media: [photo(1)] }), 2);
+    expect(one.status).toBe('fail');
+    expect(one.detail).toMatch(/need 2/);
+    expect(completenessCheck(job, makeProof({ media: [photo(1), photo(2)] }), 2).status).toBe('pass');
+    expect(completenessCheck(job, makeProof({ media: [photo(1)] })).status).toBe('pass');
+  });
+});

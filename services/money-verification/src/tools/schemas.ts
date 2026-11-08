@@ -154,9 +154,9 @@ export const toolSchemas = {
     }),
   },
   check_eligibility: {
-    description: 'Can this worker take this job (not suspended, tier, required certification verified)?',
+    description: "Can this worker take this job (not suspended, tier, required certification verified, verified identity on a tier-2 job)? Also returns the job's verification tier.",
     input: z.object({ worker_id: uuid, job_id: uuid }).strict(),
-    output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()) }),
+    output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()), tier: z.number().int().min(0).max(2) }),
   },
   get_dispute: {
     description: 'Evidence bundle for a chargeback: job, proof review, ledger lines.',
