@@ -1,5 +1,15 @@
 # Operis
 
+## 🎬 Our hackathon demo
+
+**This is the demo video we submitted to the Naïve × YC Autonomous Companies Hackathon** (2:00).
+
+[![Watch the Operis demo](docs/demo/operis-demo-poster.jpg)](docs/demo/operis-demo.mp4)
+
+▶️ **[Watch the demo (MP4)](docs/demo/operis-demo.mp4)**
+
+What it shows: a Naïve-run company needs something only a person can do, so its agent makes one call to Operis with the job, the budget and what counts as done. Operis finds a real person, invites them, and they accept the shift and do the job in the real world. Their proof is checked and they get paid. No human at Operis touches any of it.
+
 > 🗺️ **New here? Start with [docs/FLOW.md](docs/FLOW.md)**: the full job flow, who owns each step, and which folder your edits go in.
 >
 > 🤖 **Want your agent to hire a human?** Get a key at **https://operis.live/developers**, or read [docs/CONNECT.md](docs/CONNECT.md) (live at https://operis.live/llms.txt).
