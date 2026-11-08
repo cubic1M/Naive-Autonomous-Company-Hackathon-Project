@@ -64,13 +64,15 @@ New (this PR):
 - `apps/api/src/app/v1/growth/unsubscribe/route.ts`, `apps/api/src/app/v1/growth/join/route.ts`.
 - `agents/prompts/recruiter.md`; rewrite of `agents/prompts/sales.md`.
 
-Modified, additive hunks only (Edwin's files, none on the liability PR's list):
+New in `apps/api`: `apps/api/src/mcp/growthSchemas.ts` (the seven zod input schemas and descriptions).
+
+Modified, additive hunks only (Edwin's files; none is on an open PR's file list, VERIFIED with `gh pr view` for #23, #30, #36 and #42):
 - `contracts/tools.ts`: seven tool specs, `Agent` gains `"recruiter"`, `TOOL_REGISTRY` entries.
 - `apps/api/src/tools/registry.ts`: growth module in `REAL`, names in `INTERNAL_TOOLS`.
-- `apps/api/src/mcp/schemas.ts`: the growth schemas, spread from `services/growth` (one import, one line at the end of `SCHEMAS`).
+- `apps/api/src/mcp/server.ts`: looks a tool's schema up in `SCHEMAS` and then in `GROWTH_SCHEMAS`. `serveMcp` reads `spec.description` with no guard (VERIFIED `apps/api/src/mcp/server.ts:16-19`), so a served tool without a schema would fail every internal MCP request; `schemas.ts` itself is on PR #42's list.
 - `apps/api/src/tools/mocks.ts`: one mock per tool (required by its type, VERIFIED `apps/api/src/tools/mocks.ts:15`).
 
-Not touched (frozen by open PRs or owned elsewhere): `agents/agents.json`, `apps/api/src/app/mcp/internal/route.ts`, `scripts/migrate.ts`, `agents/prompts/ceo.md`, `apps/api/src/lib/guide.ts` (liability PR's list, VERIFIED its plan line 23); everything in `services/money-verification`, `services/payments`, `services/verify` (PRs #23, #30, liability); `services/outreach` (Andrew); `apps/web` (Dora). Their changes ship as paste-ready snippets in the PR body.
+Not touched (frozen by open PRs or owned elsewhere): the liability PR #42's files (VERIFIED `gh pr view 42`), among them `agents/agents.json`, `agents/prompts/ceo.md`, `apps/api/src/app/mcp/internal/route.ts`, `apps/api/src/mcp/schemas.ts`, `apps/api/src/lib/approvals.ts`, `apps/api/src/lib/agentFeed.ts`, `apps/api/src/lib/guide.ts`, `apps/api/.env.example`, `scripts/approvals.ts`, `scripts/migrate.ts`, `docs/GO_LIVE.md`; everything in `services/money-verification`, `services/payments`, `services/verify` (PRs #23, #30, #42); `services/outreach` (Andrew); `apps/web` (Dora). Their changes ship as paste-ready snippets in the PR body.
 
 ## 5. Data model (`services/growth/migrations/0001_growth.sql`, idempotent, never run by this PR)
 
@@ -96,7 +98,7 @@ Until Cameron says yes in this session, `GROWTH_LIVE` stays unset everywhere thi
 
 The agent may supply at most one personal line (300 characters, single paragraph); everything else is fixed in code. Every message has:
 
-- A sender that names Operis ("Operis Sales" for marketing, "Operis" for invites) and a subject that describes the email (no "Re:", no false urgency).
+- A sender that names Operis and a subject that describes the email (no "Re:", no false urgency). The From name belongs to the sending inbox, so the inboxes are named "Operis Sales" and "Operis" when they are set up (rollout step 2); the body always names Operis.
 - A line saying what it is: "This is a marketing email from Operis." / "This is an invitation from Operis." (Not "one-time": the guard allows another message after 30 days.)
 - Who we are, including that Sales is an AI agent: signature "Operis Sales (an AI agent) · operis.live".
 - **How we found you**: the prospect's `found_via`, or for recruits the public profile and headline (the same wording as Andrew's `whyLine`).
@@ -201,7 +203,7 @@ Cameron, in order:
 1. A real postal address (PO box or virtual mailbox) → `GROWTH_POSTAL_ADDRESS` on operis-api.
 2. Confirm or create the Naïve Sales identity inbox and set its two ids, so replies wake Sales.
 3. Run `services/growth/migrations/0001_growth.sql` (and add it to `scripts/migrate.ts` after the liability PR merges).
-4. Apply the `agents.json` and `ceo.md` snippets, then `npm run agents:setup` (needs his yes).
+4. Apply the `agents.json` and `ceo.md` snippets, and add `"RECRUITER"` to the role lists in `apps/api/src/lib/approvals.ts`, `scripts/approvals.ts` and `apps/api/src/lib/agentFeed.ts`. Those lists decide whose paused calls the founder console and `AUTO_APPROVE_TOOLS` can see and whose activity the dashboard feed shows (VERIFIED `apps/api/src/lib/approvals.ts:9,20-22,31`, `agentFeed.ts:7,37`). Then `npm run agents:setup` (needs his yes) and copy the printed `NAIVE_AGENT_RECRUITER` to operis-api.
 5. Add `operis.list_prospects,operis.send_marketing,operis.suppress_contact,operis.recruit_search,operis.recruit_invite,operis.growth_report,operis.redeem_promo` to `AUTO_APPROVE_TOOLS` (the rules they would protect are enforced in code; `redeem_promo` only checks and reserves a grant, while the refund itself stays `operis.refund`). Leave `email.send` off it.
 6. Import the hand-sourced team CSV with `services/growth/scripts/import-prospects.ts`.
 7. One real test send to an allowlisted team address; then set `GROWTH_LIVE=sales,recruit` and enable the two schedules.
