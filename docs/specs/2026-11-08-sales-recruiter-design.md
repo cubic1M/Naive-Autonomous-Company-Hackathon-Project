@@ -113,12 +113,12 @@ Invite copy describes the family's work, says each job shows its pay before you 
 
 | Tool | Caller | Input | Output |
 |---|---|---|---|
-| `list_prospects` | Sales | `{ limit? }` (1-50, default 20) | uncontacted, not opted-out prospects: `contact_id, name, org, email_domain, notes, found_via, free_first_job`; plus `sent_today`, `daily_cap` |
+| `list_prospects` | Sales | `{ limit? }` (1-50, default 20) | uncontacted, not opted-out prospects: `contact_id, name, org, email_domain, notes, found_via, free_first_job`; plus `used_today` (sends + dry runs, what counts against the cap) and `daily_cap` |
 | `send_marketing` | Sales | `{ contact_id, personal_line?, offer_free_first_job? }` | `{ contact_id, status, reason?, promo? }`; refuses any id that is not an imported prospect |
 | `suppress_contact` | Sales | `{ email, reason }` | `{ suppressed: true, matched_contacts, matched_workers }`; for replies that say stop; also opts the address out of Ops' outreach |
 | `recruit_search` | Recruiter | `{ family, limit? }` (1-20, default 10) | `{ family, found, new, spend_usd, spend_today_usd, daily_cap_usd, candidates: [{ person_id, name, headline, source, score, distance_km }] }`, opted-out and recently invited people excluded |
-| `recruit_invite` | Recruiter | `{ family, person_ids }` (1-20) | `{ sent, dry_run, skipped, failed, invites_today, daily_cap, results: [{ person_id, status, reason? }] }` |
-| `growth_report` | Sales, Recruiter, CEO | `{}` | today's sends vs caps, search spend, directory per family (found, invited, opted_in, id_verified, licensed, target, gap), demand (section 9), promos (granted, redeemed, due) |
+| `recruit_invite` | Recruiter | `{ family, person_ids }` (1-20) | `{ sent, dry_run, skipped, failed, used_today, daily_cap, results: [{ person_id, status, reason? }] }` |
+| `growth_report` | Sales, Recruiter, CEO | `{}` | today's `sent_today` and `dry_run_today` vs caps (Sales and Recruiter), search spend, directory per family (found, invited, opted_in, id_verified, licensed, target, gap), demand (section 9), promos (granted, redeemed, due) |
 | `redeem_promo` | CEO | `{ job_id }` | `{ eligible: true, refund: { job_id, amount_cents, request_id, reason } }` or `{ eligible: false, reason }` |
 
 `recruit_search` runs Andrew's `findPeopleDetailed` against a scratch in-memory job for the family (as `scripts/warm-pool.ts` does), keeps **individuals only**, drops the paid ContactOut work-email enricher (`linkedinWorkEmail`; enrichers are injectable, VERIFIED `services/outreach/src/find.ts:25,131`), caps each call at `min($0.50, what is left of $2 today)`, saves the people it found into the pool through Andrew's `upsertLead`, and records them as recruit contacts with `found_via`.
