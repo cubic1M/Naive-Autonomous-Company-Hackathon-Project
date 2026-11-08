@@ -5,7 +5,7 @@
 import type { JobState } from "./states";
 
 type Owner = "edwin" | "andrew" | "cameron";
-type Agent = "customer" | "ceo" | "ops" | "verifier" | "finance" | "sales";
+type Agent = "customer" | "ceo" | "ops" | "verifier" | "finance" | "sales" | "recruiter";
 
 interface ToolSpec<In, Out> {
   in: In;
@@ -32,6 +32,23 @@ export interface JobSummary {
   deadline: string;
   budget_usd: number;
   worker_id: string | null;
+}
+
+// ---------- growth shapes (services/growth; docs/specs/2026-11-08-sales-recruiter-design.md) ----------
+export type GrowthFamily = "pier70_gigs" | "sf_notaries" | "ca_attorneys" | "developers";
+export type GrowthSendStatus = "sent" | "dry_run" | "skipped" | "failed";
+export interface GrowthProspect {
+  contact_id: string; name: string | null; org: string | null; email_domain: string; notes: string | null; found_via: string; free_first_job: boolean;
+}
+export interface GrowthDemand { last_7d: number; prior_7d: number; projected_next_7d: number; unfilled_7d: number }
+export interface GrowthReport {
+  day: string;
+  live: { sales: boolean; recruit: boolean };
+  sales: { sent_today: number; dry_run_today: number; daily_cap: number; prospects_waiting: number };
+  recruiting: { sent_today: number; dry_run_today: number; daily_cap: number; search_spend_today_usd: number; search_cap_usd: number };
+  directory: Record<GrowthFamily, { found: number; invited: number; opted_in: number; id_verified: number; licensed: number; target: number; gap: number }>;
+  demand: { by_family: Record<GrowthFamily | "other", GrowthDemand>; top_requested: { title: string; count: number }[] };
+  promos: { granted: number; max: number; redeemed: number; due: { job_id: string; customer: string; refund_cents: number }[] };
 }
 
 // ---------- the tools ----------
@@ -133,6 +150,30 @@ export interface Tools {
     { since?: string },
     { revenue_usd: number; payouts_usd: number; fees_usd: number; costs_usd: number; jobs_paid: number }
   >;
+
+  // GROWTH (Sales, Recruiter, CEO): services/growth
+  list_prospects: ToolSpec<{ limit?: number }, { prospects: GrowthProspect[]; used_today: number; daily_cap: number }>;
+  send_marketing: ToolSpec<
+    { contact_id: string; personal_line?: string; offer_free_first_job?: boolean },
+    { contact_id: string; status: GrowthSendStatus; reason?: string; promo?: { granted: boolean; cap_usd?: number; expires_at?: string; reason?: string } }
+  >;
+  suppress_contact: ToolSpec<{ email: string; reason: string }, { suppressed: true; matched_contacts: number; matched_workers: number }>;
+  recruit_search: ToolSpec<
+    { family: GrowthFamily; limit?: number },
+    {
+      family: GrowthFamily; found: number; new: number; spend_usd: number; spend_today_usd: number; daily_cap_usd: number; error?: string;
+      candidates: { person_id: string; name: string | null; headline: string | null; source: string; score: number; distance_km: number | null }[];
+    }
+  >;
+  recruit_invite: ToolSpec<
+    { family: GrowthFamily; person_ids: string[] },
+    { sent: number; dry_run: number; skipped: number; failed: number; used_today: number; daily_cap: number; results: { person_id: string; status: GrowthSendStatus; reason?: string }[] }
+  >;
+  growth_report: ToolSpec<Record<string, never>, GrowthReport>;
+  redeem_promo: ToolSpec<
+    { job_id: string },
+    { eligible: true; refund: { job_id: string; amount_cents: number; request_id: string; reason: string } } | { eligible: false; reason: string }
+  >;
 }
 
 /** Where each tool lives and who may call it. Edwin mirrors calledBy in agents/agents.json. */
@@ -151,4 +192,11 @@ export const TOOL_REGISTRY: Record<keyof Tools, { owner: Owner; folder: string; 
   refund_large:    { owner: "cameron", folder: "services/payments",          calledBy: ["ceo"] },
   release_payout_large: { owner: "cameron", folder: "services/payments",     calledBy: ["ceo"] },
   ledger:          { owner: "cameron", folder: "services/payments",          calledBy: ["finance", "ceo"] },
+  list_prospects:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
+  send_marketing:   { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
+  suppress_contact: { owner: "cameron", folder: "services/growth", calledBy: ["sales"] },
+  recruit_search:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
+  recruit_invite:   { owner: "cameron", folder: "services/growth", calledBy: ["recruiter"] },
+  growth_report:    { owner: "cameron", folder: "services/growth", calledBy: ["sales", "recruiter", "ceo"] },
+  redeem_promo:     { owner: "cameron", folder: "services/growth", calledBy: ["ceo"] },
 };
