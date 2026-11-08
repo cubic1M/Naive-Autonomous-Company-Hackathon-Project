@@ -176,6 +176,34 @@ describe('identity webhooks', () => {
     expect(verifiedHooks(world)).toHaveLength(1);
   });
 
+  it('a non-uuid worker_id or client_reference_id is not ours: unhandled, and the uuid column is never queried', async () => {
+    const world = makeWorld();
+    const queried: string[] = [];
+    const original = world.repo.getWorkerVerification.bind(world.repo);
+    world.repo.getWorkerVerification = async (workerId, kind) => {
+      queried.push(workerId);
+      // what Postgres answers for a non-uuid in a uuid column (22P02), which would make the webhook 500 and Stripe retry
+      if (!/^[0-9a-f-]{36}$/i.test(workerId)) throw new Error(`invalid input syntax for type uuid: "${workerId}"`);
+      return original(workerId, kind);
+    };
+    const sessions = [
+      { metadata: { worker_id: 'not-a-uuid' }, client_reference_id: null },
+      { metadata: {}, client_reference_id: 'user_42' },
+      { metadata: { worker_id: `${WORKER_ID}x` }, client_reference_id: WORKER_ID },
+    ];
+    for (const type of ['identity.verification_session.verified', 'identity.verification_session.requires_input', 'identity.verification_session.canceled']) {
+      for (const ids of sessions) {
+        const event = world.stripe.event(type, { id: 'vs_foreign', object: 'identity.verification_session', status: 'processing', type: 'document', last_error: { code: 'document_expired', reason: 'expired' }, ...ids });
+        const res = await handleStripeWebhook(world.deps, webhookRequest(world, event));
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ handled: false });
+        expect(await handleStripeEvent(world.deps, event)).toMatchObject({ handled: false, detail: 'session vs_foreign has no worker_id' });
+      }
+    }
+    expect(queried).toEqual([]);
+    expect(world.repo.workerVerifications.size).toBe(0);
+  });
+
   it('a session without worker_id metadata is reported unhandled', async () => {
     const world = makeWorld();
     const event = world.stripe.event('identity.verification_session.verified', {

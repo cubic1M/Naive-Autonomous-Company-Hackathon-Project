@@ -12,6 +12,11 @@ export interface Env {
   DAILY_ESCROW_CAP_CENTS: number;
   /** Per-job payout cap, in cents, above which release_payout_large (human approval) is required. Default 15000. */
   PAYOUT_CAP_CENTS: number;
+  /**
+   * Tier-2 identity gate. 'enforce': a tier-2 proof needs a verified Stripe Identity to be approved. 'log' (default
+   * until the job page has its identity step): the identity check is recorded in the review but never blocks.
+   */
+  IDENTITY_GATE: IdentityGate;
   /** OpenAI-compatible chat completions endpoint for the vision scorer. */
   VERIFIER_BASE_URL?: string;
   VERIFIER_API_KEY?: string;
@@ -20,6 +25,16 @@ export interface Env {
 
 export const DEFAULT_DAILY_ESCROW_CAP_CENTS = 200_000;
 export const DEFAULT_PAYOUT_CAP_CENTS = 15_000;
+
+export type IdentityGate = 'enforce' | 'log';
+export const DEFAULT_IDENTITY_GATE: IdentityGate = 'log';
+
+function identityGateOr(value: string | undefined, fallback: IdentityGate): IdentityGate {
+  if (value === undefined || value.trim() === '') return fallback;
+  const gate = value.trim().toLowerCase();
+  if (gate !== 'enforce' && gate !== 'log') throw new Error(`invalid IDENTITY_GATE value: ${value} (enforce | log)`);
+  return gate;
+}
 
 function intOr(value: string | undefined, fallback: number): number {
   if (value === undefined || value === '') return fallback;
@@ -39,6 +54,7 @@ export function envFromProcess(source: NodeJS.ProcessEnv = process.env): Env {
     // DAILY_HOLD_CAP_CENTS is the name used in the build spec; the checkpoint's name wins, the alias is accepted.
     DAILY_ESCROW_CAP_CENTS: intOr(source.DAILY_ESCROW_CAP_CENTS ?? source.DAILY_HOLD_CAP_CENTS, DEFAULT_DAILY_ESCROW_CAP_CENTS),
     PAYOUT_CAP_CENTS: intOr(source.PAYOUT_CAP_CENTS, DEFAULT_PAYOUT_CAP_CENTS),
+    IDENTITY_GATE: identityGateOr(source.IDENTITY_GATE, DEFAULT_IDENTITY_GATE),
     VERIFIER_BASE_URL: source.VERIFIER_BASE_URL,
     VERIFIER_API_KEY: source.VERIFIER_API_KEY,
     VERIFIER_MODEL: source.VERIFIER_MODEL,

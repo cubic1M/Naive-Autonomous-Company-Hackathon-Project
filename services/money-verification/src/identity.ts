@@ -69,8 +69,18 @@ function attemptsOf(v: WorkerVerification | null): number {
 
 const refId = (x: string | { id: string } | null | undefined): string | null => (x ? (typeof x === 'string' ? x : x.id) : null);
 
-/** metadata.worker_id is what we set; client_reference_id is the same value, kept as a fallback. */
-const workerIdOf = (session: Session): string | null => session.metadata?.worker_id || session.client_reference_id || null;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * metadata.worker_id is what we set; client_reference_id is the same value, kept as a fallback. Only a uuid can be
+ * ours (workers.id and worker_verifications.worker_id are uuid): another integration's session on the same Stripe
+ * account may carry any string, and querying the uuid column with it makes Postgres throw 22P02, the webhook answer
+ * 500 and Stripe redeliver for days. Such a session is reported unhandled instead.
+ */
+const workerIdOf = (session: Session): string | null => {
+  const id = (session.metadata?.worker_id || session.client_reference_id || '').trim();
+  return UUID.test(id) ? id : null;
+};
 
 /** "First Last" from a verified identity row, or null when there is no verified identity (or no name on it). */
 export function verifiedIdentityName(v: WorkerVerification | null): string | null {
@@ -135,7 +145,8 @@ async function write(deps: RecordDeps, workerId: string, existing: WorkerVerific
 /**
  * The verified name. The webhook payload never carries verified_outputs (observed against the sandbox on API
  * 2026-10-28: the key is absent, and it is expandable), so it is fetched with one expanded retrieve. A failed
- * fetch must not lose the verification: the names stay null and the error is recorded for a later refetch.
+ * fetch must not lose the verification: the names stay null and the error is recorded, and refreshVerifiedName
+ * refetches once when verifyNotary needs the name.
  */
 async function verifiedOutputsOf(
   deps: Pick<IdentityDeps, 'stripe'>,
@@ -148,6 +159,30 @@ async function verifiedOutputsOf(
   } catch (err) {
     return { outputs: null, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * The worker's identity row, with the verified name refetched once when the verified webhook could not fetch it
+ * (status verified, no name, details.verified_outputs_error set): one expanded retrieve, and when it returns a name
+ * the row is patched (names in, the error dropped). Otherwise, or without a Stripe client, the row is returned as is.
+ */
+export async function refreshVerifiedName(
+  deps: { repo: Pick<Repo, 'getWorkerVerification' | 'upsertWorkerVerification'>; stripe?: Pick<StripeClient, 'identity'> },
+  workerId: string,
+): Promise<WorkerVerification | null> {
+  const row = await deps.repo.getWorkerVerification(workerId, 'identity');
+  if (!row || row.status !== 'verified' || verifiedIdentityName(row) !== null) return row;
+  const { verified_outputs_error: fetchError, ...details } = detailsOf(row);
+  if (!fetchError || !row.provider_ref || !deps.stripe) return row;
+  let outputs: Stripe.Identity.VerificationSession.VerifiedOutputs | null;
+  try {
+    outputs = (await deps.stripe.identity.verificationSessions.retrieve(row.provider_ref, { expand: ['verified_outputs'] })).verified_outputs ?? null;
+  } catch {
+    return row;
+  }
+  const patched = { ...row, details: { ...details, first_name: outputs?.first_name ?? null, last_name: outputs?.last_name ?? null } };
+  if (verifiedIdentityName(patched) === null) return row;
+  return deps.repo.upsertWorkerVerification(patched);
 }
 
 /** identity.verification_session.verified: store the verified name and the report id, fire onWorkerVerified once. */

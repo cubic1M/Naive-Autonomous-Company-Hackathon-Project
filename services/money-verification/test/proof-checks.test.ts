@@ -44,6 +44,14 @@ describe('geofenceChecks', () => {
   const job = makeJob();
   const proof = makeProof({ gps_lat: null, gps_lng: null });
 
+  it('a remote job (no location) passes with a note, whatever GPS the proof carries', () => {
+    const remote = makeJob({ lat: null, lng: null });
+    const far = makeProof({ gps_lat: 40.7128, gps_lng: -74.006 }); // New York device GPS, EXIF in San Francisco
+    const checks = geofenceChecks(remote, far, withExif(far, exifAt(YC.lat, YC.lng)));
+    expect(checks).toEqual([{ name: 'geofence', status: 'pass', pass: true, detail: 'remote job: no job location, so no geofence applies', data: { remote: true } }]);
+    expect(geofenceChecks(remote, proof, withExif(proof, null))[0]?.status).toBe('pass');
+  });
+
   it('passes at 100 m (EXIF GPS)', () => {
     const [c] = geofenceChecks(job, proof, withExif(proof, exifAt(metersNorth(100), YC.lng)));
     expect(c?.name).toBe('geofence');

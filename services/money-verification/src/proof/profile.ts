@@ -9,10 +9,12 @@
  *   tier 1  $50 to $150                          EXIF capture time required (missing -> review), >= 0.85
  *   tier 2  above $150, or any certification     2 photos, EXIF required, verified identity, >= 0.90
  *
- * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2;
- * `required_tier` is a floor; the customer's own proof requirement (photos.min, must_show, geofence_m,
- * fields) always applies on top, the photo minimum by max.
+ * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2; the
+ * customer's own proof requirement (photos.min, must_show, geofence_m, fields) always applies on top, the photo
+ * minimum by max, and only for a photo proof (a video- or files-only requirement has no tier photo minimum).
+ * `required_tier` is not read here: it is the minimum worker tier (eligibility.ts).
  */
+import type { IdentityGate } from '../env.js';
 import type { Job } from '../types.js';
 
 export type VerificationTier = 0 | 1 | 2;
@@ -31,6 +33,8 @@ export interface TierRules {
 
 export interface VerificationProfile extends TierRules {
   tier: VerificationTier;
+  /** identityRequired under IDENTITY_GATE=enforce. Under 'log' the identity check is recorded but never blocks. */
+  identityEnforced: boolean;
   /** The customer requires a certification (a notary commission, or anything in jobs.certification_required). */
   certificationRequired: boolean;
   /** How the tier was derived, one line per rule that applied; shown in check_proof evidence. */
@@ -57,16 +61,28 @@ export function budgetTier(budgetCents: number): VerificationTier {
   return 2;
 }
 
-const clampTier = (n: number): VerificationTier => (n >= 2 ? 2 : n >= 1 ? 1 : 0);
+/** What a customer agent writes when it means "no certification", compared trimmed, lowercased, spaces collapsed. */
+const NO_CERTIFICATION = new Set(['', 'none', 'no', 'n/a', 'na', 'nil', 'null', 'false', 'not required', 'not applicable', '-']);
 
-export function verificationProfile(job: Job): VerificationProfile {
+/**
+ * The certification a job really requires: null for null, blank, or a placeholder meaning none ("none", "N/A",
+ * "not required", ...). Read wherever certification drives the tier (here) or the task type (repo/postgres.ts).
+ */
+export function requiredCertification(written: string | null | undefined): string | null {
+  const value = (written ?? '').trim();
+  return NO_CERTIFICATION.has(value.toLowerCase().replace(/\s+/g, ' ')) ? null : value;
+}
+
+/** `identityGate` is IDENTITY_GATE (env.ts); omitted, the identity rule is enforced. */
+export function verificationProfile(job: Job, opts: { identityGate?: IdentityGate } = {}): VerificationProfile {
   const notes: string[] = [];
   let tier = budgetTier(job.budget_cents);
   notes.push(`budget ${usd(job.budget_cents)}: tier ${tier}`);
 
   if (job.risk_class) {
     const key = job.risk_class.trim().toLowerCase();
-    const risk = RISK_CLASS_TIER[key];
+    // own keys only: 'constructor' or '__proto__' must be an unknown value, not Object or Object.prototype
+    const risk = Object.hasOwn(RISK_CLASS_TIER, key) ? RISK_CLASS_TIER[key] : undefined;
     if (risk === undefined) {
       notes.push(`risk_class ${job.risk_class} is not low | standard | high; ignored`);
     } else {
@@ -75,25 +91,30 @@ export function verificationProfile(job: Job): VerificationProfile {
     }
   }
 
-  const certification = job.certification_required?.trim() || (job.task_type === 'notarization' ? 'notary commission' : '');
+  const named = requiredCertification(job.certification_required);
+  const written = job.certification_required?.trim() ?? '';
+  if (named === null && written !== '') notes.push(`certification_required "${written}" means none; ignored`);
+  const certification = named ?? (job.task_type === 'notarization' ? 'notary commission' : '');
   const certificationRequired = certification !== '';
   if (certificationRequired) {
     if (tier < 2) tier = 2;
     notes.push(`certification required (${certification}): tier 2`);
   }
 
-  const floor = clampTier(job.required_tier);
-  if (floor > tier) {
-    tier = floor;
-    notes.push(`required_tier ${job.required_tier}: floor tier ${floor}`);
-  }
-
   const rules = TIER_RULES[tier];
   const customerMin = job.proof_schema.photos.min;
-  const minPhotos = Math.max(rules.minPhotos, customerMin);
-  if (customerMin > rules.minPhotos) notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
+  const photosRequested = job.proof_schema.photos.requested !== false;
+  const minPhotos = photosRequested ? Math.max(rules.minPhotos, customerMin) : customerMin;
+  if (!photosRequested) {
+    notes.push('the proof requirement asks for video or files, not photos: no tier photo minimum; such a proof goes to a human');
+  } else if (customerMin > rules.minPhotos) {
+    notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
+  }
 
-  return { tier, ...rules, minPhotos, certificationRequired, notes };
+  const identityEnforced = rules.identityRequired && (opts.identityGate ?? 'enforce') === 'enforce';
+  if (rules.identityRequired && !identityEnforced) notes.push('IDENTITY_GATE=log: the identity check is recorded, not enforced');
+
+  return { tier, ...rules, minPhotos, identityEnforced, certificationRequired, notes };
 }
 
 /** One line for the evidence an agent reads, e.g. "tier 2: confidence >= 0.9, >= 2 photos, EXIF capture time required, verified identity required". */
@@ -102,7 +123,7 @@ export function describeProfile(p: VerificationProfile): string {
     `confidence >= ${p.confidenceThreshold}`,
     `>= ${p.minPhotos} photo${p.minPhotos === 1 ? '' : 's'}`,
     p.exifTimePolicy === 'require' ? 'EXIF capture time required' : 'device capture time accepted when EXIF has none',
-    p.identityRequired ? 'verified identity required' : 'no identity check',
+    p.identityEnforced ? 'verified identity required' : p.identityRequired ? 'identity recorded, not enforced (IDENTITY_GATE=log)' : 'no identity check',
   ];
   if (p.certificationRequired) parts.push('certification required');
   return `tier ${p.tier}: ${parts.join(', ')}`;
@@ -116,6 +137,7 @@ export function profileData(p: VerificationProfile): Record<string, unknown> {
     min_photos: p.minPhotos,
     exif_time_policy: p.exifTimePolicy,
     identity_required: p.identityRequired,
+    identity_enforced: p.identityEnforced,
     certification_required: p.certificationRequired,
     notes: p.notes,
   };
