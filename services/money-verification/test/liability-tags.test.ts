@@ -32,6 +32,7 @@ describe('tagJob', () => {
     ['notary via certification', job('Witness a signature', 'At our office', 'California notary commission'), ['L1'], 'connector', 'connector'],
     ['signing agent', job('Loan signing agent needed', 'Refinance packet'), ['L1'], 'connector', 'connector'],
     ['contract review', job('Review our SaaS terms of service', 'Online contract review'), ['L2'], 'connector', 'connector'],
+    ['review with a word before the document', job('Review our SaaS terms of service'), ['L2'], 'connector', 'connector'],
     ['legal advice', job('Need legal advice on a lease', 'Thirty minute call'), ['L2'], 'connector', 'connector'],
     ['bar licence certification', job('Look over an NDA', 'Two pages', 'California bar license'), ['L2'], 'connector', 'connector'],
     ['electrical', job('Rewire a kitchen outlet', 'Replace the wiring'), ['L3'], 'refuse', 'standard'],

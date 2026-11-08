@@ -36,7 +36,7 @@ export const RULES: readonly LiabilityRule[] = [
       /\b(attorney|lawyer|counsel|paralegal)s?\b/i,
       /\blegal (advice|review|services?|opinion|documents?)\b/i,
       /\b(contract|lease|nda|terms of service) review\b/i,
-      /\breview (our|my|the|a|this) (contract|lease|nda|terms of service|agreement)\b/i,
+      /\breview (our|my|the|a|this)( [a-z0-9-]+)? (contract|lease|nda|terms of service|agreement)\b/i,
       /\bbar (license|licence|number|admission)\b/i,
     ],
   },
