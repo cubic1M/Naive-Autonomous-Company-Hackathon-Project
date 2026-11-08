@@ -177,7 +177,7 @@ export const toolSchemas = {
     }),
   },
   check_eligibility: {
-    description: "Can this worker take this job (not suspended, tier, required certification verified, verified identity on a tier-2 job)? Also returns the job's verification tier.",
+    description: "Can this worker take this job (not suspended, tier, required certification verified, a verified identity, which every job needs)? Also returns the job's verification tier.",
     input: z.object({ worker_id: uuid, job_id: uuid }).strict(),
     output: z.object({ eligible: z.boolean(), reasons: z.array(z.string()), tier: z.number().int().min(0).max(2) }),
   },

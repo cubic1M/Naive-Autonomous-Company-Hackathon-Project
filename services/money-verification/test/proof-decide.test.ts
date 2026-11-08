@@ -11,7 +11,7 @@ import {
 import type { ExifData } from '../src/proof/exif.js';
 import { VisionError, type VisionInput, type VisionScore, type VisionScorer } from '../src/proof/vision.js';
 import type { Job, Proof } from '../src/types.js';
-import { MINUTE_MS, PROOF_ID, T0, YC, makeJob, makeProof, makeWorld } from './helpers.js';
+import { MINUTE_MS, PROOF_ID, T0, YC, makeJob, makeProof, makeWorld, seedVerifiedIdentity } from './helpers.js';
 
 const metersNorth = (m: number) => YC.lat + m / 111_195;
 const IMG = 'https://blob.test/proof-1.jpg';
@@ -68,6 +68,7 @@ describe('reviewProof', () => {
       job: { proof_schema: { photos: { min: 1, must_show: ['sign'] }, geofence_m: 150 } },
       scorer,
     });
+    await seedVerifiedIdentity(world);
     const review = await reviewProof(deps, PROOF_ID);
     expect(review.decision).toBe('approved');
     expect(review.confidence).toBe(0.9);
@@ -179,6 +180,7 @@ describe('manual decisions', () => {
 
   it('(i) low confidence needs override, then approves with a reviewer note', async () => {
     const { world, deps } = setup({ scorer: new FakeScorer({ confidence: 0.6, mustShowFound: {}, notes: '' }) });
+    await seedVerifiedIdentity(world);
     await reviewProof(deps, PROOF_ID);
     await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'ops' })).rejects.toThrow(/^below_threshold/);
 
@@ -191,6 +193,7 @@ describe('manual decisions', () => {
 
   it('approveProof runs the review first when none exists, and refuses null confidence', async () => {
     const { world, deps } = setup();
+    await seedVerifiedIdentity(world);
     await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'ops' })).rejects.toThrow(/^below_threshold/);
     expect(await world.repo.getProofReview(PROOF_ID)).not.toBeNull();
   });
@@ -210,7 +213,8 @@ describe('real fixture end to end', () => {
   it('(j) real readExif on proof-gps.jpg: geofence and time pass, approved', async () => {
     const bytes = new Uint8Array(readFileSync(new URL('./fixtures/proof-gps.jpg', import.meta.url)));
     const scorer = new FakeScorer({ confidence: 0.92, mustShowFound: {}, notes: 'looks right' });
-    const { deps } = setup({ scorer });
+    const { world, deps } = setup({ scorer });
+    await seedVerifiedIdentity(world);
     // Fixture's GPS is the job location; the default proof's device GPS is too, so no consistency flag.
     const review = await reviewProof({ ...deps, readExif: undefined, readMedia: async () => bytes }, PROOF_ID);
     expect(check(review, 'geofence')?.status).toBe('pass');

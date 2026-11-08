@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { budgetTier, describeProfile, requiredCertification, TIER_RULES, verificationProfile } from '../src/proof/profile.js';
+import { budgetTier, describeProfile, profileData, requiredCertification, TIER_RULES, verificationProfile } from '../src/proof/profile.js';
 import type { Job } from '../src/types.js';
 import { makeJob } from './helpers.js';
 
 const job = (overrides: Partial<Job> = {}) => makeJob(overrides);
 
 describe('verificationProfile: budget tiers', () => {
-  it('tier 0 under $50: one photo, device time fallback, 0.80, no identity', () => {
+  it('tier 0 under $50: one photo, device time fallback, 0.80', () => {
     const p = verificationProfile(job({ budget_cents: 3000 }));
     expect(p).toMatchObject({
       tier: 0,
       confidenceThreshold: 0.8,
       minPhotos: 1,
       exifTimePolicy: 'device_fallback',
-      identityRequired: false,
       certificationRequired: false,
     });
     expect(p.notes.join(' ')).toContain('$30');
@@ -26,18 +25,16 @@ describe('verificationProfile: budget tiers', () => {
         confidenceThreshold: 0.85,
         minPhotos: 1,
         exifTimePolicy: 'require',
-        identityRequired: false,
       });
     }
   });
 
-  it('tier 2 above $150: two photos, 0.90, identity required', () => {
+  it('tier 2 above $150: two photos, 0.90', () => {
     expect(verificationProfile(job({ budget_cents: 15001 }))).toMatchObject({
       tier: 2,
       confidenceThreshold: 0.9,
       minPhotos: 2,
       exifTimePolicy: 'require',
-      identityRequired: true,
     });
     expect(budgetTier(4999)).toBe(0);
     expect(budgetTier(5000)).toBe(1);
@@ -46,10 +43,33 @@ describe('verificationProfile: budget tiers', () => {
   });
 });
 
+describe('verificationProfile: a verified identity on every job', () => {
+  it('every tier enforces a verified identity by default, whether IDENTITY_GATE is omitted or enforce', () => {
+    for (const budget_cents of [3000, 6000, 30000]) {
+      for (const p of [verificationProfile(job({ budget_cents })), verificationProfile(job({ budget_cents }), { identityGate: 'enforce' })]) {
+        expect(p.identityEnforced).toBe(true);
+        expect(profileData(p)).toMatchObject({ identity_required: true, identity_enforced: true });
+        expect(describeProfile(p)).toContain('verified identity required');
+        expect(p.notes.join(' ')).not.toContain('IDENTITY_GATE');
+      }
+    }
+  });
+
+  it('IDENTITY_GATE=log records the identity on every tier without enforcing it, and says so', () => {
+    for (const budget_cents of [3000, 6000, 30000]) {
+      const p = verificationProfile(job({ budget_cents }), { identityGate: 'log' });
+      expect(p.identityEnforced).toBe(false);
+      expect(profileData(p)).toMatchObject({ identity_required: true, identity_enforced: false });
+      expect(p.notes).toContain('IDENTITY_GATE=log: the identity check is recorded, not enforced');
+      expect(describeProfile(p)).toContain('identity recorded, not enforced (IDENTITY_GATE=log)');
+    }
+  });
+});
+
 describe('verificationProfile: certification, risk class, floors, customer requirement', () => {
   it('a notarization job is tier 2 whatever the budget', () => {
     const p = verificationProfile(job({ budget_cents: 6000, task_type: 'notarization' }));
-    expect(p).toMatchObject({ tier: 2, certificationRequired: true, identityRequired: true, minPhotos: 2 });
+    expect(p).toMatchObject({ tier: 2, certificationRequired: true, minPhotos: 2 });
   });
 
   it('any certification_required lifts the job to tier 2', () => {
@@ -62,7 +82,7 @@ describe('verificationProfile: certification, risk class, floors, customer requi
     const negatives = ['none', 'None', 'NO', 'no', 'n/a', 'N/A', 'na', 'nil', 'null', 'false', 'not required', 'Not  Applicable', '-', ' - '];
     for (const value of negatives) {
       const p = verificationProfile(job({ budget_cents: 3000, certification_required: value }));
-      expect(p).toMatchObject({ tier: 0, certificationRequired: false, identityRequired: false, minPhotos: 1 });
+      expect(p).toMatchObject({ tier: 0, certificationRequired: false, minPhotos: 1 });
       expect(p.notes.join(' ')).toContain(`certification_required "${value.trim()}" means none; ignored`);
     }
     const blank = verificationProfile(job({ budget_cents: 3000, certification_required: '   ' }));
@@ -100,7 +120,7 @@ describe('verificationProfile: certification, risk class, floors, customer requi
 
   it('required_tier does not move the verification tier: it is the worker-tier gate in check_eligibility', () => {
     expect(verificationProfile(job({ budget_cents: 3000, required_tier: 1 })).tier).toBe(0);
-    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 5 }))).toMatchObject({ tier: 0, identityRequired: false, minPhotos: 1 });
+    expect(verificationProfile(job({ budget_cents: 3000, required_tier: 5 }))).toMatchObject({ tier: 0, minPhotos: 1 });
     expect(verificationProfile(job({ budget_cents: 30000, required_tier: 0 })).tier).toBe(2);
     expect(verificationProfile(job({ budget_cents: 3000, required_tier: 3 })).notes.join(' ')).not.toContain('required_tier');
   });

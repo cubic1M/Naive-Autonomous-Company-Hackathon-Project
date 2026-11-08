@@ -59,10 +59,11 @@ describe('licences required by the liability tags', () => {
     expect(r.reasons.some((x) => x.startsWith('notary_not_verified'))).toBe(true);
     expect(r.reasons.some((x) => x.startsWith('attorney_not_verified'))).toBe(true);
   });
-  it('changes nothing for a job without tags', async () => {
+  it('changes nothing for a job without tags: a worker with a verified identity stays eligible', async () => {
     const repo = new InMemoryRepo();
     repo.seedJob(makeJob({ status: 'outreach', worker_id: null }));
     repo.seedWorker(makeWorker());
-    expect((await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).eligible).toBe(true);
+    await repo.upsertWorkerVerification({ worker_id: WORKER_ID, kind: 'identity', status: 'verified', provider_ref: 'vs_test', details: {}, verified_at: T0, expires_at: null });
+    expect(await checkEligibility({ repo }, { workerId: WORKER_ID, jobId: JOB_ID })).toEqual({ eligible: true, reasons: [], tier: 1 });
   });
 });

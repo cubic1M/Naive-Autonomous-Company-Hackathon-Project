@@ -16,14 +16,14 @@ import {
 const tools = (ctx: ToolContext) => createContractTools(depsFromApiContext(ctx as ApiContext));
 
 const verify: ServiceModule = {
-  // Runs the automated review (profile/tier, geofence, time window, completeness, media reuse, identity on tier 2,
+  // Runs the automated review (profile/tier, geofence, time window, completeness, media reuse, identity on every job,
   // vision) and returns the evidence, including `decision`, `tier` and `profile`.
   check_proof: (input, ctx) => tools(ctx).check_proof(input),
   approve_proof: async (input, ctx) => {
     const out = await tools(ctx).approve_proof(input);
     if (!("error" in out)) return out;
     // contracts/tools.ts knows two error codes. Reused media is a fraud signal like an out-of-fence photo; a
-    // tier-2 worker without a verified identity (IDENTITY_GATE=enforce), too few photos or missing fields
+    // worker without a verified identity (IDENTITY_GATE=enforce), too few photos or missing fields
     // (incomplete) and a capture time outside the window mean the evidence is not sufficient, so the agent escalates.
     const error: "below_threshold" | "outside_geofence" = out.error === "reused_media" || out.error === "outside_geofence" ? "outside_geofence" : "below_threshold";
     return { error };
@@ -37,7 +37,7 @@ export default verify;
 
 /**
  * Named export, read with `import * as verify from "@services/verify/index"` like createPayoutLink after PR #15.
- * Called by POST /v1/worker/identity (Dora's job page, before proof upload on a tier-2 job): a hosted Stripe
+ * Called by POST /v1/worker/identity (Dora's job page, before a worker accepts any job): a hosted Stripe
  * Identity link for the worker (government ID plus a matching selfie), or { url: null, status: 'verified' }
  * when the identity is already on file. Needs DATABASE_URL, STRIPE_SECRET_KEY and PUBLIC_BASE_URL (the
  * return URL is <PUBLIC_BASE_URL>/join/<workerId>/identity/done). The outcome arrives by webhook

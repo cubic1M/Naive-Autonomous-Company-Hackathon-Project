@@ -13,8 +13,10 @@ export interface Env {
   /** Per-job payout cap, in cents, above which release_payout_large (human approval) is required. Default 15000. */
   PAYOUT_CAP_CENTS: number;
   /**
-   * Tier-2 identity gate. 'enforce': a tier-2 proof needs a verified Stripe Identity to be approved. 'log' (default
-   * until the job page has its identity step): the identity check is recorded in the review but never blocks.
+   * Identity gate for every job. 'enforce' (default): a worker without a verified Stripe Identity cannot accept a
+   * job (check_eligibility) and an agent can never approve their proof (a founder can, recording a waiver). 'log' is
+   * an emergency switch: the identity check is recorded but blocks only notary and legal jobs. While 'log' is set,
+   * the "verified human" promise in llms.txt and SKILL.md is not true.
    */
   IDENTITY_GATE: IdentityGate;
   /** OpenAI-compatible chat completions endpoint for the vision scorer. */
@@ -27,7 +29,7 @@ export const DEFAULT_DAILY_ESCROW_CAP_CENTS = 200_000;
 export const DEFAULT_PAYOUT_CAP_CENTS = 15_000;
 
 export type IdentityGate = 'enforce' | 'log';
-export const DEFAULT_IDENTITY_GATE: IdentityGate = 'log';
+export const DEFAULT_IDENTITY_GATE: IdentityGate = 'enforce';
 
 function identityGateOr(value: string | undefined, fallback: IdentityGate): IdentityGate {
   if (value === undefined || value.trim() === '') return fallback;
