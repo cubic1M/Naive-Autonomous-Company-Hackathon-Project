@@ -4,7 +4,7 @@ import { extractEmails, extractPhones } from '../sources/crawl.js';
 import { SKIP_DOMAINS } from '../sources/hunter.js';
 import type { Monid } from '../monid.js';
 import type { Lead } from '../types.js';
-import { EMPTY, deobfuscate, profileOf, type EnrichResult, type PersonEnricher } from './util.js';
+import { EMPTY, deobfuscate, profileOf, type EnrichResult, type PersonEnricher, isOwnSiteFor } from './util.js';
 
 export const WEBSITE_CONTACT_ID = 'monid:search1api/crawl#person';
 
@@ -13,7 +13,7 @@ const ROLE = /^(info|jobs|booking|bookings|hello|contact|hire|careers|work|inqui
 export function personSite(lead: Lead): string | null {
   const site = profileOf(lead, 'website')?.url ?? lead.website;
   const d = domainOf(site);
-  return site && d && !SKIP_DOMAINS.test(d) ? site : null;
+  return site && d && !SKIP_DOMAINS.test(d) && isOwnSiteFor(site, lead) ? site : null;
 }
 
 /** Home, /contact, /about of the person's own site. */

@@ -106,7 +106,7 @@ const email: EmailSender = !send
     : new MonidEmailSender(new HttpMonid(monidKey!, env.MONID_BASE_URL), agentmailInbox!);
 
 console.log(`\n== 1. find_people (${liveSearch ? 'LIVE Monid search' : 'saved sample data, free'}) ==`);
-const found = await findPeopleDetailed({ job_id: 'demo-job', limit: 10, hints }, { repo, monid, env });
+const found = await findPeopleDetailed({ job_id: 'demo-job', limit: Number(e.LIMIT ?? 40), hints }, { repo, monid, env });
 const pl = found.plan;
 console.log(`  plan: ${pl.remote ? 'REMOTE (no distance limit)' : `on-site near ${pl.locationText ?? '?'}`}; roles=${pl.roles.join('|')}; skills=${pl.skills.join('|') || '-'}; credential=${pl.credential ?? '-'}`);
 for (const c of found.output.candidates) {

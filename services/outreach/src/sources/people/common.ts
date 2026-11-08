@@ -68,11 +68,14 @@ export interface PersonInit {
   credentials?: string[];
 }
 
+export const ORG_NAME = /\b(llc|llp|pllc|inc|corp|ltd|firm|group|opportunities|registry|association|network|services|solutions|partners|company|agency|associates|consulting)\b/i;
+
 export function personLead(i: PersonInit): Lead {
   const text = `${i.headline ?? ''} ${i.snippet ?? ''}`;
   return {
     name: i.name,
-    kind: 'person',
+    // "SaaS Law Firm ...", "ProVisors Business Opportunities": organizations, not individuals.
+    kind: i.name && ORG_NAME.test(i.name) ? 'business' : 'person',
     email: i.email ?? null,
     phone: null,
     website: firstWebsite(i.profiles),

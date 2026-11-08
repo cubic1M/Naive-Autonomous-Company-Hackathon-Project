@@ -190,7 +190,8 @@ describe('webPresence', () => {
   it('applies to named people without email or own site', () => {
     expect(webPresence.applies!(named)).toBe(true);
     expect(webPresence.applies!({ ...named, email: 'a@b.co' })).toBe(false);
-    expect(webPresence.applies!({ ...named, profiles: [prof('website', 'https://lw.com')] })).toBe(false);
+    expect(webPresence.applies!({ ...named, profiles: [prof('website', 'https://wernerlaw.com')] })).toBe(false); // own site already known
+    expect(webPresence.applies!({ ...named, profiles: [prof('website', 'https://californiaattorneyregistry.com')] })).toBe(true); // a directory is not their site
     expect(webPresence.applies!(lead({ name: null }))).toBe(false);
   });
   it('picks the person\'s own site/directory page from a real result list, skipping social and aggregators', () => {
@@ -228,5 +229,18 @@ describe('webPresence', () => {
     const r2 = await webPresence.enrich(named, none);
     expect(r2).toMatchObject({ email: null, cost_usd: 0.00015 });
     expect(none.callsTo('search1api/crawl')).toBe(0);
+  });
+});
+
+describe('isOwnSiteFor', () => {
+  it('accepts a person\'s own domain, rejects directories and unrelated sites', async () => {
+    const { isOwnSiteFor } = await import('../src/enrich/util.js');
+    const robert = { name: 'Robert M. Congelliere', kind: 'person' as const };
+    expect(isOwnSiteFor('https://congellierelaw.com', robert)).toBe(true);
+    expect(isOwnSiteFor('https://www.californiaattorneyregistry.com/robert-congelliere', robert)).toBe(false);
+    expect(isOwnSiteFor('https://acme-legal.com', robert)).toBe(false);
+    expect(isOwnSiteFor('https://isaihowens.dev', { name: 'Isaih Owens, Esq.', kind: 'person' })).toBe(true);
+    expect(isOwnSiteFor('https://kineticevents.com', { name: 'Kinetic Events Staffing', kind: 'business' })).toBe(true);
+    expect(isOwnSiteFor('https://www.yelp.com/biz/x', { name: 'X', kind: 'business' })).toBe(false);
   });
 });

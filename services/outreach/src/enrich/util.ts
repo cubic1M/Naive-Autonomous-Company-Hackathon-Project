@@ -75,3 +75,41 @@ export function swallowNotFound(e: unknown): EnrichResult {
   if (e instanceof SourceError && /http 404|not_found/i.test(e.message)) return { ...EMPTY, cost_usd: e.cost_usd };
   throw e;
 }
+
+/** Aggregators/directories: a page there is ABOUT someone, but its contact email belongs to the site. */
+const AGGREGATOR = /(registry|directory|directories|listing|findlaw|justia|avvo|martindale|superlawyers|lawyers\.com|upcounsel|provisors|thumbtack|yelp|bbb|zoominfo|rocketreach|crunchbase|apollo|signalhire|manta|yellowpages|clutch|goodfirms|bark\.com|angi|houzz|expertise\.com)/i;
+
+function nameTokens(name: string | null): string[] {
+  if (!name) return [];
+  return name
+    .replace(/,.*$/, '')
+    .replace(/\b(esq|jd|llm|phd|md|cpa|mr|ms|mrs|dr|attorney|lawyer)\.?\b/gi, '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
+}
+
+/**
+ * True when a website plausibly belongs to this lead, so its contact email is THEIR email:
+ * businesses: any non-aggregator site; people: the domain contains their last name (or first name, 4+ chars).
+ * Prevents taking info@some-directory.com as a person's email.
+ */
+export function isOwnSiteFor(siteOrHost: string, lead: Pick<Lead, 'name' | 'kind'>): boolean {
+  let host = siteOrHost.toLowerCase();
+  try {
+    host = new URL(siteOrHost.startsWith('http') ? siteOrHost : `https://${siteOrHost}`).hostname.toLowerCase();
+  } catch {
+    /* keep as-is */
+  }
+  host = host.replace(/^www\./, '');
+  if (AGGREGATOR.test(host)) return false;
+  if (lead.kind === 'business') return true;
+  const label = host.split('.').slice(0, -1).join('').replace(/[^a-z]/g, '');
+  const tokens = nameTokens(lead.name);
+  if (!tokens.length) return false;
+  const last = tokens[tokens.length - 1]!;
+  const first = tokens[0]!;
+  return label.includes(last) || (first.length >= 4 && label.includes(first));
+}

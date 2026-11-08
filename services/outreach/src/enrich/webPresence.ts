@@ -2,7 +2,7 @@ import { profileFromUrl } from '../profiles.js';
 import { arr, callMonid, domainOf, rec, str } from '../sources/types.js';
 import type { Lead, Profile } from '../types.js';
 import { crawlSiteContact, personSite } from './websiteContact.js';
-import { EMPTY, type EnrichResult, type PersonEnricher } from './util.js';
+import { EMPTY, type EnrichResult, type PersonEnricher, isOwnSiteFor } from './util.js';
 
 export const WEB_PRESENCE_ID = 'monid:litescrape/google/search#presence';
 const SEARCH_COST = 0.00015;
@@ -54,8 +54,9 @@ export function pickOwnSite(output: unknown, name: string): Profile | null {
     if (!r || !link || !p || (p.platform !== 'website' && p.platform !== 'directory')) continue;
     const host = domainOf(link) ?? '';
     if (/(^|\.)(facebook|youtube|wikipedia|zoominfo|yelp|linkedin|instagram|twitter|x|indeed|glassdoor|crunchbase|bloomberg|rocketreach|signalhire|dnb|manta|yellowpages|mapquest|bbb)\./.test(`${host}.`)) continue;
-    const hay = `${str(r.title) ?? ''} ${str(r.snippet) ?? ''} ${host}`.toLowerCase().replace(/[^\p{L}\s.]/gu, '');
-    if (hay.includes(last)) return p;
+    // Only the person's OWN site counts (domain contains their name). A directory page that merely
+    // mentions them would hand us the directory's info@ address.
+    if (p.platform === 'website' && isOwnSiteFor(host, { name, kind: 'person' })) return p;
   }
   return null;
 }

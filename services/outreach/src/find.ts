@@ -32,6 +32,8 @@ export interface FindDetailed {
   plan: SearchPlan;
 }
 
+/** Below this, a candidate is a poor fit (e.g. an unrelated Reddit poster); never invited. */
+export const MIN_SCORE = 0.3;
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 50;
 const MAX_ENRICH = 60;
@@ -282,6 +284,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     .map((p) => ({ p, channel: pickChannel(p, { allowManual: env.OUTREACH_MANUAL_QUEUE }), score: scorePerson(p, job, scoreCtx), d: remote ? null : distanceToJob(p, job) }))
     .filter((x): x is typeof x & { channel: NonNullable<typeof x.channel> } => x.channel !== null)
     .filter((x) => x.d === null || x.d <= radiusKm) // on-site: never invite people outside the job's area
+    .filter((x) => x.p.regular || x.score >= MIN_SCORE) // don't invite clearly irrelevant people
     .sort((a, b) => Number(b.p.regular) - Number(a.p.regular) || b.score - a.score || (a.d ?? 1e9) - (b.d ?? 1e9))
     .slice(0, limit);
 
