@@ -3,10 +3,12 @@
 # in Vercel DNS, after the nameservers moved from GoDaddy to Vercel. Values copied from GoDaddy's zone.
 #   bash scripts/dns-restore-m365.sh
 cd "$(dirname "$0")/.." || exit 1
-a() { npx vercel dns add operis.live "$@" || true; }
-a '@' MX operis-live.mail.protection.outlook.com 0
-a '@' TXT 'v=spf1 include:secureserver.net -all'
-a '@' TXT 'NETORGFT21294107.onmicrosoft.com'
+a() {
+  if out=$(npx vercel dns add operis.live "$@" 2>&1); then echo "✓ $*"; else echo "✗ $*"; echo "$out" | grep -iE '"message"|error|already|exists' | grep -v feedback | head -3 | sed 's/^/    /'; fi
+}
+a '' MX operis-live.mail.protection.outlook.com 0
+a '' TXT 'v=spf1 include:secureserver.net -all'
+a '' TXT 'NETORGFT21294107.onmicrosoft.com'
 a autodiscover CNAME autodiscover.outlook.com
 a selector1._domainkey CNAME selector1-operis-live._domainkey.netorgft21294107.n-v1.dkim.mail.microsoft
 a selector2._domainkey CNAME selector2-operis-live._domainkey.netorgft21294107.n-v1.dkim.mail.microsoft
