@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { optional } from "./env";
 
 const NAIVE = "https://api.vetta.sh/v1";
-export type AgentRole = "ceo" | "ops" | "verifier" | "finance" | "sales" | "disputes";
+export type AgentRole = "ceo" | "ops" | "verifier" | "finance" | "sales" | "disputes" | "compliance";
 
 const AGENT_ENV: Record<AgentRole, string> = {
   ceo: "NAIVE_AGENT_CEO",
@@ -13,11 +13,12 @@ const AGENT_ENV: Record<AgentRole, string> = {
   finance: "NAIVE_AGENT_FINANCE",
   sales: "NAIVE_AGENT_SALES",
   disputes: "NAIVE_AGENT_DISPUTES",
+  compliance: "NAIVE_AGENT_COMPLIANCE",
 };
 
 const MESSAGES: Partial<Record<JobState, (id: string) => string>> = {
   held: (id) =>
-    `Job ${id} is funded. Read it with get_job, create a board card for it, and assign the card to the ops member to find a worker.`,
+    `Job ${id} is funded. Read it with get_job and get_liability_context, decide operis, connector or refuse under the liability policy, and record it with set_liability (rule id and a one-line reason).`,
   accepted: (id) =>
     `Job ${id} was accepted by a worker. Read it with get_job, confirm the worker, and note on the board card that outreach is closed.`,
   proof_submitted: (id) =>
@@ -25,6 +26,10 @@ const MESSAGES: Partial<Record<JobState, (id: string) => string>> = {
   approved: (id) =>
     `Job ${id} proof was approved. Call capture_payment, then payout. Report the result on the board card.`,
 };
+
+/** After Compliance decides operis or connector, the CEO dispatches as before. */
+export const liabilityDecidedMessage = (id: string, model: string) =>
+  `Job ${id} is funded and cleared by Compliance (liability model: ${model}). Read it with get_job, create a board card for it with the model in the body, and assign the card to the ops member to find a worker.`;
 
 /**
  * Wake a Naïve agent for a job event. Idempotent per (job, event): retries and duplicate

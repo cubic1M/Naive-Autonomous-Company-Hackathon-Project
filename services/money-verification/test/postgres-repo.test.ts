@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { completenessCheck, loadExif } from '../src/proof/checks.js';
 import { PostgresRepo, type SqlClient } from '../src/repo/postgres.js';
 import { makeJob } from './helpers.js';
@@ -17,6 +17,55 @@ function fakeSql(answers: Array<{ match: string; rows: Record<string, unknown>[]
 }
 
 const JOB = '00000000-0000-4000-8000-000000000001';
+
+describe('PostgresRepo: job_liability (migration 0003)', () => {
+  const row = {
+    job_id: JOB, tags: { rules: ['L2'], forced: 'connector' }, pricing: 'connector', model: 'connector', rule_id: 'L2',
+    reason: 'contract review is legal work', policy_version: '2026-11-08', decided_by: 'compliance-agent',
+    decided_at: '2026-11-07T18:00:00.000Z', created_at: '2026-11-07T17:45:00.000Z',
+  };
+  const decision = { model: 'connector' as const, rule_id: 'L2', reason: 'contract review is legal work', policy_version: '2026-11-08', decided_by: 'compliance-agent', decided_at: new Date('2026-11-07T18:00:00.000Z') };
+
+  it('maps a row: tags from jsonb, timestamps to Dates', async () => {
+    const liability = await new PostgresRepo(fakeSql([{ match: 'select * from job_liability', rows: [row] }])).getJobLiability(JOB);
+    expect(liability).toEqual({ ...row, decided_at: new Date(row.decided_at), created_at: new Date(row.created_at) });
+    expect(liability?.decided_at).toBeInstanceOf(Date);
+  });
+
+  it('inserts with on conflict do nothing and decides only an undecided row', async () => {
+    const undecided = { ...row, model: null, rule_id: null, reason: null, policy_version: null, decided_by: null, decided_at: null };
+    const sql = fakeSql([
+      { match: 'insert into job_liability', rows: [undecided] },
+      { match: 'update job_liability', rows: [row] },
+    ]);
+    const repo = new PostgresRepo(sql);
+    expect((await repo.insertJobLiability({ job_id: JOB, tags: { rules: ['L2'], forced: 'connector' }, pricing: 'connector' })).model).toBeNull();
+    expect((await repo.decideJobLiability(JOB, decision)).changed).toBe(true);
+    const insert = sql.calls.find((c) => c.text.includes('insert into job_liability'));
+    expect(insert?.text).toContain('on conflict (job_id) do nothing');
+    expect(insert?.params).toEqual([JOB, JSON.stringify({ rules: ['L2'], forced: 'connector' }), 'connector']);
+    expect(sql.calls.find((c) => c.text.includes('update job_liability'))?.text).toContain('where job_id = $1 and model is null');
+  });
+
+  it('returns the stored row when the insert conflicts or the job is already decided', async () => {
+    const repo = new PostgresRepo(fakeSql([{ match: 'select * from job_liability', rows: [row] }]));
+    expect((await repo.insertJobLiability({ job_id: JOB, tags: { rules: [], forced: null }, pricing: 'standard' })).pricing).toBe('connector');
+    expect(await repo.decideJobLiability(JOB, { ...decision, model: 'operis', rule_id: 'D' })).toMatchObject({ changed: false, row: { model: 'connector', rule_id: 'L2' } });
+  });
+
+  it('treats a missing table (42P01: migration 0003 not run) as no row and lets other errors through', async () => {
+    const failing = (code: string): SqlClient => ({
+      async query() {
+        throw Object.assign(new Error(`postgres error ${code}`), { code });
+      },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await new PostgresRepo(failing('42P01')).getJobLiability(JOB)).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+    await expect(new PostgresRepo(failing('57P01')).getJobLiability(JOB)).rejects.toThrow('postgres error 57P01');
+  });
+});
 
 describe('PostgresRepo against contracts/schema.sql shaped rows', () => {
   it('maps a jobs row with *_usd money and proof_requirement into cents and ProofSchema', async () => {

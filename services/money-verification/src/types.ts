@@ -133,7 +133,7 @@ export interface LedgerEntry {
 
 export type NewLedgerEntry = Omit<LedgerEntry, 'id' | 'created_at' | 'currency'> & { currency?: string };
 
-export type VerificationKind = 'identity' | 'notary_commission';
+export type VerificationKind = 'identity' | 'notary_commission' | 'attorney_license';
 export type VerificationStatus = 'pending' | 'verified' | 'failed' | 'needs_review';
 
 export interface WorkerVerification {
@@ -145,6 +145,29 @@ export interface WorkerVerification {
   verified_at: Date | null;
   expires_at: Date | null;
 }
+
+/** Owned by this package: the per-job liability model (src/liability, migration 0003). */
+export interface JobLiability {
+  job_id: string;
+  tags: { rules: string[]; forced: 'connector' | 'refuse' | null };
+  pricing: 'standard' | 'connector';
+  model: 'operis' | 'connector' | 'refuse' | null;
+  rule_id: string | null;
+  reason: string | null;
+  policy_version: string | null;
+  decided_by: string | null;
+  decided_at: Date | null;
+  created_at: Date;
+}
+
+export type LiabilityDecision = {
+  model: 'operis' | 'connector' | 'refuse';
+  rule_id: string;
+  reason: string;
+  policy_version: string;
+  decided_by: string;
+  decided_at: Date;
+};
 
 export type ProofDecision = 'approved' | 'escalated' | 'rejected';
 

@@ -16,7 +16,7 @@ const decide = async (s: string, c: string, d: string, why: string) => {
 };
 
 async function pending() {
-  const ids = new Map(["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"].map((r) => [process.env[`NAIVE_AGENT_${r}`], r.toLowerCase()]));
+  const ids = new Map(["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES", "COMPLIANCE"].map((r) => [process.env[`NAIVE_AGENT_${r}`], r.toLowerCase()]));
   // waiting = session stopped with stop_reason "awaiting_approval"; its calls are the tool.confirm events since it last ran
   const sessions = ((await get(`${NAIVE}/sessions?limit=30`)).body.data ?? []).filter((s: any) => ids.has(s.agent_id) && s.stop_reason === "awaiting_approval");
   const out: any[] = [];

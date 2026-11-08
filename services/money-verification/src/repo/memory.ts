@@ -6,7 +6,9 @@ import type {
   Escrow,
   EscrowStatus,
   Job,
+  JobLiability,
   LedgerEntry,
+  LiabilityDecision,
   NewLedgerEntry,
   NotaryRecord,
   Payout,
@@ -17,6 +19,7 @@ import type {
   Worker,
   WorkerVerification,
 } from '../types.js';
+import { NotFoundError } from '../errors.js';
 
 /**
  * In-memory Repo for tests and local demos. Also holds teammates' tables (jobs/workers/proofs)
@@ -37,6 +40,7 @@ export class InMemoryRepo implements Repo {
   notaries = new Map<string, NotaryRecord>();
   payouts = new Map<string, Payout>();
   disputes = new Map<string, Dispute>();
+  jobLiability = new Map<string, JobLiability>();
 
   constructor(private readonly now: () => Date = () => new Date()) {}
 
@@ -229,5 +233,30 @@ export class InMemoryRepo implements Repo {
     const row: Dispute = { ...d, updated_at: this.now() };
     this.disputes.set(row.id, row);
     return row;
+  }
+
+  async getJobLiability(jobId: string) {
+    const r = this.jobLiability.get(jobId);
+    return r ? { ...r, tags: { ...r.tags, rules: [...r.tags.rules] } } : null;
+  }
+
+  async insertJobLiability(row: Pick<JobLiability, 'job_id' | 'tags' | 'pricing'>) {
+    const existing = await this.getJobLiability(row.job_id);
+    if (existing) return existing;
+    const created: JobLiability = {
+      job_id: row.job_id, tags: { ...row.tags, rules: [...row.tags.rules] }, pricing: row.pricing,
+      model: null, rule_id: null, reason: null, policy_version: null, decided_by: null, decided_at: null,
+      created_at: this.now(),
+    };
+    this.jobLiability.set(row.job_id, created);
+    return { ...created };
+  }
+
+  async decideJobLiability(jobId: string, d: LiabilityDecision) {
+    const r = this.jobLiability.get(jobId);
+    if (!r) throw new NotFoundError('job_liability', jobId);
+    if (r.model !== null) return { row: (await this.getJobLiability(jobId))!, changed: false };
+    this.jobLiability.set(jobId, { ...r, ...d });
+    return { row: (await this.getJobLiability(jobId))!, changed: true };
   }
 }

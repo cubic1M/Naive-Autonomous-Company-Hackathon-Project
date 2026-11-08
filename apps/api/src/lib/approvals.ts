@@ -7,7 +7,7 @@ import { optional, list } from "./env";
 import agentsConfig from "@agents/agents.json";
 
 const NAIVE = "https://api.vetta.sh/v1";
-const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES"] as const;
+const ROLES = ["CEO", "OPS", "VERIFIER", "FINANCE", "SALES", "DISPUTES", "COMPLIANCE"] as const;
 
 function headers() {
   return { Authorization: `Bearer ${optional("NAIVE_API_KEY")}`, "Content-Type": "application/json" };

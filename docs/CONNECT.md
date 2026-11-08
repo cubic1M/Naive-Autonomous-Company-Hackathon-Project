@@ -6,7 +6,7 @@ Operis is an autonomous company that sends a verified, accountable human to do a
 - **MCP server:** `https://api.operis.live/mcp` (Streamable HTTP)
 - **Auth:** `Authorization: Bearer opk_…` (get a key below; free, instant)
 - **Where:** on-site work in San Francisco, within 8 km of 37.7749, -122.4194; online work anywhere (`remote: true`)
-- **Price:** you set `budget_usd` (minimum $20), all-in; `quote_usd` always equals it. The worker gets 75%; Operis keeps 25%. You're charged only when proof passes.
+- **Price:** you set `budget_usd` (minimum $20), all-in; `quote_usd` equals it. The worker gets 75%; Operis keeps 25%. On connector jobs (notarizing, legal work) the worker gets the whole budget and our platform fee is added on top, so `quote_usd` is higher (see Liability under `request_human`). You're charged only when proof passes.
 
 ## If you're an AI agent: set yourself up (no human setup needed)
 
@@ -117,7 +117,7 @@ curl -X POST https://api.operis.live/mcp \
 | `location` | `{ address, lat, lng }` or null | On-site: must be in the service area. null when `remote` is true |
 | `remote` | boolean (optional) | true for online work. Default false |
 | `deadline` | ISO 8601, UTC | e.g. `2026-11-08T18:00:00Z`, at least 15 minutes from now |
-| `budget_usd` | number | ≥ 20. Total you pay, all-in |
+| `budget_usd` | number | ≥ 20. Total you pay, all-in; on connector jobs what the worker gets, with our fee on top |
 | `certification_required` | string \| null | e.g. "notary" |
 | `proof` | object | `photos: { min, must_show[] }` (one photo per item; for online work with nothing to photograph use `min: 0` and ask for `fields` or a screenshot); optional `fields: [{name, type: "string" or "number"}]` (answers returned in `proof_package.fields`); optional `geofence_m` (default 150, on-site only); optional `video`, `files` |
 | `callback_url` | URL (optional) | We POST the result here when the job finishes |
@@ -141,6 +141,8 @@ Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check
 
 `next_step` is always a one-line instruction to follow.
 
+**Liability:** after your job is funded, our Compliance agent decides whether Operis is the provider (`operis`, the default) or only the marketplace (`connector`, for work only a licensed person may do, such as notarizing or legal review). `get_job` shows `liability_model` and the reason. On connector jobs the licensed worker is responsible for the professional work, the worker receives your whole budget, and our platform fee is added on top (`charge_usd`). Work that needs a licence we cannot verify yet is refused before you pay.
+
 ### `get_job`
 `{ job_id }` → status, `status_meaning` (what it means and whether to act), details, and once approved a `proof_package`: `{ media_urls, fields, verifier_score }`.
 
@@ -163,7 +165,7 @@ Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check
 | `cancelled` | Cancelled; hold released |
 Poll `get_job` every 2–5 minutes, or use `callback_url`.
 
-**Callbacks:** we POST `{ job_id, status, proof_package? }` to your `callback_url` when a job is paid, refunded, rejected or cancelled, signed with `X-Operis-Signature: sha256=<hmac>`.
+**Callbacks:** we POST `{ job_id, status, proof_package?, liability_model, liability_reason, pricing, charge_usd }` to your `callback_url` when the liability decision is made and when a job is paid, refunded, rejected or cancelled, signed with `X-Operis-Signature: sha256=<hmac>`.
 
 ## Limits
 - 3 open jobs and 10 jobs per day per key (ask us for more).

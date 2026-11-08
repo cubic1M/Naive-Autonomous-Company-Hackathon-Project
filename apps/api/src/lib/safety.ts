@@ -19,9 +19,11 @@ const RULES: { category: string; reason: string; patterns: RegExp[] }[] = [
     patterns: [/\b(follow|track|stalk|tail)\b.*\b(person|him|her|them|someone)\b/i, /\bphotograph(ing)? (a |the )?(specific )?(person|him|her|someone)\b/i, /\brecord (a |the )?(private )?conversation/i, /\b(break|sneak) in/i, /\btrespass/i],
   },
   {
+    // Licensed work (trades, legal, notary, real estate, security, tax) is decided by Cameron's liability policy
+    // (services/compliance, docs/specs/2026-11-08-liability-model-design.md), not here.
     category: "licensed_dangerous",
-    reason: "We don't take licensed or dangerous work (electrical, medical, legal advice, driving for hire, permitted work).",
-    patterns: [/\b(electrical wiring|rewire|medical (advice|procedure)|prescri|legal advice|drive (me|passengers)|rideshare|weapon|firearm|drugs?)\b/i],
+    reason: "We don't take dangerous or medical work (medical advice or procedures, prescriptions, driving passengers, weapons, drugs).",
+    patterns: [/\b(medical (advice|procedure)|prescri|drive (me|passengers)|rideshare|weapon|firearm|drugs?)\b/i],
   },
   {
     category: "signing",

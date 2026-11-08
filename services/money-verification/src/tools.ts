@@ -13,6 +13,7 @@ import { getDisputeBundle, submitDisputeEvidence, type DisputeDeps } from './dis
 import type { Hooks } from './hooks.js';
 import { startIdentityVerification } from './identity.js';
 import * as ledger from './ledger.js';
+import { getLiabilityContext, setLiability } from './liability/decide.js';
 import { payWorker, type PayoutDeps, type PayWorkerResult } from './payouts.js';
 import { approveProof, escalateProof, type DecideDeps } from './proof/decide.js';
 import type { ReadMedia } from './proof/exif.js';
@@ -21,6 +22,7 @@ import type { VisionScorer } from './proof/vision.js';
 import type { Repo } from './repo.js';
 import { settleApprovedJob } from './settle.js';
 import type { StripeClient } from './stripe-client.js';
+import { verifyAttorney } from './certs/attorney.js';
 import { verifyNotary } from './certs/notary.js';
 import { resolveToolName, toolSchemas, type ToolInput, type ToolName, type ToolOutput } from './tools/schemas.js';
 import type { ProofReview } from './types.js';
@@ -184,6 +186,10 @@ export function createTools(deps: ToolDeps): Tools {
       );
       return { worker_id, status: r.status, reasons: r.reasons, commission_expires: iso(r.record?.commission_expires), name_source: r.nameSource };
     },
+    async verify_attorney(raw) {
+      const { worker_id, bar_number, name } = parse('verify_attorney', raw);
+      return verifyAttorney({ repo: deps.repo, now: deps.now }, { workerId: worker_id, barNumber: bar_number, name });
+    },
     async verify_identity(raw) {
       const { worker_id } = parse('verify_identity', raw);
       const r = await startIdentityVerification(deps, worker_id);
@@ -192,6 +198,15 @@ export function createTools(deps: ToolDeps): Tools {
     async check_eligibility(raw) {
       const { worker_id, job_id } = parse('check_eligibility', raw);
       return checkEligibility({ repo: deps.repo, env: deps.env }, { workerId: worker_id, jobId: job_id });
+    },
+    async get_liability_context(raw) {
+      const { job_id } = parse('get_liability_context', raw);
+      return getLiabilityContext({ repo: deps.repo, now: deps.now }, job_id);
+    },
+    async set_liability(raw) {
+      const { job_id, model, rule_id, reason } = parse('set_liability', raw);
+      const out = await setLiability({ repo: deps.repo, now: deps.now }, { jobId: job_id, model, ruleId: rule_id, reason, decidedBy: 'compliance-agent' });
+      return { job_id, model: out.liability.model!, rule_id: out.liability.rule_id!, reason: out.liability.reason!, next: out.next, changed: out.changed };
     },
     async get_dispute(raw) {
       const { dispute_id } = parse('get_dispute', raw);

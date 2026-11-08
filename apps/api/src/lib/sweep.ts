@@ -4,6 +4,8 @@ import { transition } from "./jobs";
 import { wake } from "./naive";
 import { makeContext } from "@/tools/context";
 import { resolveTool } from "@/tools/registry";
+import { afterDecision } from "@/tools/liability";
+import * as compliance from "@services/compliance/index";
 
 const NUDGES = [
   { afterMin: 15, event: "no_taker_1" },
@@ -11,7 +13,7 @@ const NUDGES = [
 ];
 
 export async function sweep() {
-  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, errors: [] as string[] };
+  const report = { cancelled: 0, expired: 0, refunded: 0, nudged: 0, liability: 0, errors: [] as string[] };
 
   // 1. Past the deadline and nobody delivered: stop the job and give the customer their money back.
   const overdue = await sql`
@@ -35,7 +37,24 @@ export async function sweep() {
     }
   }
 
-  // 2. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
+  // 2. Funded jobs with no liability decision fifteen minutes after Compliance was woken: decide by the intake tags.
+  const undecided = await sql`
+    select j.id from jobs j
+    join wake_events w on w.job_id = j.id and w.event = 'held'
+    left join job_liability l on l.job_id = j.id
+    where j.status = 'held' and (l.job_id is null or l.model is null)
+      and w.created_at < now() - interval '15 minutes'`.catch(() => [] as any[]); // before migration 0003
+  for (const j of undecided) {
+    try {
+      const out = await compliance.fallbackDecision(j.id);
+      await afterDecision(j.id, out);
+      report.liability++;
+    } catch (e) {
+      report.errors.push(`${j.id}: ${String(e).slice(0, 120)}`);
+    }
+  }
+
+  // 3. Outreach with no taker: wake Ops to widen the search (each nudge at most once per job).
   for (const n of NUDGES) {
     const stuck = await sql`
       select j.id from jobs j

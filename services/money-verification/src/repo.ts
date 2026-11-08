@@ -4,8 +4,10 @@ import type {
   Escrow,
   EscrowStatus,
   Job,
+  JobLiability,
   LedgerEntry,
   LedgerKind,
+  LiabilityDecision,
   NewLedgerEntry,
   NotaryRecord,
   Payout,
@@ -100,4 +102,11 @@ export interface Repo {
   getDispute(id: string): Promise<Dispute | null>;
   listDisputesForJob(jobId: string): Promise<Dispute[]>;
   upsertDispute(dispute: Omit<Dispute, 'updated_at'>): Promise<Dispute>;
+
+  // ---- job_liability (owned by this package; migration 0003) ----
+  getJobLiability(jobId: string): Promise<JobLiability | null>;
+  /** Intake row with tags and pricing. Idempotent: an existing row is returned unchanged. */
+  insertJobLiability(row: Pick<JobLiability, 'job_id' | 'tags' | 'pricing'>): Promise<JobLiability>;
+  /** Records the decision only when none is recorded; `changed` says whether this call wrote it. */
+  decideJobLiability(jobId: string, d: LiabilityDecision): Promise<{ row: JobLiability; changed: boolean }>;
 }

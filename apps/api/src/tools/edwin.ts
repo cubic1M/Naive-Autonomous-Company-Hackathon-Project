@@ -4,8 +4,7 @@ import type { ToolContext } from "@contracts/runtime";
 import { checkSafety } from "@/lib/safety";
 import { inServiceArea } from "@/lib/geo";
 import { flag } from "@/lib/env";
-
-const FEE_RATE = 0.25;
+import * as compliance from "@services/compliance/index";
 
 /** Plain-English meaning of each status, returned by get_job so customer agents know what to do. */
 export const STATUS_MEANING: Record<string, string> = {
@@ -38,6 +37,21 @@ export async function getJob(input: Tools["get_job"]["in"], ctx: ToolContext): P
   };
   // extra context for our own agents (kept short: Naïve truncates tool output at 8k chars)
   Object.assign(out, { status_meaning: STATUS_MEANING[j.status] ?? "", instructions: j.instructions, proof_requirement: j.proof_requirement, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) });
+  // Cameron's liability model (services/compliance): who provides the work, and the price breakdown.
+  let liability: { model: string | null; reason: string | null; pricing: string } = { model: null, reason: null, pricing: "standard" };
+  try {
+    const [l] = await ctx.sql`select model, reason, pricing from job_liability where job_id = ${j.id}`;
+    if (l) liability = { model: l.model, reason: l.reason, pricing: l.pricing };
+  } catch {
+    // job_liability is created by migration 0003; before it runs, report the defaults.
+  }
+  Object.assign(out, {
+    certification_required: j.certification_required, // the Compliance agent reads it (agents/prompts/compliance.md)
+    liability_model: liability.model,
+    liability_reason: liability.reason,
+    pricing: liability.pricing,
+    charge_usd: Math.round((Number(j.worker_pay_usd) + Number(j.fee_usd)) * 100) / 100,
+  });
   if (["approved", "paid"].includes(j.status)) {
     const [p] = await ctx.sql`select media, fields, verifier_score from proofs where job_id = ${j.id} and status = 'approved' order by created_at desc limit 1`;
     if (p) out.proof_package = { media_urls: (p.media ?? []).map((m: any) => m.url), fields: p.fields ?? {}, verifier_score: Number(p.verifier_score) };
@@ -73,26 +87,40 @@ export async function requestHuman(
   const [{ all }] = await ctx.sql`select count(*)::int as all from jobs where created_at > now() - interval '24 hours'`;
   if (all >= Number(process.env.MAX_JOBS_PER_DAY ?? 60)) return reject("Operis is at capacity today. Try again later.");
 
-  const fee = Math.round(input.budget_usd * FEE_RATE * 100) / 100;
+  // Cameron's liability policy prices and tags the job (services/compliance): connector jobs (notary, legal) pay the
+  // worker the whole budget plus a platform fee on top; work that needs a licence we can't verify is refused here,
+  // before payment. quote_usd is what the card is held for: worker pay + fee.
+  let q: compliance.JobQuote;
+  try {
+    q = compliance.quoteJob({ budgetUsd: input.budget_usd, title: input.title, instructions: input.instructions, certification_required: input.certification_required ?? null });
+  } catch (e) {
+    return reject((e as Error).message);
+  }
+  if (q.tags.forced === "refuse") return reject(compliance.refusalReason(q.tags.rules.find((r) => r >= "L3" && r <= "L6") ?? q.tags.rules[0]));
+  const feeUsd = q.feeCents / 100;
+  const workerPayUsd = q.workerPayCents / 100;
+  const chargeUsd = q.chargeCents / 100;
   const [job] = await ctx.sql`
     insert into jobs (customer_id, title, instructions, address, lat, lng, deadline, budget_usd, fee_usd, worker_pay_usd,
                       certification_required, proof_requirement, status, callback_url)
     values (${customerId}, ${input.title}, ${input.instructions}, ${loc.address}, ${loc.lat}, ${loc.lng},
-            ${input.deadline}, ${input.budget_usd}, ${fee}, ${input.budget_usd - fee}, ${input.certification_required},
+            ${input.deadline}, ${input.budget_usd}, ${feeUsd}, ${workerPayUsd}, ${input.certification_required},
             ${ctx.sql.json({ ...input.proof, geofence_m: remote ? null : input.proof?.geofence_m ?? 150 })}, 'requested', ${input.callback_url ?? null})
     returning id`;
+  await compliance.recordIntake(job.id, q);
+  const liabilityNote = "Our Compliance agent decides after funding whether Operis is the provider or only the marketplace for this job; get_job shows liability_model.";
 
   // Payments: Cameron's createHold returns a Stripe Checkout URL; the Stripe webhook moves the job to `held`.
   // Without it (or with MOCK_PAYMENTS), we treat the hold as instant so the loop runs end to end.
   if (createHold && !flag("MOCK_PAYMENTS") && !flag("USE_MOCKS")) {
     const { escrow_url } = await createHold(job.id);
-    return { job_id: job.id, status: "requested", quote_usd: input.budget_usd, escrow_url,
-      next_step: "Payment needed: give escrow_url to your human owner to pay once (the card is held, charged only when proof passes). The job starts as soon as it's paid." };
+    return { job_id: job.id, status: "requested", quote_usd: chargeUsd, escrow_url,
+      next_step: `Payment needed: give escrow_url to your human owner to pay once (the card is held, charged only when proof passes). The job starts as soon as it's paid. ${liabilityNote}` };
   }
-  await ctx.ledger(job.id, "hold", input.budget_usd, "mock");
+  await ctx.ledger(job.id, "hold", chargeUsd, "mock");
   await ctx.transition(job.id, "held");
-  return { job_id: job.id, status: "held", quote_usd: input.budget_usd, escrow_url: null,
-    next_step: "Funded. We're finding a verified person now. Call get_job every 2-5 minutes (or wait for your callback_url); status 'paid' means proof is ready." };
+  return { job_id: job.id, status: "held", quote_usd: chargeUsd, escrow_url: null,
+    next_step: `Funded. We're finding a verified person now. Call get_job every 2-5 minutes (or wait for your callback_url); status 'paid' means proof is ready. ${liabilityNote}` };
 }
 
 export async function cancelJob(input: Tools["cancel_job"]["in"], ctx: ToolContext, customerId: string): Promise<Tools["cancel_job"]["out"]> {

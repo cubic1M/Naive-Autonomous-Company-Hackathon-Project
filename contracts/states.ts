@@ -38,8 +38,8 @@ export function canTransition(from: JobState, to: JobState): boolean {
 }
 
 /** Which Naïve agent the API wakes when a job enters a state (via lib/naive.ts wake()). */
-export const WAKE_ON_ENTER: Partial<Record<JobState, "ceo" | "ops" | "verifier" | "finance">> = {
-  held: "ceo",
+export const WAKE_ON_ENTER: Partial<Record<JobState, "ceo" | "ops" | "verifier" | "finance" | "compliance">> = {
+  held: "compliance",
   accepted: "ops",
   proof_submitted: "verifier",
   approved: "finance",
