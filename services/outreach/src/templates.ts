@@ -16,6 +16,8 @@ export interface MessageContext {
 export interface EmailMessage {
   subject: string;
   text: string;
+  /** Branded HTML version (senders that support it send both; text stays the fallback). */
+  html?: string;
 }
 
 export const EMAIL_FOOTER = 'Reply STOP to never hear from us again.';
@@ -101,29 +103,107 @@ function whereLine(job: JobForOutreach): string | null {
   return job.address;
 }
 
+/** Company identity shown in every email footer (CAN-SPAM: who we are + a postal address + opt-out). */
+export const COMPANY = {
+  name: 'Operis',
+  site: 'operis.live',
+  tagline: 'Verified people for short paid jobs',
+  // TODO(team): replace with Operis's real mailing address before OUTREACH_LIVE=true (legally required).
+  address: 'Operis · San Francisco, CA',
+} as const;
+
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Subject: calm and specific, like a real company (no "gig near you", no all-caps, pay at the end). */
+export function emailSubject(job: JobForOutreach, payUsd: number): string {
+  return `${job.remote ? 'Remote opportunity' : 'Opportunity'}: ${job.title} · ${money(payUsd)}`;
+}
+
 export function renderEmail(ctx: MessageContext): EmailMessage {
   const { job, person } = ctx;
   const pay = money(ctx.payUsd);
   const when = formatDeadline(job.deadline);
+  const where = whereLine(job);
+  const name = greetingName(person);
   const lines = [
-    `Hi${greetingName(person) ? ` ${greetingName(person)}` : ''},`,
+    `Hi${name ? ` ${name}` : ''},`,
     '',
-    'Operis connects people with paid short jobs from businesses.',
+    `${COMPANY.name} matches businesses with skilled people for short, paid jobs. A new one fits your background:`,
     '',
-    `The job: ${job.title}`,
-    ...(whereLine(job) ? [`Where: ${whereLine(job)}`] : []),
-    ...(when ? [`When: by ${when} (Pacific time)`] : []),
-    `Pay: ${pay}`,
-    ...(job.certification_required ? [`Requires: ${job.certification_required}`] : []),
+    `  ${job.title}`,
+    ...(where ? [`  Where: ${where}`] : []),
+    ...(when ? [`  Due: ${when} (Pacific time)`] : []),
+    `  Pay: ${pay}, paid by ${COMPANY.name} when the work is approved`,
+    ...(job.certification_required ? [`  Requires: ${job.certification_required}`] : []),
     '',
-    whyLine(person),
+    `View the job and accept: ${ctx.link}`,
     '',
-    `See details and accept: ${ctx.link}`,
-    'First to accept gets it. No signup.',
+    'The first qualified person to accept gets the job. No account or signup needed.',
     '',
+    `Why you got this: ${whyLine(person)}`,
+    '',
+    `${COMPANY.name} · ${COMPANY.site}`,
+    COMPANY.address,
     EMAIL_FOOTER,
   ];
-  return { subject: job.remote ? `${job.title}: ${pay} paid remote gig` : `${job.title}: ${pay} paid gig near you`, text: lines.join('\n') };
+  return { subject: emailSubject(job, ctx.payUsd), text: lines.join('\n'), html: renderEmailHtml(ctx) };
+}
+
+/**
+ * Branded HTML version. Table layout + inline styles (works in Gmail/Outlook/Apple Mail), no images
+ * (images and tracking pixels hurt deliverability and trust), one clear button, a real footer.
+ */
+export function renderEmailHtml(ctx: MessageContext): string {
+  const { job, person } = ctx;
+  const pay = money(ctx.payUsd);
+  const when = formatDeadline(job.deadline);
+  const where = whereLine(job);
+  const name = greetingName(person);
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:96px;vertical-align:top">${esc(label)}</td><td style="padding:6px 0;color:#111827;font-size:14px;font-weight:500">${esc(value)}</td></tr>`;
+  const details = [
+    ...(where ? [row(job.remote ? 'Location' : 'Where', where)] : []),
+    ...(when ? [row('Due', `${when} (PT)`)] : []),
+    row('Pay', `${pay}, paid on approval`),
+    ...(job.certification_required ? [row('Requires', job.certification_required)] : []),
+  ].join('');
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(job.title)}</title></head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden">${esc(`${job.title} · ${pay}. First qualified person to accept gets it.`)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb">
+  <tr><td style="padding:22px 28px;border-bottom:1px solid #f0f1f3">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-0.2px;color:#111827">${COMPANY.name}</span>
+    <span style="font-size:12px;color:#6b7280;padding-left:8px">${esc(COMPANY.tagline)}</span>
+  </td></tr>
+  <tr><td style="padding:28px 28px 8px">
+    <p style="margin:0 0 14px;font-size:15px;color:#111827">Hi${name ? ` ${esc(name)}` : ''},</p>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#374151">${COMPANY.name} matches businesses with skilled people for short, paid jobs. A new one fits your background:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px">
+      <tr><td style="padding:18px 20px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#4f46e5;margin-bottom:6px">${job.remote ? 'Remote job' : 'On-site job'}</div>
+        <div style="font-size:17px;font-weight:650;color:#111827;margin-bottom:10px;line-height:1.35">${esc(job.title)}</div>
+        <table role="presentation" cellpadding="0" cellspacing="0">${details}</table>
+      </td></tr>
+    </table>
+  </td></tr>
+  <tr><td align="center" style="padding:22px 28px 6px">
+    <a href="${esc(ctx.link)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:8px">View job &amp; accept</a>
+    <p style="margin:12px 0 0;font-size:13px;color:#6b7280">The first qualified person to accept gets the job. No account needed.</p>
+  </td></tr>
+  <tr><td style="padding:20px 28px 26px">
+    <p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af">Why you got this: ${esc(whyLine(person))}</p>
+  </td></tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td align="center" style="padding:16px 12px;font-size:12px;line-height:1.6;color:#9ca3af">
+  ${COMPANY.name} · <a href="https://${COMPANY.site}" style="color:#9ca3af">${COMPANY.site}</a> · ${esc(COMPANY.address.replace(/^Operis · /, ''))}<br>
+  Not interested? Reply <strong>STOP</strong> and we'll never contact you again.
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
 }
 
 /** Max 320 chars (2 SMS segments). Only ever sent to regulars with sms_consent. */

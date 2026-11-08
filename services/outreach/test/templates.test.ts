@@ -29,7 +29,9 @@ describe('templates', () => {
     const m = renderEmail(ctx());
     expect(m.subject).toContain('Hold a sign');
     expect(m.subject).toContain('$45');
-    expect(m.text).toContain('Operis connects people with paid short jobs from businesses');
+    expect(m.text).toContain('Operis matches businesses with skilled people for short, paid jobs');
+    expect(m.html).toContain('View job &amp; accept');
+    expect(m.html).toContain('STOP');
     expect(m.text).toContain('Sun Nov 8, 2:00 PM');
     expect(m.text).toContain('https://operis.test/j/abc123');
     expect(m.text).toContain('First to accept gets it');
@@ -80,7 +82,7 @@ describe('templates', () => {
     it('email says Remote for remote jobs', () => {
       const m = renderEmail(ctx(remote, lawyer));
       expect(m.text).toContain('Where: Remote');
-      expect(m.subject).toContain('remote');
+      expect(m.subject.toLowerCase()).toContain('remote');
       expect(m.subject).not.toContain('near you');
     });
     it('whyLine names the platform and headline', () => {
