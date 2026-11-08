@@ -94,6 +94,7 @@ for (const [role, m] of Object.entries<any>(cfg.members)) {
   };
   if (m.output_schema) Object.assign(body, { output_schema: m.output_schema, structured_output_required: true });
   if (m.skills) body.skills = m.skills;
+  if (process.env.FOUNDER_EMAIL) body.notifications = { email: process.env.FOUNDER_EMAIL, approvals: true, questions: true, updates: false };
   const a = await upsert(m, body);
   ids[role] = a.id;
   versions[role] = a.current_version ?? 1;
