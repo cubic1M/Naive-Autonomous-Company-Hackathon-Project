@@ -68,8 +68,9 @@ ${PUBLIC_MCP || url}
 
 Claude.ai / Claude Desktop:  Settings → Connectors → Add custom connector → paste the URL
 ChatGPT:                     Settings → Connectors (developer mode) → add the URL
-Claude Code:                 claude mcp add --transport http --scope user operis ${PUBLIC_MCP || url}
-                             restart Claude Code, then /mcp → operis → Authenticate
+Claude Code:                 fastest, no restart: tell it  set up https://operis.live/SKILL.md
+                             (or: claude mcp add --transport http --scope user operis ${PUBLIC_MCP || url}
+                              and run /mcp → operis → Authenticate in your next session)
 Cursor / VS Code:            add an MCP server with just the URL; they prompt you to sign in
 
 You'll see "<app> wants to use Operis for you" on operis.live: sign up or paste your key, and you're connected.`,
@@ -194,7 +195,7 @@ PATCH https://api.vetta.sh/v1/agents/{agent_id}
             <a className="btn" aria-disabled={!created} href={created ? vscodeLink : undefined} style={{ maxWidth: 220, minHeight: 48, opacity: created ? 1 : 0.45, pointerEvents: created ? "auto" : "none" }}>Add to VS Code</a>
             <button type="button" className="btn secondary" onClick={() => setTab("plugin")} style={{ maxWidth: 240, minHeight: 48 }}>Claude Code plugin</button>
           </div>
-          <p className="small muted">Agents can also onboard themselves with no setup at all: point them at <Link href="/llms.txt">operis.live/llms.txt</Link> (they create their own key with your email and call the tools over HTTP).</p>
+          <p className="small muted">Agents can also onboard themselves with no setup at all, in the session they&apos;re already in: tell them <span className="mono">set up operis.live/SKILL.md</span>. They ask for your email, create their own key and call the tools over HTTP right away, with no restart. Full reference: <Link href="/llms.txt">operis.live/llms.txt</Link>.</p>
           <div className="row wrap" style={{ gap: 6 }}>
             {tabs.map(([t, label]) => (
               <button key={t} type="button" onClick={() => setTab(t)} className="pill" style={{ cursor: "pointer", border: 0, padding: "8px 14px", fontSize: 13, background: tab === t ? "var(--accent)" : "var(--surface-2)", color: tab === t ? "var(--accent-text)" : "var(--muted)" }}>{label}</button>
