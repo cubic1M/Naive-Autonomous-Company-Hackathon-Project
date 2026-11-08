@@ -45,9 +45,28 @@ export function Spinner() {
   return <span className="spinner" style={{ width: "18px", height: "18px" }} aria-hidden="true" />;
 }
 
+// Google's "G" mark (their sign-in branding asks for the full-colour logo on a light button).
 export const GoogleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#46664F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></svg>
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style={{ flex: "none" }}>
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+  </svg>
 );
+
+/** "Continue with Google": a full-page navigation to the API, which sends the browser to Google and back. */
+export function GoogleButton({ next, flow, label = "Continue with Google" }: { next?: string; flow?: "admin"; label?: string }) {
+  const q = new URLSearchParams();
+  if (next) q.set("next", next);
+  if (flow) q.set("flow", flow);
+  return (
+    <a href={`/api/v1/auth/google/start?${q}`} style={{ ...secondary, background: "#FFFFFF", border: "1px solid #C9C2B4" }}>
+      <GoogleIcon />
+      {label}
+    </a>
+  );
+}
 export const PhoneIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M11 18h2" /></svg>
 );
@@ -68,8 +87,10 @@ export const ERRORS: Record<string, string> = {
   too_many_tries: "Too many tries. Send a new code.",
   link_expired: "That link has expired. Request a new one.",
   network: "We couldn't reach Operis. Check your connection and try again.",
+  google_failed: "Google sign-in didn't go through. Please try again.",
+  google_cancelled: "Google sign-in was cancelled. Try again whenever you're ready.",
   sms_unavailable: "Text codes aren't available yet. Use an email link or your password instead.",
-  google_unavailable: "Google sign-in isn't available yet. Create an account with your email instead.",
+  google_unavailable: "Google sign-in isn't switched on yet. Create an account with your email instead.",
   email_unavailable: "We couldn't send the email just now. Try again in a minute, or use your password.",
   rate_limited: "Too many emails in a short time. Wait a few minutes and try again.",
   login_required: "Log in to continue.",

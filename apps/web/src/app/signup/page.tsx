@@ -7,5 +7,5 @@ export const metadata: Metadata = { title: "Create account · Operis" };
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  return <AuthPage mode="signup" next={safeNext(sp.next)} />;
+  return <AuthPage mode="signup" next={safeNext(sp.next)} error={sp.error ?? null} />;
 }

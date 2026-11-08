@@ -8,7 +8,7 @@ import { useState } from "react";
 
 import { postJson } from "@/lib/api";
 import { useSession, type User } from "@/lib/session";
-import { DevHint, Divider, FormError, MailIcon, PhoneIcon, Spinner, errorText, input, label, primary, secondary, textBtn } from "./ui";
+import { DevHint, Divider, FormError, GoogleButton, MailIcon, PhoneIcon, Spinner, errorText, input, label, primary, secondary, textBtn } from "./ui";
 import PasswordInput from "@/components/PasswordInput";
 
 export type Mode = "start" | "phone" | "code" | "email" | "link_sent" | "password";
@@ -23,8 +23,8 @@ export const introFor = (mode: Mode, phoneHint: string | null, fromJob: boolean)
         : mode === "email"
           ? "We'll email you a link that logs you straight in."
         : fromJob
-          ? "The fastest way back to this job is a code sent to the phone this job was texted to."
-          : "Get a code by text, a link by email, or use your password.";
+          ? "Log in with Google, or get a code on the phone this job was sent to."
+          : "Log in with Google, get a code by text, a link by email, or use your password.";
 
 export default function LoginMethods({
   next,
@@ -32,12 +32,15 @@ export default function LoginMethods({
   phoneHint: initialHint,
   initialMode = "start",
   onModeChange,
+  showGoogle = true,
 }: {
   next: string;
   jobToken?: string;
   phoneHint?: string | null;
   initialMode?: Mode;
   onModeChange?: (m: Mode, phoneHint: string | null) => void;
+  /** AuthPage shows its own Google button above the tabs. */
+  showGoogle?: boolean;
 }) {
   const router = useRouter();
   const { setUser } = useSession();
@@ -112,6 +115,12 @@ export default function LoginMethods({
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
       {mode === "start" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {showGoogle && (
+            <>
+              <GoogleButton next={next} label="Log in with Google" />
+              <Divider>or</Divider>
+            </>
+          )}
           <button type="button" onClick={sendCode} disabled={busy !== null} style={{ ...primary, minHeight: "50px" }}>
             {busy === "code" ? <Spinner /> : <PhoneIcon />}
             {jobToken && phoneHint ? `Text a code to ${phoneHint}` : "Text me a code"}

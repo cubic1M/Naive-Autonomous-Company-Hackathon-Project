@@ -1,9 +1,14 @@
-// Google sign-in isn't set up yet: send people to the email/password login with a clear message.
-import { baseUrl } from "@/lib/env";
-import { safeNext } from "@/lib/accounts";
+// GET /v1/auth/google/start?next=/jobs[&flow=admin]: send the browser to Google's account picker.
+import { STATE_COOKIE, cookie, googleConfigured, redirect, safeNext, startUrl } from "@/lib/googleAuth";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const next = safeNext(new URL(req.url).searchParams.get("next"));
-  return Response.redirect(`${baseUrl()}/login?error=google_unavailable&next=${encodeURIComponent(next)}`, 302);
+  const u = new URL(req.url);
+  const flow = u.searchParams.get("flow") === "admin" ? "admin" : "worker";
+  const next = safeNext(u.searchParams.get("next"), flow === "admin" ? "/backoffice" : "/jobs");
+  if (!googleConfigured()) {
+    return redirect(flow === "admin" ? "/backoffice#admin_error=google_unavailable" : `/login?error=google_unavailable&next=${encodeURIComponent(next)}`);
+  }
+  const { url, nonce } = startUrl(flow, next);
+  return redirect(url, [cookie(STATE_COOKIE, nonce, 600)]);
 }
