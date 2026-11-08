@@ -69,8 +69,18 @@ function attemptsOf(v: WorkerVerification | null): number {
 
 const refId = (x: string | { id: string } | null | undefined): string | null => (x ? (typeof x === 'string' ? x : x.id) : null);
 
-/** metadata.worker_id is what we set; client_reference_id is the same value, kept as a fallback. */
-const workerIdOf = (session: Session): string | null => session.metadata?.worker_id || session.client_reference_id || null;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * metadata.worker_id is what we set; client_reference_id is the same value, kept as a fallback. Only a uuid can be
+ * ours (workers.id and worker_verifications.worker_id are uuid): another integration's session on the same Stripe
+ * account may carry any string, and querying the uuid column with it makes Postgres throw 22P02, the webhook answer
+ * 500 and Stripe redeliver for days. Such a session is reported unhandled instead.
+ */
+const workerIdOf = (session: Session): string | null => {
+  const id = (session.metadata?.worker_id || session.client_reference_id || '').trim();
+  return UUID.test(id) ? id : null;
+};
 
 /** "First Last" from a verified identity row, or null when there is no verified identity (or no name on it). */
 export function verifiedIdentityName(v: WorkerVerification | null): string | null {
