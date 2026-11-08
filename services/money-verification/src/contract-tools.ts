@@ -43,7 +43,7 @@ export interface CheckProofOut {
 
 export type ApproveProofOut =
   | { job_id: string; status: 'approved' }
-  | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' | 'identity_unverified' };
+  | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' | 'identity_unverified' | 'incomplete' | 'outside_time_window' };
 /**
  * contracts/tools.ts gives escalate no error shape. A proof that is already approved (the job is being paid) is not
  * re-opened, and the agent gets that as a readable result rather than a thrown tool error.
@@ -134,6 +134,9 @@ export function createContractTools(deps: ToolDeps): ContractTools {
           if (err.message.startsWith('below_threshold')) return { error: 'below_threshold' };
           if (err.message.startsWith('reused_media')) return { error: 'reused_media' };
           if (err.message.startsWith('identity_unverified')) return { error: 'identity_unverified' };
+          // the contract cannot pass override, so a completeness or time failure is a refusal here
+          if (err.message.startsWith('incomplete')) return { error: 'incomplete' };
+          if (err.message.startsWith('outside_time_window')) return { error: 'outside_time_window' };
         }
         throw err;
       }

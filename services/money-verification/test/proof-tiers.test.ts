@@ -171,7 +171,35 @@ describe('tier 2 (over $150 or certification): identity and two photos', () => {
     await seedVerifiedIdentity(world);
     const approved = await approveProof(deps, { proofId: PROOF_ID, reviewer: 'verifier-agent', notes: 'id verified now' });
     expect(approved.decision).toBe('approved');
-    expect(approved.checks.filter((c) => c.name === 'identity').map((c) => c.status)).toEqual(['needs_review', 'pass']);
+    // the live check replaces the stale one, so check_proof's flags no longer report an unverified identity
+    expect(approved.checks.filter((c) => c.name === 'identity').map((c) => c.status)).toEqual(['pass']);
+    expect(approved.checks.filter((c) => c.status !== 'pass').map((c) => c.name)).toEqual([]);
+  });
+
+  it('approveProof refuses a stored completeness failure (one photo at tier 2) unless override', async () => {
+    const { world, deps } = setup({ job: { budget_cents: 24000 }, confidence: 0.95 });
+    await seedVerifiedIdentity(world);
+    expect(check(await reviewProof(deps, PROOF_ID), 'completeness')).toMatchObject({ status: 'fail', detail: '1 image(s), need 2' });
+    await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'verifier-agent' })).rejects.toThrow(/^incomplete: 1 image\(s\), need 2; pass override/);
+    const contract = createContractTools({ ...world.deps, vision: new CountingScorer(0.95) });
+    expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'incomplete' });
+    expect((await approveProof(deps, { proofId: PROOF_ID, reviewer: 'founder', override: true })).decision).toBe('approved');
+  });
+
+  it('approveProof refuses a stored time failure (device time after the deadline at tier 0) unless override', async () => {
+    const { world, deps } = setup({ job: { budget_cents: 3000 }, proof: { captured_at: new Date(T0.getTime() + 5 * HOUR_MS) }, exif: NO_EXIF });
+    expect(check(await reviewProof(deps, PROOF_ID), 'time')?.status).toBe('fail');
+    await expect(approveProof(deps, { proofId: PROOF_ID, reviewer: 'verifier-agent' })).rejects.toThrow(/^outside_time_window: device captured_at/);
+    const contract = createContractTools({ ...world.deps, vision: new CountingScorer(0.95) });
+    expect(await contract.approve_proof({ job_id: JOB_ID, proof_id: PROOF_ID, notes: '' })).toEqual({ error: 'outside_time_window' });
+    expect((await approveProof(deps, { proofId: PROOF_ID, reviewer: 'founder', override: true })).decision).toBe('approved');
+  });
+
+  it('needs_review flags stay the reviewer\'s call: a missing EXIF time is approvable without override', async () => {
+    const { world, deps } = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, exif: NO_EXIF, confidence: 0.95 });
+    await seedVerifiedIdentity(world);
+    expect(check(await reviewProof(deps, PROOF_ID), 'time')?.status).toBe('needs_review');
+    expect((await approveProof(deps, { proofId: PROOF_ID, reviewer: 'verifier-agent' })).decision).toBe('approved');
   });
 });
 
@@ -267,6 +295,14 @@ describe('IDENTITY_GATE=log: tier 2 keeps its bar, the identity is recorded but 
     const approved = await approveProof(deps, { proofId: PROOF_ID, reviewer: 'ops', override: true });
     expect(approved.decision).toBe('approved');
     expect(approved.checks.filter((c) => c.name === 'identity').map((c) => c.data)).toEqual([{ status: null, enforced: false, verified: false }]);
+  });
+
+  it('a later approval records the identity as verified in place of the earlier unverified entry', async () => {
+    const { world, deps } = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, confidence: 0.95, gate: 'log' });
+    expect(check(await reviewProof(deps, PROOF_ID), 'identity')?.data).toMatchObject({ verified: false });
+    await seedVerifiedIdentity(world);
+    const approved = await approveProof(deps, { proofId: PROOF_ID, reviewer: 'ops' });
+    expect(approved.checks.filter((c) => c.name === 'identity')).toMatchObject([{ status: 'pass', data: { enforced: false, verified: true, status: 'verified' } }]);
   });
 
   it('checkEligibility lists the identity reason as not enforced and keeps the worker eligible', async () => {

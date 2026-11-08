@@ -166,20 +166,26 @@ export async function reviewProof(deps: DecideDeps, proofId: string): Promise<Pr
   return review;
 }
 
+/**
+ * Record a human or agent decision on top of `base`. Each `current` check takes the place of the stored check with
+ * the same name (or is added), so a re-checked fact (the live identity) does not leave a stale entry in the flags.
+ */
 async function recordManual(
   deps: DecideDeps,
   base: Pick<ProofReview, 'proof_id' | 'job_id' | 'confidence' | 'checks'>,
   decision: ProofDecision,
   reviewer: string,
   detail: string,
-  extra: ProofCheck[] = [],
+  current: ProofCheck[] = [],
 ): Promise<ProofReview> {
+  const kept = base.checks.map((c) => current.find((n) => n.name === c.name) ?? c);
+  const added = current.filter((n) => !base.checks.some((c) => c.name === n.name));
   const review = await deps.repo.upsertProofReview({
     proof_id: base.proof_id,
     job_id: base.job_id,
     confidence: base.confidence,
     decision,
-    checks: [...base.checks, ...extra, note('reviewer_note', 'pass', detail)],
+    checks: [...kept, ...added, note('reviewer_note', 'pass', detail)],
     reviewer,
   });
   await fire(deps.hooks, 'onProofDecision', review.job_id, review.proof_id, decision);
@@ -193,9 +199,12 @@ async function reviewOnRecord(deps: DecideDeps, proofId: string): Promise<ProofR
 
 /**
  * Human or agent approval. Out-of-fence and reused media can never be overridden (fraud signals, not
- * judgment calls), nor can a missing identity on a tier-2 job under IDENTITY_GATE=enforce; low confidence can, but only on an
- * explicit override. The identity is checked live rather than read from the stored review, so a worker
- * who verified after the automated review is not blocked by a stale check.
+ * judgment calls), nor can a missing identity on a tier-2 job under IDENTITY_GATE=enforce. A stored
+ * completeness or time failure (too few photos or missing fields; a capture time outside the window) and a
+ * confidence under the tier's threshold can, but only on an explicit override. needs_review flags are left
+ * to the reviewer's judgement. The identity is checked live rather than read from the stored review, and the
+ * live check replaces the stored one, so a worker who verified after the automated review is not blocked or
+ * reported by a stale check.
  */
 export async function approveProof(
   deps: DecideDeps,
@@ -204,14 +213,18 @@ export async function approveProof(
   const { proof, job } = await loadProofAndJob(deps.repo, input.proofId);
   const review = await reviewOnRecord(deps, input.proofId);
   const profile = profileFor(deps, job);
-  const failed = (name: string) => review.checks.some((c) => c.name === name && c.status === 'fail');
-  if (failed('geofence')) throw new InvalidStateError('outside_geofence: proof was captured outside the job geofence');
-  if (failed('reuse')) throw new InvalidStateError('reused_media: proof media was already used on another job');
-  const extra: ProofCheck[] = [];
+  const failure = (name: string) => review.checks.find((c) => c.name === name && c.status === 'fail');
+  if (failure('geofence')) throw new InvalidStateError('outside_geofence: proof was captured outside the job geofence');
+  if (failure('reuse')) throw new InvalidStateError('reused_media: proof media was already used on another job');
+  const incomplete = failure('completeness');
+  if (incomplete && !input.override) throw new InvalidStateError(`incomplete: ${incomplete.detail}; pass override to approve anyway`);
+  const late = failure('time');
+  if (late && !input.override) throw new InvalidStateError(`outside_time_window: ${late.detail}; pass override to approve anyway`);
+  const current: ProofCheck[] = [];
   if (profile.identityRequired) {
     const identity = await identityCheck(deps.repo, proof.worker_id, profile);
     if (identity.status !== 'pass') throw new InvalidStateError(`identity_unverified: ${identity.detail}`);
-    if (!review.checks.some((c) => c.name === 'identity' && c.status === 'pass')) extra.push(identity);
+    current.push(identity);
   }
   const threshold = thresholdFor(deps, profile);
   if (!input.override && (review.confidence === null || review.confidence < threshold)) {
@@ -219,7 +232,7 @@ export async function approveProof(
       `below_threshold: confidence ${review.confidence ?? 'n/a'} is under ${threshold}; pass override to approve anyway`,
     );
   }
-  return recordManual(deps, review, 'approved', input.reviewer, input.notes ?? '', extra);
+  return recordManual(deps, review, 'approved', input.reviewer, input.notes ?? '', current);
 }
 
 /**

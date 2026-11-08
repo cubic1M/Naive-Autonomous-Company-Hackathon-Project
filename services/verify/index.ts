@@ -22,10 +22,9 @@ const verify: ServiceModule = {
     const out = await tools(ctx).approve_proof(input);
     if (!("error" in out)) return out;
     // contracts/tools.ts knows two error codes. Reused media is a fraud signal like an out-of-fence photo; a
-    // tier-2 worker without a verified identity means the evidence is not sufficient yet (check_proof's
-    // `identity` flag says so), so the agent escalates.
-    const error: "below_threshold" | "outside_geofence" =
-      out.error === "reused_media" ? "outside_geofence" : out.error === "identity_unverified" ? "below_threshold" : out.error;
+    // tier-2 worker without a verified identity (IDENTITY_GATE=enforce), too few photos or missing fields
+    // (incomplete) and a capture time outside the window mean the evidence is not sufficient, so the agent escalates.
+    const error: "below_threshold" | "outside_geofence" = out.error === "reused_media" || out.error === "outside_geofence" ? "outside_geofence" : "below_threshold";
     return { error };
   },
   // contracts/tools.ts types escalate's result as { job_id, status: "escalated" } only. A proof that is already approved
