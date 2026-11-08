@@ -45,7 +45,7 @@ const env: Env = {
   NAIVE_BASE_URL: e.NAIVE_BASE_URL || DEFAULTS.NAIVE_BASE_URL,
   NAIVE_OPS_IDENTITY_ID: e.NAIVE_OPS_IDENTITY_ID,
   NAIVE_OPS_INBOX_ID: e.NAIVE_OPS_INBOX_ID,
-  OUTREACH_MAX_SPEND_USD: 0.1,
+  OUTREACH_MAX_SPEND_USD: Number(e.MAX_SPEND ?? 0.1),
   OUTREACH_RADIUS_KM: DEFAULTS.OUTREACH_RADIUS_KM,
   OUTREACH_LIVE: false, // never email scraped businesses from a demo
   OUTREACH_TEST_ALLOWLIST: testEmail ? [testEmail] : [],
@@ -68,7 +68,7 @@ const repo = new InMemoryRepo();
 repo.addJob({
   id: 'demo-job',
   title: e.JOB_TITLE ?? 'Hold a sign near the YC office',
-  instructions: 'Stand at the corner holding our sign for 2 hours, 12-2pm.',
+  instructions: e.JOB_INSTRUCTIONS ?? 'Stand at the corner holding our sign for 2 hours, 12-2pm.',
   address: e.JOB_ADDRESS ?? 'San Francisco, CA',
   lat,
   lng,
