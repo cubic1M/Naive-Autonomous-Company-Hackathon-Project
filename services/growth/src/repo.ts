@@ -1,7 +1,8 @@
 import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, VerificationRow } from './types.js';
+import type { NewSocialPost, SocialPlatform, SocialPost, SocialPostOutcome } from './types.js';
 
 /**
- * Persistence for growth. Writes only the growth_* tables (migrations/0001_growth.sql); reads jobs and customers
+ * Persistence for growth. Writes only the growth_* tables (migrations/0001_growth.sql, 0002_social.sql); reads jobs and customers
  * (Edwin's) and worker_verifications (Cameron's). Pool rows (workers, worker_profiles) are written through
  * services/outreach's Repo, never here. MemoryGrowthRepo (tests, dry run) and PostgresGrowthRepo implement it.
  */
@@ -43,11 +44,18 @@ export interface GrowthRepo {
   countPaidJobsBefore(customerId: string, before: Date, excludeJobId: string): Promise<number>;
   /** Empty when the table does not exist yet. */
   listVerifications(workerIds: string[]): Promise<VerificationRow[]>;
+
+  /** Record one post_social attempt (growth_social_posts, migrations/0002_social.sql); returns its id. */
+  logSocialPost(p: NewSocialPost): Promise<string>;
+  /** Record how a pending attempt ended. Rows no longer pending are left as they are. */
+  settleSocialPost(id: string, outcome: SocialPostOutcome): Promise<void>;
+  /** This platform's attempts since `since`, newest first. */
+  socialPostsSince(platform: SocialPlatform, since: Date): Promise<SocialPost[]>;
 }
 
 export class GrowthTablesMissing extends Error {
-  constructor() {
-    super('growth tables missing: run services/growth/migrations/0001_growth.sql');
+  constructor(migration = '0001_growth.sql') {
+    super(`growth tables missing: run services/growth/migrations/${migration}`);
     this.name = 'GrowthTablesMissing';
   }
 }
