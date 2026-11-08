@@ -135,3 +135,49 @@ describe('contracts/tools.ts adapters', () => {
     expect(await big.contract.payout({ job_id: JOB_ID })).toEqual({ error: 'over_limit' });
   });
 });
+
+describe('over-cap adapters for the CEO agent (contracts/tools.ts refund_large, release_payout_large)', () => {
+  it('refund_large refunds past the $150 cap, partially, and a retry with the same request id does not refund twice', async () => {
+    const big = await fundedWorld({ budget: 24000 });
+    await big.world.repo.upsertProofReview(approvedReview());
+    await big.contract.capture_payment({ job_id: JOB_ID });
+    const input = { job_id: JOB_ID, reason: 'item damaged on site', amount_cents: 20000, request_id: 'req-large-1', approved_by: 'operis-ceo', approval_note: 'photos show the damage' };
+    expect(await big.contract.refund_large(input)).toEqual({ job_id: JOB_ID, status: 'refunded', amount_usd: 200, partial: true, refunded_total_usd: 200 });
+    await big.contract.refund_large(input);
+    expect(big.world.stripe.callsTo('refunds.create')).toHaveLength(1);
+  });
+
+  it('refund_large releases the hold instead when nothing was captured yet', async () => {
+    const big = await fundedWorld({ budget: 24000 });
+    expect(await big.contract.refund_large({ job_id: JOB_ID, reason: 'cancelled before any work', request_id: 'req-large-2', approved_by: 'operis-ceo' })).toEqual({
+      job_id: JOB_ID,
+      status: 'refunded',
+      amount_usd: 240,
+      refunded_total_usd: 240,
+      released_hold: true,
+    });
+    expect(big.world.stripe.callsTo('refunds.create')).toHaveLength(0);
+  });
+
+  it('release_payout_large pays a worker past the cap that payout refuses with over_limit', async () => {
+    const big = await fundedWorld({ budget: 24000 });
+    await big.world.repo.upsertProofReview(approvedReview());
+    await big.contract.capture_payment({ job_id: JOB_ID });
+    expect(await big.contract.payout({ job_id: JOB_ID })).toEqual({ error: 'over_limit' });
+    expect(await big.contract.release_payout_large({ job_id: JOB_ID, approved_by: 'operis-ceo', approval_note: 'large job, proof approved' })).toEqual({
+      job_id: JOB_ID,
+      status: 'paid',
+      worker_pay_usd: 180,
+      fee_usd: 60,
+    });
+  });
+
+  it('release_payout_large reports needs_bank_setup when the worker has no payout account', async () => {
+    const big = await fundedWorld({ budget: 24000, account: 'none' });
+    await big.world.repo.upsertProofReview(approvedReview());
+    await big.contract.capture_payment({ job_id: JOB_ID });
+    const out = await big.contract.release_payout_large({ job_id: JOB_ID, approved_by: 'operis-ceo' });
+    expect(out).toMatchObject({ error: 'needs_bank_setup' });
+    expect((out as { onboarding_url: string }).onboarding_url).toMatch(/^https:\/\/connect\.stripe\.test\//);
+  });
+});
