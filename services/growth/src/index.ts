@@ -16,3 +16,4 @@ export { classifyJob, demandFrom, targetFor } from './demand.js';
 export { promosDue, redeemPromo } from './redeem.js';
 export { grantKeyFor } from './promo.js';
 export { describeFound, recruitEnrichers } from './recruit.js';
+export { parseCsv, parseProspectsCsv } from './prospects.js';
