@@ -7,12 +7,11 @@
  *
  * Results are structured fields only, each length-capped, and the whole result stays under the tool-result limit.
  * Reddit text is untrusted data (REDDIT_NOTE): links and invisible characters are scrubbed, and the prompt says so.
- * Spend has its own daily cap, GROWTH_REDDIT_DAILY_USD (growth_reddit_calls). GROWTH_LIVE and GROWTH_PAUSE do not
- * apply: they govern email, and this tool sends nothing.
+ * Spend has its own daily cap, GROWTH_REDDIT_DAILY_USD, over its own growth_log rows (repo.ts REDDIT_REF), never
+ * recruit_search's. GROWTH_LIVE and GROWTH_PAUSE do not apply: they govern email, and this tool sends nothing.
  */
 import { succeeded, type Monid, type MonidInput } from '../../outreach/src/monid.js';
 import type { GrowthDeps } from './deps.js';
-import { GrowthTablesMissing } from './repo.js';
 import { pacificDayStart } from './time.js';
 
 export type RedditOp = 'rules' | 'search';
@@ -170,17 +169,6 @@ async function runOnce(monid: Monid, ep: Endpoint, input: MonidInput): Promise<O
   }
 }
 
-async function spentToday(deps: GrowthDeps): Promise<number> {
-  try {
-    return await deps.repo.redditSpendSince(pacificDayStart(deps.now()));
-  } catch (e) {
-    if (e instanceof GrowthTablesMissing) {
-      throw new Error('reddit_research: table growth_reddit_calls is missing: run npm run db:migrate (services/growth/migrations/0002_reddit_research.sql)');
-    }
-    throw e;
-  }
-}
-
 /** The first `rules` list in a provider response, breadth-first: TikHub's response shape is not captured yet. */
 function findRules(output: unknown): RedditRule[] | null {
   const queue: [unknown, number][] = [[output, 0]];
@@ -277,7 +265,7 @@ export async function redditResearch(deps: GrowthDeps, input: RedditResearchInpu
   const monid = deps.monid;
   if (!monid) throw new Error('reddit_research: Monid is not configured (set MONID_API_KEY)');
   const cap = deps.env.GROWTH_REDDIT_DAILY_USD;
-  const spentBefore = await spentToday(deps);
+  const spentBefore = await deps.repo.redditSpendSince(pacificDayStart(deps.now()));
   let spend = 0;
 
   /** A budgeted, timed and recorded call. */

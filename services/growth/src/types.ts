@@ -49,7 +49,7 @@ export interface LogEntry {
   ref?: string | null;
 }
 
-/** One Monid call made by reddit_research (growth_reddit_calls): its daily budget is the sum of cost_usd. */
+/** One Monid call made by reddit_research, stored as a growth_log row (repo.ts redditLogEntry). */
 export interface RedditCall {
   op: 'rules' | 'search';
   subreddit: string;

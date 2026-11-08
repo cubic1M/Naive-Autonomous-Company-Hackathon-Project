@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { GrowthRepo } from '../repo.js';
+import { REDDIT_REF, redditLogEntry, type GrowthRepo } from '../repo.js';
 import type { Contact, ContactKind, Grant, JobRow, JobWithCustomer, LogEntry, MessageKind, NewContact, RedditCall, VerificationRow } from '../types.js';
 
 type StoredJob = JobRow & { customer_id: string | null; budget_usd: number };
@@ -8,7 +8,6 @@ type StoredJob = JobRow & { customer_id: string | null; budget_usd: number };
 export class MemoryGrowthRepo implements GrowthRepo {
   readonly contacts: Contact[] = [];
   readonly logs: (LogEntry & { created_at: Date })[] = [];
-  readonly redditCalls: (RedditCall & { created_at: Date })[] = [];
   readonly grants: Grant[] = [];
   readonly jobs: StoredJob[] = [];
   readonly customers: { id: string; name: string | null; contact_email: string | null }[] = [];
@@ -131,15 +130,19 @@ export class MemoryGrowthRepo implements GrowthRepo {
   }
 
   async searchSpendSince(since: Date): Promise<number> {
-    return this.logs.filter((l) => l.kind === 'search' && l.created_at >= since).reduce((sum, l) => sum + (l.cost_usd ?? 0), 0);
+    return this.spend((l) => l.ref !== REDDIT_REF, since);
   }
 
   async logRedditCall(c: RedditCall): Promise<void> {
-    this.redditCalls.push({ ...c, created_at: this.clock() });
+    await this.log(redditLogEntry(c));
   }
 
   async redditSpendSince(since: Date): Promise<number> {
-    return this.redditCalls.filter((c) => c.created_at >= since).reduce((sum, c) => sum + c.cost_usd, 0);
+    return this.spend((l) => l.ref === REDDIT_REF, since);
+  }
+
+  private spend(which: (l: LogEntry) => boolean, since: Date): number {
+    return this.logs.filter((l) => l.kind === 'search' && which(l) && l.created_at >= since).reduce((sum, l) => sum + (l.cost_usd ?? 0), 0);
   }
 
   async getGrantByKey(key: string): Promise<Grant | null> {

@@ -3,8 +3,6 @@ import type { Monid } from '../../outreach/src/monid.js';
 import { FakeMonid, fixture } from '../../outreach/test/helpers/fakeMonid.js';
 import { growthReport } from '../src/report.js';
 import { redditResearch } from '../src/reddit.js';
-import { GrowthTablesMissing } from '../src/repo.js';
-import { MemoryGrowthRepo } from '../src/repo/memory.js';
 import { DAY_MS } from '../src/time.js';
 import { setup } from './helpers.js';
 
@@ -179,21 +177,17 @@ describe('reddit_research inputs', () => {
     await expect(redditResearch(s.deps, { op: 'rules', subreddit: 'SaaS' })).rejects.toThrow(/MONID_API_KEY/);
   });
 
-  it('fails clearly, before spending, when the migration has not run', async () => {
-    class NoTable extends MemoryGrowthRepo {
-      override async redditSpendSince(): Promise<number> {
-        throw new GrowthTablesMissing();
-      }
-    }
-    const m = new FakeMonid().override(STYLE, cheap(restRules));
-    const s = withMonid(m);
-    s.deps.repo = new NoTable(s.now);
-    await expect(redditResearch(s.deps, { op: 'rules', subreddit: 'SaaS' })).rejects.toThrow(/db:migrate.*0002_reddit_research/);
-    expect(m.calls).toHaveLength(0);
-  });
 });
 
 describe('reddit_research spend', () => {
+  it('records each call in growth_log (no new table), as a search tagged reddit_research', async () => {
+    const s = withMonid(new FakeMonid().override(STYLE, cheap(restRules)));
+    await redditResearch(s.deps, { op: 'rules', subreddit: 'SaaS' });
+    expect(s.repo.logs).toHaveLength(1);
+    expect(s.repo.logs[0]).toMatchObject({ kind: 'search', status: 'ok', ref: 'reddit_research', cost_usd: 0.001 });
+    expect(s.repo.logs[0]!.reason).toContain('rules r/SaaS');
+  });
+
   it('counts every call against its own daily cap', async () => {
     const m = new FakeMonid().override(STYLE, cheap(restRules));
     const s = withMonid(m, { GROWTH_REDDIT_DAILY_USD: 0.25 });
