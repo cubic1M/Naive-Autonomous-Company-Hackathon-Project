@@ -54,11 +54,11 @@ type Data = {
   money?: { revenue: number; payouts: number; fees: number; refunds: number; held: number };
   stages?: Record<string, number>;
   calls?: Call[];
-  call_stats?: { total_24h: number; agents_24h: number; errors_24h: number; unauthorized_24h: number; request_human_24h: number };
+  call_stats?: { total_24h: number; agents_24h: number; errors_24h: number; unauthorized_24h: number; request_human_24h: number; crawlers_24h?: number };
 };
 type Call = {
   id: number; at: string; customer_id: string | null; customer_name: string | null; channel: string; method: string | null; tool: string | null;
-  outcome: "ok" | "rejected" | "error" | "unauthorized"; http_status: number | null; duration_ms: number | null; job_id: string | null; summary: string | null; client: string | null;
+  outcome: "ok" | "rejected" | "error" | "unauthorized" | "crawler"; http_status: number | null; duration_ms: number | null; job_id: string | null; summary: string | null; client: string | null;
 };
 
 // Raw tool events → readable lines.
@@ -236,7 +236,7 @@ export default function Backoffice() {
         <Kpi k="Revenue" v={m ? usd(m.revenue) : "–"} sub={m ? `${usd(m.fees)} fees · ${usd(m.payouts)} to workers` : undefined} />
         <Kpi k="Companies" v={s?.companies ?? "–"} />
         <Kpi k="Agent calls · 24h" v={data?.call_stats?.total_24h ?? "–"} warn={!!data?.call_stats?.errors_24h}
-          sub={data?.call_stats ? `${plural(data.call_stats.agents_24h, "agent")} · ${plural(data.call_stats.request_human_24h, "request")} · ${plural(data.call_stats.errors_24h, "error")}` : undefined} />
+          sub={data?.call_stats ? `${plural(data.call_stats.agents_24h, "agent")} · ${plural(data.call_stats.request_human_24h, "request")} · ${plural(data.call_stats.errors_24h, "error")}${data.call_stats.crawlers_24h ? ` · ${data.call_stats.crawlers_24h} directory checks` : ""}` : undefined} />
       </section>
 
       <section style={{ ...card, marginTop: 10, padding: "12px 14px", display: "flex", gap: 6, alignItems: "stretch", overflowX: "auto" }}>
@@ -446,13 +446,21 @@ const OUTCOME: Record<Call["outcome"], [string, string, string]> = {
   rejected: ["Rejected", "#F6EAD3", "#8A5300"],
   error: ["Error", "#F6E1DE", "#A12A22"],
   unauthorized: ["No key", "#F3EFE7", "#5B635C"],
+  crawler: ["Directory", "#E2EBE8", "#3E5C5A"],
 };
 const CALL_LABEL: Record<string, string> = {
   request_human: "request_human", get_job: "get_job", cancel_job: "cancel_job", setup_payment: "setup_payment",
   initialize: "connect", "tools/list": "list tools", "POST /v1/customers": "sign-up", "oauth/token": "OAuth connect",
 };
+/** Real agents by default; directory crawlers (Glama, MCP Yellow Pages, ...) only in their own tab. */
+const match = (f: "all" | "requests" | "problems" | "crawlers", c: Call) =>
+  f === "crawlers" ? c.outcome === "crawler"
+  : c.outcome === "crawler" ? false
+  : f === "requests" ? c.tool === "request_human"
+  : f === "problems" ? c.outcome !== "ok"
+  : true;
 function AgentCalls({ calls, onOpenJob }: { calls: Call[] | null; onOpenJob: (id: string) => void }) {
-  const [filter, setFilter] = useState<"all" | "requests" | "problems">("all");
+  const [filter, setFilter] = useState<"all" | "requests" | "problems" | "crawlers">("all");
   const [more, setMore] = useState(false);
   const seenIds = useRef<Set<number> | null>(null);
   const [fresh, setFresh] = useState<Set<number>>(new Set());
@@ -461,20 +469,19 @@ function AgentCalls({ calls, onOpenJob }: { calls: Call[] | null; onOpenJob: (id
     if (seenIds.current) setFresh(new Set(calls.filter((c) => !seenIds.current!.has(c.id)).map((c) => c.id)));
     seenIds.current = new Set(calls.map((c) => c.id));
   }, [calls]);
-  const list = (calls ?? []).filter((c) =>
-    filter === "requests" ? c.tool === "request_human" : filter === "problems" ? c.outcome !== "ok" : true);
+  const list = (calls ?? []).filter((c) => match(filter, c));
   const shown = list.slice(0, more ? 150 : 12);
-  const count = (f: typeof filter) => (calls ?? []).filter((c) => (f === "requests" ? c.tool === "request_human" : f === "problems" ? c.outcome !== "ok" : true)).length;
+  const count = (f: typeof filter) => (calls ?? []).filter((c) => match(f, c)).length;
   return (
     <section style={{ ...card, marginTop: 14, overflow: "hidden" }}>
       <div style={{ padding: "14px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderBottom: `1px solid ${C.border}` }}>
         <div>
           <h2 style={{ ...display, fontSize: 20, margin: 0, color: C.heading }}>Calls from agents</h2>
-          <div style={{ fontSize: 13, color: C.muted }}>Every call customer agents make to Operis, live: connects, requests, status checks, errors.</div>
+          <div style={{ fontSize: 13, color: C.muted }}>Every call customer agents make to Operis, live: connects, requests, status checks, errors. MCP directories that index us are under Directories.</div>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, background: C.card2, padding: 4, borderRadius: 10 }}>
-          {([["all", "All"], ["requests", "Job requests"], ["problems", "Errors & rejected"]] as const).map(([v, l]) => (
+          {([["all", "Agents"], ["requests", "Job requests"], ["problems", "Errors & no key"], ["crawlers", "Directories"]] as const).map(([v, l]) => (
             <button key={v} onClick={() => setFilter(v)} style={{ ...btn, padding: "7px 12px", fontSize: 13, background: filter === v ? C.card : "transparent", color: filter === v ? C.heading : C.muted, boxShadow: filter === v ? "0 1px 2px rgba(0,0,0,0.08)" : "none" }}>
               {l} <span style={{ color: C.faint, marginLeft: 4 }}>{count(v)}</span>
             </button>

@@ -8,7 +8,7 @@ export type CallLog = {
   channel: "mcp" | "signup" | "oauth";
   method?: string | null;
   tool?: string | null;
-  outcome: "ok" | "rejected" | "error" | "unauthorized";
+  outcome: "ok" | "rejected" | "error" | "unauthorized" | "crawler";
   http_status?: number | null;
   duration_ms?: number | null;
   job_id?: string | null;
