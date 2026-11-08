@@ -5,7 +5,7 @@ import { cityFromAddress } from './googleProfiles.js';
 import { personLead } from './common.js';
 
 export const LINKEDIN_PEOPLE_ID = 'monid:ploid/linkedin/search';
-const LIMIT = 8;
+const LIMIT = 15;
 
 export function buildLinkedinFilters(ctx: Pick<SourceContext, 'job' | 'hints' | 'remote'>): Record<string, unknown> {
   const roles = ctx.hints.roles;

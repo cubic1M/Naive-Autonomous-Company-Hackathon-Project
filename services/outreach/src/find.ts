@@ -32,10 +32,10 @@ export interface FindDetailed {
   plan: SearchPlan;
 }
 
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 50;
-const MAX_ENRICH = 15;
-const ENRICH_CONCURRENCY = 4;
+const MAX_ENRICH = 60;
+const ENRICH_CONCURRENCY = 6;
 /** Naive truncates tool results at 8,000 chars; stay under. */
 const MAX_OUTPUT_CHARS = 7500;
 const MAX_REGULARS_SCAN = 300;
@@ -207,7 +207,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
     if (k?.email && !l.email) l.email = k.email;
   }
 
-  // 4. enrich the top candidates, cheapest step first, stopping at the first email
+  // 4. enrich the top candidates (up to MAX_ENRICH, skipping anyone who already has an email), cheapest step first, stopping at the first email
   const stepsFor = (l: Lead): Enricher[] => {
     if (l.kind === 'person') return enrichers.filter((e) => !e.applies || e.applies(l));
     return l.website ? [crawl, hunter] : [];
@@ -245,9 +245,13 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
       }
     }
   };
-  for (let i = 0; i < targets.length; i += ENRICH_CONCURRENCY) {
-    await Promise.all(targets.slice(i, i + ENRICH_CONCURRENCY).map(enrichOne));
-  }
+  // worker pool: ENRICH_CONCURRENCY leads in flight, best-scored first
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(ENRICH_CONCURRENCY, targets.length) }, async () => {
+      while (next < targets.length) await enrichOne(targets[next++]!);
+    }),
+  );
 
   // 5. persist
   const people = new Map<string, Person>();
@@ -283,7 +287,7 @@ export async function findPeopleDetailed(input: FindPeopleInput, deps: FindDeps)
 
   let candidates: Candidate[] = ranked.map((x) => ({
     candidate_id: x.p.id,
-    name: x.p.name ? x.p.name.slice(0, 40) : null,
+    name: x.p.name ? x.p.name.slice(0, 32) : null,
     channel: x.channel,
     source: x.p.regular ? 'regular' : shortSource(x.p.source),
     distance_km: x.d === null ? null : Math.round(x.d * 10) / 10,

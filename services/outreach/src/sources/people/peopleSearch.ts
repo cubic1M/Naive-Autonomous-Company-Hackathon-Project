@@ -1,6 +1,6 @@
 import { profileFromUrl } from '../../profiles.js';
 import type { Lead, Profile } from '../../types.js';
-import { arr, callMonid, rec, str, type SourceAdapter, type SourceContext } from '../types.js';
+import { arr, callMonid, rec, SourceError, str, type SourceAdapter, type SourceContext } from '../types.js';
 import { addProfile, personLead } from './common.js';
 import { cityFromAddress } from './googleProfiles.js';
 
@@ -10,6 +10,16 @@ export function buildPeopleQuery(ctx: Pick<SourceContext, 'job' | 'hints' | 'rem
   const roles = ctx.hints.roles.length ? ctx.hints.roles.slice(0, 2) : [ctx.job.title];
   let q = `freelance ${roles.join(' or ')}`;
   if (ctx.hints.skills.length) q += ` experienced in ${ctx.hints.skills.slice(0, 3).join(', ')}`;
+  const city = ctx.remote ? null : cityFromAddress(ctx.job.address);
+  if (city) q += ` in ${city}`;
+  return q.slice(0, 500);
+}
+
+/** Pure: a second, differently-angled phrasing (independent consultants with a web presence). */
+export function buildPeopleQuery2(ctx: Pick<SourceContext, 'job' | 'hints' | 'remote'>): string {
+  const role = ctx.hints.roles[2] ?? ctx.hints.roles[1] ?? ctx.hints.roles[0] ?? ctx.job.title;
+  let q = `independent ${role} with own practice or personal website`;
+  if (ctx.hints.skills[0]) q += `, ${ctx.hints.skills[0]}`;
   const city = ctx.remote ? null : cityFromAddress(ctx.job.address);
   if (city) q += ` in ${city}`;
   return q.slice(0, 500);
@@ -47,10 +57,26 @@ export function parsePeopleSearch(output: unknown): Lead[] {
 
 export const peopleSearch: SourceAdapter = {
   id: PEOPLE_SEARCH_ID,
-  costEstimateUsd: 0.02,
+  costEstimateUsd: 0.04, // two pages at $0.02
   perQuery: false,
   async run(ctx) {
-    const r = await callMonid(ctx.monid, 'context.dev', '/people/search', { body: { query: buildPeopleQuery(ctx) } });
-    return { leads: parsePeopleSearch(r.output), cost_usd: r.cost_usd };
+    const queries = [...new Set([buildPeopleQuery(ctx), buildPeopleQuery2(ctx)])];
+    const leads: Lead[] = [];
+    let cost = 0;
+    let lastErr: SourceError | null = null;
+    let ok = 0;
+    for (const query of queries) {
+      try {
+        const r = await callMonid(ctx.monid, 'context.dev', '/people/search', { body: { query } });
+        leads.push(...parsePeopleSearch(r.output));
+        cost += r.cost_usd;
+        ok++;
+      } catch (e) {
+        lastErr = e instanceof SourceError ? e : new SourceError(e instanceof Error ? e.message : String(e));
+        cost += lastErr.cost_usd;
+      }
+    }
+    if (ok === 0 && lastErr) throw new SourceError(lastErr.message, cost);
+    return { leads, cost_usd: cost };
   },
 };

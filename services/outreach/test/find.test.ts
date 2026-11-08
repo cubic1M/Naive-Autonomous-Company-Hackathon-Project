@@ -320,3 +320,50 @@ describe('findPeople: on-site job with people sources', () => {
     expect(res.output.candidates.findIndex((c) => c.name === 'Near Nina')).toBeLessThan(res.output.candidates.findIndex((c) => c.source === 'google_maps'));
   });
 });
+
+describe('findPeople: autonomous email-only at scale', () => {
+  const job = { title: 'Review our SaaS terms of service', instructions: 'Online contract review', remote: true };
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      person({ name: `Lawyer Number${i}`, headline: 'Freelance contract attorney', location_text: 'Austin', profiles: [li(`lawyer${i}`)] }),
+    );
+
+  it('enriches up to 60 leads, drops non-emailable, defaults to 40 emailable candidates', async () => {
+    const { repo, monid, env } = setup(job, { OUTREACH_MANUAL_QUEUE: false, OUTREACH_MAX_SPEND_USD: 1 });
+    const tried: string[] = [];
+    // every lead with an even index has a findable email
+    const enr: Enricher = {
+      id: 'enr', costEstimateUsd: 0.001,
+      enrich: async (l) => {
+        tried.push(l.name!);
+        const i = Number(l.name!.replace(/\D/g, ''));
+        return { email: i % 2 === 0 ? `l${i}@law.example` : null, phone: null, cost_usd: 0.001 };
+      },
+    };
+    const res = await findPeopleDetailed({ job_id: 'job1' }, { repo, monid, env, sources: [fakeSource(many(120))], enrichers: [enr] });
+    expect(tried).toHaveLength(60);
+    expect(res.output.candidates).toHaveLength(30); // 60 enriched, half emailable
+    expect(res.output.candidates.every((c) => c.channel === 'email')).toBe(true);
+    expect(JSON.stringify(res.output).length).toBeLessThan(7500);
+  });
+
+  it('returns up to the default 40 emailable people and never more than 50', async () => {
+    const { repo, monid, env } = setup(job, { OUTREACH_MANUAL_QUEUE: false });
+    const withEmail = many(70).map((l, i) => ({ ...l, email: `l${i}@law.example` }));
+    const a = await findPeople({ job_id: 'job1' }, { repo, monid, env, sources: [fakeSource(withEmail)], enrichers: [] });
+    expect(a.candidates).toHaveLength(40);
+    const b = await findPeople({ job_id: 'job1', limit: 500 }, { repo, monid, env, sources: [fakeSource(withEmail)], enrichers: [] });
+    expect(b.candidates.length).toBeGreaterThan(44); // capped at 50, trimmed to fit the 7.5k output budget
+    expect(b.candidates.length).toBeLessThanOrEqual(50);
+    expect(JSON.stringify(b).length).toBeLessThan(7500);
+  });
+
+  it('does not enrich leads that already have an email', async () => {
+    const { repo, monid, env } = setup(job, { OUTREACH_MANUAL_QUEUE: false });
+    let n = 0;
+    const enr: Enricher = { id: 'enr', costEstimateUsd: 0.001, enrich: async () => (n++, { email: null, phone: null, cost_usd: 0 }) };
+    const ls = many(5).map((l, i) => ({ ...l, email: i < 3 ? `x${i}@law.example` : null }));
+    await findPeople({ job_id: 'job1' }, { repo, monid, env, sources: [fakeSource(ls)], enrichers: [enr] });
+    expect(n).toBe(2);
+  });
+});

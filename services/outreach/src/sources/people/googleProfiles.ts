@@ -50,7 +50,7 @@ export function cityFromAddress(address: string | null): string | null {
 
 type QueryCtx = Pick<SourceContext, 'job' | 'hints' | 'remote'>;
 
-/** Pure: 3-6 site-restricted Google queries for the job. Remote jobs get no city. */
+/** Pure: up to 14 (site-restricted and contact-page) Google queries for the job. Remote jobs get no city. */
 export function buildGoogleQueries(ctx: QueryCtx): string[] {
   const roles = ctx.hints.roles.length ? ctx.hints.roles : [ctx.job.title];
   const skills = ctx.hints.skills;
@@ -73,7 +73,88 @@ export function buildGoogleQueries(ctx: QueryCtx): string[] {
   }
   if (cred && fam !== 'notary') out.push(join('site:linkedin.com/in', roleTerm, q(cred), loc));
   out.push(join(`"freelance ${roles[0]}"`, skillTerm, 'portfolio contact', loc));
-  return [...new Set(out.map((s) => s.replace(/\s+/g, ' ').trim()))].slice(0, 6);
+  out.push(...contactPageQueries(fam, { roleTerm, role: q(roles[0]!), skillTerm, cred, loc, join }));
+  return [...new Set(out.map((s) => s.replace(/\s+/g, ' ').trim()))].slice(0, MAX_QUERIES);
+}
+
+/** Hard cap on queries per job ($0.00015 each). */
+export const MAX_QUERIES = 14;
+/** Results requested per query (litescrape: best-effort, 1-100). */
+export const RESULTS_PER_QUERY = 20;
+
+interface ExtraCtx {
+  roleTerm: string;
+  role: string;
+  skillTerm: string;
+  cred: string | null;
+  loc: string;
+  join: (...p: string[]) => string;
+}
+
+/** Pure: queries aimed at people with a public contact page (solo practices, freelancer sites, directories). */
+function contactPageQueries(fam: RoleFamily, c: ExtraCtx): string[] {
+  const { join, roleTerm, role, skillTerm, loc } = c;
+  const noSocial = '-site:linkedin.com -site:facebook.com';
+  switch (fam) {
+    case 'legal':
+      return [
+        join(role, skillTerm, '("law office" OR "law firm" OR PLLC OR Esq)', 'contact', loc, noSocial),
+        join('site:lawyers.com', roleTerm, skillTerm, loc),
+        join('site:upcounsel.com', roleTerm, skillTerm),
+        join('site:martindale.com', roleTerm, skillTerm, loc),
+        join('"freelance" ("contract lawyer" OR "contract attorney") email', skillTerm, loc),
+        join('"solo practitioner"', roleTerm, skillTerm, '("email me" OR "contact me")', loc),
+        join(role, skillTerm, '"attorney at law" "free consultation" contact', loc, noSocial),
+      ];
+    case 'software':
+      return [
+        join('site:github.com', '"freelance developer"', 'portfolio', '"contact"', skillTerm, loc),
+        join('site:contra.com', roleTerm, skillTerm),
+        join('site:toptal.com', roleTerm, skillTerm),
+        join(`"freelance ${c.role.replace(/"/g, '')}"`, 'portfolio ("contact me" OR "hire me" OR "email me")', skillTerm, loc, noSocial),
+        join('site:github.io', roleTerm, skillTerm, 'contact'),
+        join('site:stackoverflow.com/users', roleTerm, skillTerm, '"available for"'),
+      ];
+    case 'design':
+      return [
+        join('site:behance.net', roleTerm, skillTerm, loc),
+        join('site:dribbble.com', roleTerm, skillTerm, loc),
+        join('site:contra.com', roleTerm, skillTerm),
+        join(roleTerm, 'portfolio ("contact me" OR "hire me" OR "email me")', skillTerm, loc, noSocial),
+        join('"freelance"', roleTerm, '"available for work"', 'email', loc, noSocial),
+      ];
+    case 'media':
+      return [
+        join(roleTerm, 'portfolio ("contact me" OR "book me" OR "inquiries")', skillTerm, loc, noSocial),
+        join('site:thumbtack.com', roleTerm, loc),
+        join('site:contra.com', roleTerm, skillTerm),
+        join('"freelance"', roleTerm, 'email', skillTerm, loc, noSocial),
+      ];
+    case 'writing':
+      return [
+        join('site:contra.com', roleTerm, skillTerm),
+        join(roleTerm, 'portfolio ("contact me" OR "hire me" OR "email me")', skillTerm, loc, noSocial),
+        join('"freelance"', roleTerm, 'email', skillTerm, loc, noSocial),
+        join('site:upwork.com/freelancers', roleTerm, skillTerm),
+      ];
+    case 'notary':
+      return [
+        join('site:thumbtack.com', roleTerm, loc),
+        join('"mobile notary"', 'contact email', loc, noSocial),
+        join(roleTerm, '("call or email" OR "book now")', loc, noSocial),
+      ];
+    case 'gig':
+      return [
+        join('site:thumbtack.com', roleTerm, loc),
+        join(roleTerm, 'available ("contact me" OR "email me")', loc, noSocial),
+      ];
+    default:
+      return [
+        join('site:thumbtack.com', roleTerm, loc),
+        join('site:contra.com', roleTerm, skillTerm),
+        join(roleTerm, '"freelance"', '("contact me" OR "email me")', skillTerm, loc, noSocial),
+      ];
+  }
 }
 
 const SITE_SUFFIX = /\s*(?:[-|–·]\s*)?(?:LinkedIn|GitHub|Instagram|Behance|Dribbble|Avvo|Justia|Facebook|Reddit|Contra)\b.*$/i;
@@ -140,7 +221,7 @@ export const googleProfiles: SourceAdapter = {
   run(ctx) {
     const queries = buildGoogleQueries(ctx);
     return perQueryRun({ ...ctx, queries }, async (query) => {
-      const r = await callMonid(ctx.monid, 'litescrape', '/google/search', { queryParams: { q: query, num: 10 } });
+      const r = await callMonid(ctx.monid, 'litescrape', '/google/search', { queryParams: { q: query, num: RESULTS_PER_QUERY } });
       return { leads: parseGoogleProfiles(r.output), cost_usd: r.cost_usd };
     });
   },

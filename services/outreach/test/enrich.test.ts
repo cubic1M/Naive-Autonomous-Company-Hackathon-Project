@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { githubProfile, instagramContact, linkedinWorkEmail, makeGithubProfile, personEnrichers, websiteContact, xBio } from '../src/enrich/index.js';
+import { acceptableEmail, buildPresenceQuery, pickOwnSite, webPresence } from '../src/enrich/webPresence.js';
 import type { Lead } from '../src/types.js';
 import { FakeMonid, fixture } from './helpers/fakeMonid.js';
 
@@ -169,5 +170,63 @@ describe('linkedinWorkEmail', () => {
     expect((await linkedinWorkEmail.enrich(l, m)).email).toBeNull();
     const m404 = { run: async () => ({ runId: 'r', status: 'FAILED' as const, httpStatus: 404, output: null, cost_usd: 0 }) };
     expect(await linkedinWorkEmail.enrich(l, m404)).toMatchObject({ email: null, cost_usd: 0 });
+  });
+});
+
+describe('webPresence', () => {
+  const named = lead({ name: 'Leslie Werner', headline: 'Contract attorney', profiles: [prof('linkedin', 'https://www.linkedin.com/in/lw', 'lw')] });
+  const search = fixture('litescrape__google_search_name');
+
+  it('is registered before linkedin, after website', () => {
+    const ids = personEnrichers.map((e) => e.id);
+    expect(ids.indexOf(webPresence.id)).toBe(ids.indexOf(websiteContact.id) + 1);
+    expect(ids.indexOf(webPresence.id)).toBeLessThan(ids.indexOf(linkedinWorkEmail.id));
+  });
+  it('builds the lookup query', () => {
+    expect(buildPresenceQuery(named)).toBe('"Leslie Werner" attorney (contact OR email) -site:linkedin.com');
+    expect(buildPresenceQuery({ ...named, name: 'Madonna' })).toBeNull();
+    expect(buildPresenceQuery({ ...named, name: 'Acme Legal LLC' })).toBeNull();
+  });
+  it('applies to named people without email or own site', () => {
+    expect(webPresence.applies!(named)).toBe(true);
+    expect(webPresence.applies!({ ...named, email: 'a@b.co' })).toBe(false);
+    expect(webPresence.applies!({ ...named, profiles: [prof('website', 'https://lw.com')] })).toBe(false);
+    expect(webPresence.applies!(lead({ name: null }))).toBe(false);
+  });
+  it('picks the person\'s own site/directory page from a real result list, skipping social and aggregators', () => {
+    const p = pickOwnSite(search, 'Leslie Werner');
+    expect(p).not.toBeNull();
+    expect(['website', 'directory']).toContain(p!.platform);
+    expect(p!.url).not.toMatch(/facebook|zoominfo|linkedin/);
+    expect(pickOwnSite(search, 'Zed Nobody')).toBeNull();
+  });
+  it('accepts only own-domain or generic-mailbox emails', () => {
+    expect(acceptableEmail('les@lawfirm.com', 'lawfirm.com')).toBe(true);
+    expect(acceptableEmail('les@gmail.com', 'lawfirm.com')).toBe(true);
+    expect(acceptableEmail('webmaster@wix.com', 'lawfirm.com')).toBe(false);
+  });
+  it('searches once, crawls the found site, returns an own-domain email and the website profile', async () => {
+    const m = new FakeMonid()
+      .override('litescrape/google/search', { output: { organic_results: [
+        { title: 'Leslie Werner, Attorney', link: 'https://lesliewerner.law/about/', snippet: 'Contract law' },
+      ] }, cost: 0.00015 })
+      .override('search1api/crawl', (i) => ({ results: { content: (i.body as any).url.endsWith('/contact') ? 'Reach me: leslie@lesliewerner.law, host: support@wix.com' : 'Hello' } }));
+    const r = await webPresence.enrich(named, m);
+    expect(m.callsTo('litescrape/google/search')).toBe(1);
+    expect(r.email).toBe('leslie@lesliewerner.law');
+    expect(r.profiles).toEqual([{ platform: 'website', url: 'https://lesliewerner.law', handle: null }]);
+    expect(r.cost_usd).toBeCloseTo(0.00015 + 0.002, 6);
+  });
+  it('rejects foreign-domain emails and costs only the search when no site matches', async () => {
+    const m = new FakeMonid()
+      .override('litescrape/google/search', { output: { organic_results: [{ title: 'Leslie Werner', link: 'https://lesliewerner.law', snippet: '' }] }, cost: 0.00015 })
+      .override('search1api/crawl', { output: { results: { content: 'built by agency: hi@agency.io' } }, cost: 0.001 });
+    const r = await webPresence.enrich(named, m);
+    expect(r.email).toBeNull();
+    expect(r.profiles).toHaveLength(1);
+    const none = new FakeMonid().override('litescrape/google/search', { output: { organic_results: [] }, cost: 0.00015 });
+    const r2 = await webPresence.enrich(named, none);
+    expect(r2).toMatchObject({ email: null, cost_usd: 0.00015 });
+    expect(none.callsTo('search1api/crawl')).toBe(0);
   });
 });

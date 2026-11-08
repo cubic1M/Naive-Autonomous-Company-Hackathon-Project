@@ -7,11 +7,17 @@ import { cityFromAddress } from './googleProfiles.js';
 export const X_USERS_ID = 'monid:anyapi/twitter.search_users';
 const T_CO = /^https?:\/\/t\.co\//i;
 
-/** Pure: up to 2 bio keyword queries: "<role> freelance" / "<role> for hire" (+ city when on-site). */
+/** Pure: up to 6 bio keyword queries ("<role> freelance", "for hire", "email me", second role, skill) (+ city when on-site). */
 export function buildXQueries(ctx: Pick<SourceContext, 'job' | 'hints' | 'remote'>): string[] {
   const role = ctx.hints.roles[0] ?? ctx.job.title;
   const city = ctx.remote ? null : cityFromAddress(ctx.job.address);
-  return [`${role} freelance${city ? ` ${city}` : ''}`, `${role} for hire${city ? ` ${city}` : ''}`];
+  const c = city ? ` ${city}` : '';
+  const alt = ctx.hints.roles[1];
+  const skill = ctx.hints.skills[0];
+  const qs = [`${role} freelance${c}`, `${role} for hire${c}`, `${role} "dm for work" OR "email me"${c}`, `independent ${role} contact${c}`];
+  if (alt) qs.push(`${alt} freelance${c}`);
+  if (skill) qs.push(`${role} ${skill}${c}`);
+  return [...new Set(qs)].slice(0, 6);
 }
 
 export function parseXUsers(output: unknown): Lead[] {
