@@ -1,7 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { SCHEMAS } from "./schemas";
+import { GROWTH_SCHEMAS } from "./growthSchemas";
 import { describeToolError } from "../../../../services/money-verification/src/tools";
+
+// Every served tool needs a schema entry; the growth tools' entries live in growthSchemas.ts.
+const ALL_SCHEMAS: Record<string, { description: string; shape: unknown } | undefined> = { ...SCHEMAS, ...GROWTH_SCHEMAS };
 
 type Handler = (args: any) => Promise<unknown>;
 
@@ -15,7 +19,8 @@ const text = (v: unknown) => {
 export async function serveMcp(req: Request, name: string, tools: Record<string, Handler>, instructions?: string): Promise<Response> {
   const server = new McpServer({ name, version: "0.1.0" }, instructions ? { instructions } : undefined);
   for (const [tool, handler] of Object.entries(tools)) {
-    const spec = SCHEMAS[tool as keyof typeof SCHEMAS];
+    const spec = ALL_SCHEMAS[tool];
+    if (!spec) throw new Error(`no MCP schema for tool ${tool}`);
     server.registerTool(tool, { description: spec.description, inputSchema: spec.shape as any }, async (args: any) => {
       try {
         const out = await handler(args);

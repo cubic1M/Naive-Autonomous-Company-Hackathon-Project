@@ -131,6 +131,40 @@ export const mocks: Required<{ [K in keyof ServiceModule]-?: NonNullable<Service
     return { job_id, status: "paid" as const, worker_pay_usd: Number(j.worker_pay_usd), fee_usd: Number(j.fee_usd) };
   },
 
+  // ---- growth (services/growth): the mocks send nothing ----
+  async list_prospects() {
+    return { prospects: [], used_today: 0, daily_cap: 25 };
+  },
+  async send_marketing({ contact_id }) {
+    return { contact_id, status: "dry_run" as const, reason: "mock" };
+  },
+  async suppress_contact() {
+    return { suppressed: true as const, matched_contacts: 0, matched_workers: 0 };
+  },
+  async recruit_search({ family }) {
+    return { family, found: 0, new: 0, spend_usd: 0, spend_today_usd: 0, daily_cap_usd: 2, candidates: [] };
+  },
+  async recruit_invite({ person_ids }) {
+    const results = person_ids.map((person_id) => ({ person_id, status: "dry_run" as const, reason: "mock" }));
+    return { sent: 0, dry_run: results.length, skipped: 0, failed: 0, used_today: results.length, daily_cap: 40, results };
+  },
+  async growth_report() {
+    const demand = { last_7d: 0, prior_7d: 0, projected_next_7d: 0, unfilled_7d: 0 };
+    const entry = { found: 0, invited: 0, opted_in: 0, id_verified: 0, licensed: 0, target: 0, gap: 0 };
+    return {
+      day: new Date().toISOString().slice(0, 10),
+      live: { sales: false, recruit: false },
+      sales: { sent_today: 0, dry_run_today: 0, daily_cap: 25, prospects_waiting: 0 },
+      recruiting: { sent_today: 0, dry_run_today: 0, daily_cap: 40, search_spend_today_usd: 0, search_cap_usd: 2 },
+      directory: { pier70_gigs: entry, sf_notaries: entry, ca_attorneys: entry, developers: entry },
+      demand: { by_family: { pier70_gigs: demand, sf_notaries: demand, ca_attorneys: demand, developers: demand, other: demand }, top_requested: [] },
+      promos: { granted: 0, max: 20, redeemed: 0, due: [] },
+    };
+  },
+  async redeem_promo() {
+    return { eligible: false as const, reason: "mock" };
+  },
+
   // public tools are implemented in edwin.ts, not mocked
   request_human: null as any,
   get_job: null as any,

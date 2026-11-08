@@ -95,7 +95,7 @@
     },
     "sales": {
       "name": "operis-sales",
-      "description": "Gets other teams' agents connected to the Operis MCP server.",
+      "description": "Markets Operis to people building AI agents (hand-sourced prospects, guarded email) and answers people who write in.",
       "budget_usd": {
         "cap": 20,
         "max_task": 5
@@ -106,8 +106,47 @@
         "web_search": "allow",
         "web_fetch": "allow",
         "board_read": "allow",
+        "board_write": "allow",
+        "operis.list_prospects": "allow",
+        "operis.send_marketing": "allow",
+        "operis.suppress_contact": "allow",
+        "operis.growth_report": "allow"
+      },
+      "schedules": [
+        {
+          "cron": "0 10,15 * * *",
+          "timezone": "America/Los_Angeles",
+          "budget_usd": 1,
+          "input": "Run a marketing round: follow 'Each scheduled round' in your instructions.",
+          "enabled": false
+        }
+      ],
+      "$comment": "services/growth (docs/specs/2026-11-08-sales-recruiter-design.md): cold email only through operis.send_marketing, which enforces GROWTH_LIVE / OUTREACH_TEST_ALLOWLIST, opt-outs, caps and the unsubscribe link in code. email.send is for replies only and always waits for a founder (approvals.ts HUMAN_ONLY). Schedule created disabled; enable once live."
+    },
+    "recruiter": {
+      "name": "operis-recruiter",
+      "description": "Grows the pre-vetted worker pool: finds people for the job families in demand and invites them to join and verify their ID.",
+      "budget_usd": {
+        "cap": 10,
+        "max_task": 3
+      },
+      "tools": {
+        "operis.growth_report": "allow",
+        "operis.recruit_search": "allow",
+        "operis.recruit_invite": "allow",
+        "board_read": "allow",
         "board_write": "allow"
-      }
+      },
+      "schedules": [
+        {
+          "cron": "0 9,12,15 * * *",
+          "timezone": "America/Los_Angeles",
+          "budget_usd": 1,
+          "input": "Run a recruiting round: follow 'Each scheduled round' in your instructions.",
+          "enabled": false
+        }
+      ],
+      "$comment": "services/growth: recruit_search (Monid spend capped in code: $0.50/call, $2/day; no ContactOut) and recruit_invite (guarded like send_marketing). No email.send, SMS or DMs. Schedule created disabled; enable once live."
     },
     "disputes": {
       "name": "operis-disputes",
@@ -165,7 +204,9 @@
       "list_agents": "allow",
       "ask_operator": "allow",
       "operis.refund_large": "allow",
-      "operis.release_payout_large": "allow"
+      "operis.release_payout_large": "allow",
+      "operis.growth_report": "allow",
+      "operis.redeem_promo": "allow"
     },
     "daily_report": {
       "cron": "0 8 * * *",

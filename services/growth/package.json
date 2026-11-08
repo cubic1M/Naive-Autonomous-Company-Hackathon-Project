@@ -1,0 +1,13 @@
+{
+  "name": "@operis/growth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operis growth: the Sales agent's marketing email and the Recruiter's worker invites, with every sending rule enforced in code. Owner: Cameron.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dry-run": "tsx scripts/dry-run.ts",
+    "import-prospects": "tsx scripts/import-prospects.ts"
+  }
+}
