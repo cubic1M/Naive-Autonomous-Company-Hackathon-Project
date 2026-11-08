@@ -3,6 +3,7 @@
 // "Give this to your agent": short command shown, fuller instruction copied (see lib/quickstart.ts).
 import { useState } from "react";
 
+import AgentLogos from "@/components/AgentLogos";
 import { copiedInstruction, SHOWN_COMMAND } from "@/lib/quickstart";
 
 export default function QuickStart({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
@@ -15,7 +16,7 @@ export default function QuickStart({ compact = false, dark = false }: { compact?
     <div style={{ width: "100%", maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 14, textAlign: "center" }}>
       <p style={{ margin: 0, fontSize: compact ? 18 : 22, color: dark ? "#F3EEE4" : "#3C443E", fontFamily: "var(--font-display)", letterSpacing: "-0.01em" }}>
         Give this to your agent
-        <span style={{ marginLeft: 10, fontSize: 13, color: muted, fontFamily: "var(--font)" }}>Claude · ChatGPT · Cursor · Codex · Naïve</span>
+        <span style={{ marginLeft: 14 }}><AgentLogos color={muted} size={compact ? 18 : 20} /></span>
       </p>
       <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: "#17211A", border: "1px solid #2F3D33", borderRadius: 14, padding: compact ? "14px 14px 14px 20px" : "18px 18px 18px 24px", boxShadow: "0 18px 40px rgba(23,33,26,0.22)" }}>
         <span style={{ fontFamily: "var(--font-mono)", color: "#7A8178", fontSize: 15 }}>$</span>
