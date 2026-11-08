@@ -1,7 +1,7 @@
 // services/money-verification/test/liability-decide.test.ts
 import { describe, expect, it } from 'vitest';
 import { InMemoryRepo } from '../src/repo/memory.js';
-import { allowedModels, decideFallback, getLiabilityContext, setLiability } from '../src/liability/decide.js';
+import { allowedModels, decideByTags, decideFallback, getLiabilityContext, setLiability } from '../src/liability/decide.js';
 import { createTools } from '../src/tools.js';
 import { JOB_ID, T0, makeJob, makeWorld } from './helpers.js';
 
@@ -91,6 +91,24 @@ describe('decideFallback', () => {
     const d = deps(); await seed(d.repo, [], null, 'standard');
     await set(d, 'operis', 'D');
     expect((await decideFallback(d, JOB_ID)).changed).toBe(false);
+  });
+});
+
+describe('decideByTags (no Compliance agent configured)', () => {
+  it.each([
+    [['L3'], 'refuse', 'standard', 'refuse', 'L3', 'cancel'],
+    [['L2'], 'connector', 'connector', 'connector', 'L2', 'wake_ceo'],
+    [[], null, 'standard', 'operis', 'D', 'wake_ceo'],
+  ] as const)('tags %j -> %s', async (rules, forced, pricing, model, rule, next) => {
+    const d = deps(); await seed(d.repo, [...rules], forced, pricing);
+    expect(await decideByTags(d, JOB_ID)).toMatchObject({
+      next, changed: true, liability: { model, rule_id: rule, decided_by: 'auto (no compliance agent)', reason: 'no Compliance agent configured: decided by the intake tags' },
+    });
+  });
+  it('leaves an existing decision alone', async () => {
+    const d = deps(); await seed(d.repo, [], null, 'standard');
+    await set(d, 'connector', 'U');
+    expect(await decideByTags(d, JOB_ID)).toMatchObject({ changed: false, liability: { model: 'connector', rule_id: 'U' } });
   });
 });
 

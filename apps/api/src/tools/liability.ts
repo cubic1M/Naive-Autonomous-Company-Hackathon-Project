@@ -30,6 +30,13 @@ export async function afterDecision(jobId: string, out: { model: string; next: "
   if (!("skipped" in woke && woke.skipped === "duplicate")) later(() => notifyCustomer(jobId)); // callbacks carry liability_model
 }
 
+/** No Compliance agent configured (NAIVE_AGENT_COMPLIANCE unset): the intake tags decide at held and the CEO is woken now. */
+export async function decideWithoutAgent(jobId: string) {
+  const out = await compliance.autoDecision(jobId);
+  await afterDecision(jobId, out);
+  return out;
+}
+
 export const LIABILITY_EXTRA_TOOLS = {
   get_liability_context: (args: any, ctx: ToolContext) => compliance.LIABILITY_TOOLS.get_liability_context(args, ctx),
   set_liability: async (args: any, ctx: ToolContext) => {

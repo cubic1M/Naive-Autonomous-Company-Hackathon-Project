@@ -82,6 +82,11 @@ export async function wakeForState(jobId: string, state: JobState) {
   const role = WAKE_ON_ENTER[state];
   const msg = MESSAGES[state];
   if (!role || !msg) return;
+  if (role === "compliance" && !optional(AGENT_ENV.compliance)) {
+    // No Compliance agent yet: the intake tags decide now and the CEO is woken (Cameron's services/compliance).
+    const { decideWithoutAgent } = await import("@/tools/liability");
+    return decideWithoutAgent(jobId);
+  }
   return wake(role, jobId, state, msg(jobId));
 }
 

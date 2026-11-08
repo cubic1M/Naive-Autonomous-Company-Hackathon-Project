@@ -102,13 +102,29 @@ export async function setLiability(
   return { liability: stored, next: nextFor(stored.model as LiabilityModel), changed };
 }
 
+/** The model and rule the intake tags give: a forced tag decides with its first rule; an untagged job gets `untagged`. */
+function byTags(row: JobLiability, untagged: readonly [LiabilityModel, string]): readonly [LiabilityModel, string] {
+  const firstOf = (model: LiabilityModel) => RULES.find((r) => r.model === model && row.tags.rules.includes(r.id))?.id;
+  if (row.tags.forced === 'refuse') return ['refuse', firstOf('refuse') ?? 'R'];
+  if (row.tags.forced === 'connector') return ['connector', firstOf('connector') ?? 'U'];
+  return untagged;
+}
+
+/** The sweep's fifteen-minute timeout: the tags decide; an untagged job is connector under U (nobody judged it). */
 export async function decideFallback(deps: LiabilityDeps, jobId: string): Promise<DecisionOutcome> {
   const row = await intakeRow(deps, jobId);
   if (row.model) return { liability: row, next: nextFor(row.model), changed: false };
-  const firstOf = (model: LiabilityModel) => RULES.find((r) => r.model === model && row.tags.rules.includes(r.id))?.id;
-  const [model, ruleId] =
-    row.tags.forced === 'refuse' ? (['refuse', firstOf('refuse') ?? 'R'] as const)
-    : row.tags.forced === 'connector' ? (['connector', firstOf('connector') ?? 'U'] as const)
-    : (['connector', 'U'] as const);
+  const [model, ruleId] = byTags(row, ['connector', 'U']);
   return setLiability(deps, { jobId, model, ruleId, reason: 'no decision within fifteen minutes', decidedBy: 'fallback' });
+}
+
+/**
+ * No Compliance agent configured (NAIVE_AGENT_COMPLIANCE unset): decide at held by the intake tags, so funded jobs are
+ * not held for the timeout. An untagged job is operis under D; U stays the outcome of a real timeout only.
+ */
+export async function decideByTags(deps: LiabilityDeps, jobId: string): Promise<DecisionOutcome> {
+  const row = await intakeRow(deps, jobId);
+  if (row.model) return { liability: row, next: nextFor(row.model), changed: false };
+  const [model, ruleId] = byTags(row, ['operis', 'D']);
+  return setLiability(deps, { jobId, model, ruleId, reason: 'no Compliance agent configured: decided by the intake tags', decidedBy: 'auto (no compliance agent)' });
 }

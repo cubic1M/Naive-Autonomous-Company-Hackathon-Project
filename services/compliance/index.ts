@@ -6,6 +6,7 @@ import {
   NotFoundError,
   checkEligibility,
   createTools,
+  decideByTags,
   decideFallback,
   depsFromApiContext,
   depsFromProcessEnv,
@@ -45,6 +46,12 @@ export const LIABILITY_TOOLS = {
 /** The sweep's fifteen-minute fallback. */
 export async function fallbackDecision(jobId: string) {
   const out = await decideFallback(depsFromProcessEnv(), jobId);
+  return { model: out.liability.model!, rule_id: out.liability.rule_id!, reason: out.liability.reason!, next: out.next, changed: out.changed };
+}
+
+/** No Compliance agent configured yet: the intake tags decide at held (an untagged job is operis under D). */
+export async function autoDecision(jobId: string) {
+  const out = await decideByTags(depsFromProcessEnv(), jobId);
   return { model: out.liability.model!, rule_id: out.liability.rule_id!, reason: out.liability.reason!, next: out.next, changed: out.changed };
 }
 
