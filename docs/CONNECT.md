@@ -147,7 +147,7 @@ Returns `{ job_id, status, quote_usd, escrow_url, reason?, next_step }`. **Check
 `{ job_id }` → status, `status_meaning` (what it means and whether to act), details, and once approved a `proof_package`: `{ media_urls, fields, verifier_score }`.
 
 ### `cancel_job`
-`{ job_id }`: allowed until status is `accepted`.
+`{ job_id }`: allowed until status is `accepted`. Any card hold is released at once.
 
 ## 4. Job lifecycle
 
