@@ -44,6 +44,13 @@ export interface CheckProofOut {
 export type ApproveProofOut =
   | { job_id: string; status: 'approved' }
   | { error: 'below_threshold' | 'outside_geofence' | 'reused_media' | 'identity_unverified' };
+/**
+ * contracts/tools.ts gives escalate no error shape. A proof that is already approved (the job is being paid) is not
+ * re-opened, and the agent gets that as a readable result rather than a thrown tool error.
+ */
+export type EscalateOut =
+  | { job_id: string; status: 'escalated' }
+  | { job_id: string; status: 'approved'; error: 'already_approved'; message: string };
 export type PayoutOut =
   | { job_id: string; status: 'paid'; worker_pay_usd: number; fee_usd: number }
   | { error: 'needs_bank_setup'; onboarding_url: string }
@@ -52,7 +59,7 @@ export type PayoutOut =
 export interface ContractTools {
   check_proof(input: { job_id: string }): Promise<CheckProofOut>;
   approve_proof(input: { job_id: string; proof_id: string; notes: string }): Promise<ApproveProofOut>;
-  escalate(input: { job_id: string; proof_id: string; reason: string }): Promise<{ job_id: string; status: 'escalated' }>;
+  escalate(input: { job_id: string; proof_id: string; reason: string }): Promise<EscalateOut>;
   capture_payment(input: { job_id: string }): Promise<{ job_id: string; captured_usd: number }>;
   payout(input: { job_id: string }): Promise<PayoutOut>;
   /** released_hold is set when nothing had been captured yet and the authorization was cancelled instead. */
@@ -132,7 +139,14 @@ export function createContractTools(deps: ToolDeps): ContractTools {
     },
 
     async escalate({ job_id, proof_id, reason }) {
-      await tools.escalate({ job_id, proof_id, reason });
+      try {
+        await tools.escalate({ job_id, proof_id, reason });
+      } catch (err) {
+        if (err instanceof InvalidStateError && err.message.startsWith('already_approved')) {
+          return { job_id, status: 'approved', error: 'already_approved', message: err.message };
+        }
+        throw err;
+      }
       return { job_id, status: 'escalated' };
     },
 
