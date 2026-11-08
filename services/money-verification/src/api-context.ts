@@ -16,6 +16,7 @@ import { scorerFromEnv } from './proof/vision.js';
 import type { Repo } from './repo.js';
 import { PostgresRepo, type SqlClient } from './repo/postgres.js';
 import { fromStripe, type StripeClient } from './stripe-client.js';
+import { stripeModeFromEnv } from './stripe-mode.js';
 import type { ToolDeps } from './tools.js';
 import type { ProofReview } from './types.js';
 import type { WebhookDeps } from './webhooks/stripe.js';
@@ -135,7 +136,8 @@ export function hooksFromApiContext(ctx: ApiContext, repo: Repo): Hooks {
 
 /** Deps for a tool call made by the API: its database client, its transition(), process.env for the rest. */
 export function depsFromApiContext(ctx: ApiContext, overrides: Partial<ApiDeps> = {}): ApiDeps {
-  const repo = overrides.repo ?? new PostgresRepo(sqlClientFromPostgresJs(ctx.sql));
+  // The repo hides Stripe ids of the other mode than STRIPE_SECRET_KEY's (test -> live cutover, see PostgresRepo).
+  const repo = overrides.repo ?? new PostgresRepo(sqlClientFromPostgresJs(ctx.sql), { stripeMode: stripeModeFromEnv() });
   const env = overrides.env ?? envFor(ctx.baseUrl);
   return {
     stripe: overrides.stripe ?? lazyStripe(() => stripeClientFromEnv()),
@@ -162,7 +164,7 @@ export function depsFromProcessEnv(source: NodeJS.ProcessEnv = process.env): Api
   const env = envFor(undefined, source);
   return {
     stripe: lazyStripe(() => stripeClientFromEnv(source)),
-    repo: new PostgresRepo(pool),
+    repo: new PostgresRepo(pool, { stripeMode: stripeModeFromEnv(source) }),
     env,
     vision: scorerFromEnv(env),
     readMedia: fetchMedia(),

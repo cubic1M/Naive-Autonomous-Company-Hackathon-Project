@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { depsFromApiContext, sqlClientFromPostgresJs, type ApiContext } from '../src/api-context.js';
 import { createContractTools } from '../src/contract-tools.js';
 import type { VisionScorer } from '../src/proof/vision.js';
@@ -130,5 +130,30 @@ describe('api-context: hooks become job-state transitions', () => {
     } finally {
       if (saved !== undefined) process.env.STRIPE_SECRET_KEY = saved;
     }
+  });
+});
+
+describe('api-context: the repo follows the mode of STRIPE_SECRET_KEY', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  /** A context whose database holds one customer with a card saved under the sandbox key (stripe_livemode null). */
+  const withSandboxCard = (): ApiContext => ({
+    ...fakeContext().ctx,
+    sql: {
+      async unsafe() {
+        return [{ id: 'c1', stripe_customer_id: 'cus_test', default_payment_method_id: 'pm_test', stripe_livemode: null }];
+      },
+    },
+  });
+
+  it('a live key hides ids saved in test mode; a test key still sees them', async () => {
+    vi.stubEnv('STRIPE_SECRET_KEY', 'rk_live_x');
+    expect(await depsFromApiContext(withSandboxCard()).repo.getCustomerPayment('c1')).toMatchObject({ stripe_customer_id: null, default_payment_method_id: null });
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_x');
+    expect(await depsFromApiContext(withSandboxCard()).repo.getCustomerPayment('c1')).toMatchObject({ stripe_customer_id: 'cus_test' });
+  });
+
+  it('a key that is neither sk_/rk_ live nor test is a config error, not a silent test-mode guess', () => {
+    vi.stubEnv('STRIPE_SECRET_KEY', 'pk_live_x');
+    expect(() => depsFromApiContext(withSandboxCard())).toThrow(/STRIPE_SECRET_KEY must be/);
   });
 });
