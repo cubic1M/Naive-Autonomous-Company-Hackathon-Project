@@ -75,6 +75,14 @@ describe('verificationProfile: certification, risk class, floors, customer requi
     expect(p.notes.join(' ')).toMatch(/weird.*ignored/);
   });
 
+  it('a risk_class naming an Object.prototype key is ignored and noted too, not looked up on the prototype', () => {
+    for (const value of ['constructor', '__proto__', ' Constructor ', 'toString', 'hasOwnProperty']) {
+      const p = verificationProfile(job({ budget_cents: 3000, risk_class: value }));
+      expect(p).toMatchObject({ tier: 0, minPhotos: 1, confidenceThreshold: 0.8 });
+      expect(p.notes.join(' ')).toMatch(/is not low \| standard \| high; ignored/);
+    }
+  });
+
   it('required_tier is a floor, clamped to 2, and never lowers', () => {
     expect(verificationProfile(job({ budget_cents: 3000, required_tier: 1 })).tier).toBe(1);
     expect(verificationProfile(job({ budget_cents: 3000, required_tier: 5 })).tier).toBe(2);

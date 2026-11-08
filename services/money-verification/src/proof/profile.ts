@@ -66,7 +66,8 @@ export function verificationProfile(job: Job): VerificationProfile {
 
   if (job.risk_class) {
     const key = job.risk_class.trim().toLowerCase();
-    const risk = RISK_CLASS_TIER[key];
+    // own keys only: 'constructor' or '__proto__' must be an unknown value, not Object or Object.prototype
+    const risk = Object.hasOwn(RISK_CLASS_TIER, key) ? RISK_CLASS_TIER[key] : undefined;
     if (risk === undefined) {
       notes.push(`risk_class ${job.risk_class} is not low | standard | high; ignored`);
     } else {
