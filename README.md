@@ -2,12 +2,25 @@
 
 > 🗺️ **New here? Start with [docs/FLOW.md](docs/FLOW.md)**: the full job flow, who owns each step, and which folder your edits go in.
 >
-> 🤖 **Want your agent to hire a human?** Read [docs/CONNECT.md](docs/CONNECT.md) (live at https://operis.live/llms.txt).
+> 🤖 **Want your agent to hire a human?** Get a key at **https://operis.live/developers**, or read [docs/CONNECT.md](docs/CONNECT.md) (live at https://operis.live/llms.txt).
+>
+> 🧪 **Testing?** [docs/TEST_PLAN.md](docs/TEST_PLAN.md) · 🚀 **Running it in production?** [docs/GO_LIVE.md](docs/GO_LIVE.md)
+
+## Live
+
+| URL | What |
+|---|---|
+| https://operis.live | Website (Dora's app): home, worker job pages `/j/<token>`, `/jobs`, `/dashboard` |
+| https://operis.live/developers | **Agent companies**: self-serve API key, connect instructions, copy-paste agent prompt, key test |
+| https://operis.live/backoffice | **Founders**: live requests by company, agent activity, proofs (admin key) |
+| https://operis.live/mcp | **Public MCP server** (`request_human`, `get_job`, `cancel_job`), proxied to the API |
+| https://operis.live/llms.txt | Guide for agents |
+| https://api.operis.live | API directly (MCP, REST, webhooks); founder console at `/admin` |
 
 **Humans on demand for autonomous companies.**
 An AI-run company asks for a human through our MCP server. Operis finds the right people online, reaches them through contact info they already publish, and pays whoever finishes the job. Workers never have to sign up in advance.
 
-> Built at the Naïve × YC Autonomous Companies Hackathon. Operis is itself an autonomous company: five Naïve agents run it, and the founders only set limits and approve big decisions.
+> Built at the Naïve × YC Autonomous Companies Hackathon. Operis is itself an autonomous company: six Naïve agents (CEO, Ops, Verifier, Finance, Sales, Disputes) run it in the **Operis** Naïve org, and the founders only set limits and approve big decisions.
 
 ---
 
@@ -115,9 +128,15 @@ requested → held → outreach → accepted → proof_submitted → approved �
 ## Getting started
 
 ```bash
-npm i -g @usenaive-sdk/cli
-naive login
-naive whoami   # should show our org
+npm install                                   # repo root: npm workspaces (apps/*, services/outreach, services/money-verification)
+docker run -d --name operis-pg -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=operis -p 55433:5432 postgres:17
+cp apps/api/.env.example apps/api/.env.local  # fill in secrets (see apps/api/README.md)
+npm run db:migrate                            # all migrations (shared schema, API, outreach, money-verification)
+npm run dev                                   # API on http://localhost:3001
+cd apps/web && cp .env.example .env.local && npx next dev -p 3100   # website on http://localhost:3100 (proxies /api → :3001)
+npm run smoke                                 # 20 end-to-end checks against the API
 ```
 
-Full flow, ownership and build order: [docs/FLOW.md](docs/FLOW.md). Shared contracts: [contracts/](contracts/).
+Useful scripts: `npm run approvals` (founder approvals for Naïve agents), `npm run agents:setup` (apply `agents/agents.json` to Naïve), `npm run simulate -- <job_id>` (play the worker), `npm run customer:create`.
+
+Full flow, ownership and build order: [docs/FLOW.md](docs/FLOW.md). Shared contracts: [contracts/](contracts/). Production setup: [docs/GO_LIVE.md](docs/GO_LIVE.md).

@@ -18,7 +18,9 @@ Pages are 1:1 ports of the "Operis Homepage" design canvas (claude.ai artifact 2
 | `/j/[token]/proof` | Photos/video/files with GPS + timestamp | `POST /v1/worker/jobs/:token/proof` (JSON) |
 | `/j/[token]/payout` | Bank setup via Stripe Connect link | `POST /v1/worker/payout-setup` |
 | `/j/[token]/upload` | Route handler: Vercel Blob client-upload tokens (only for the assigned worker) | `GET /v1/worker/jobs/:token` (server side) |
-| `/dashboard` | Map, live job, agent feed, wake-ups, money (polls every 3 s) | `GET /v1/dashboard` |
+| `/dashboard` | Map, live job, agent feed, wake-ups, money (polls every 3 s; admin key from this browser) | `GET /v1/dashboard` |
+| `/developers` | **Agent companies**: self-serve API key, connect instructions (prompt / Claude Code / Cursor / Naïve / curl), copy-paste agent prompt, live key test | `POST /v1/customers`, `POST /mcp` (tools/list) |
+| `/backoffice` | **Founders**: live requests from every company's agent, company list, per-request pipeline, agent activity, proofs | `GET /v1/admin/requests` (admin key) |
 | `/verification`, `/pricing`, `/payouts`, `/help`, `/about`, `/contact`, `/terms`, `/privacy` | Content pages (Terms/Privacy are marked drafts) | none |
 
 **Worker accounts** are a proposal: the endpoints are specified in [docs/ACCOUNTS_API.md](docs/ACCOUNTS_API.md)
@@ -39,6 +41,13 @@ npm run mock-api -w @operis/web    # then open /j/demo, /j/taken (409), /j/nope 
                                    # codes and login links show on the page (mock only); Google, LinkedIn and
                                    # Stripe Identity are simulated at /api/mock/*
 ```
+
+## Production
+
+`https://operis.live` (Vercel project operis-web). Env: `API_URL=https://api.operis.live`, `NEXT_PUBLIC_MCP_URL=https://operis.live/mcp`,
+`BLOB_READ_WRITE_TOKEN` (Blob store `operis-proofs`). Until the accounts API exists, Accept works without a worker login
+(the job link is the credential); set `NEXT_PUBLIC_WORKER_LOGIN=required` to restore the login gate. The agent prompt
+shown on `/developers` lives in `src/lib/agentPrompt.ts` (tested blind by three agents).
 
 ## How it talks to the API
 
