@@ -65,4 +65,13 @@ export const SCHEMAS = {
     shape: { ...jobId, approved_by: z.string().max(100), approval_note: z.string().max(1000).optional() },
   },
   ledger: { description: "Money totals: revenue, payouts, fees, costs, jobs paid.", shape: { since: z.string().optional() } },
+  get_proof_review: {
+    description: "Latest automated/manual review of a job's proof (tier, checks, flags, decision). Pass job_id or proof_id.",
+    shape: { job_id: z.string().uuid().optional(), proof_id: z.string().uuid().optional() },
+  },
+  get_dispute: { description: "Evidence bundle for a Stripe chargeback: dispute, job, proof review, ledger lines.", shape: { dispute_id: z.string().min(1) } },
+  submit_dispute_evidence: {
+    description: "Draft (default) or submit chargeback evidence to Stripe. submit: true sends it and can't be undone.",
+    shape: { dispute_id: z.string().min(1), evidence: z.record(z.any()), submit: z.boolean().optional() },
+  },
 } as const;

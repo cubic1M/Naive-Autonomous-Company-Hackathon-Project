@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { optional } from "./env";
 
 const NAIVE = "https://api.vetta.sh/v1";
-export type AgentRole = "ceo" | "ops" | "verifier" | "finance" | "sales";
+export type AgentRole = "ceo" | "ops" | "verifier" | "finance" | "sales" | "disputes";
 
 const AGENT_ENV: Record<AgentRole, string> = {
   ceo: "NAIVE_AGENT_CEO",
@@ -12,6 +12,7 @@ const AGENT_ENV: Record<AgentRole, string> = {
   verifier: "NAIVE_AGENT_VERIFIER",
   finance: "NAIVE_AGENT_FINANCE",
   sales: "NAIVE_AGENT_SALES",
+  disputes: "NAIVE_AGENT_DISPUTES",
 };
 
 const MESSAGES: Partial<Record<JobState, (id: string) => string>> = {
