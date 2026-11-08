@@ -121,6 +121,16 @@ describe('tier 2 (over $150 or certification): identity and two photos', () => {
     expect(check(review, 'completeness')?.detail).toMatch(/need 2/);
   });
 
+  it('a video-only proof requirement: completeness passes without photos and the proof goes to a human', async () => {
+    const video = { url: 'https://blob.test/walkthrough.mp4', sha256: 'v'.repeat(64), mime: 'video/mp4' };
+    const { deps, vision } = setup({ job: { budget_cents: 3000, proof_schema: { photos: { min: 0, must_show: [], requested: false } } }, proof: { media: [video] } });
+    const review = await reviewProof(deps, PROOF_ID);
+    expect(check(review, 'completeness')).toMatchObject({ status: 'pass', detail: '0 image(s), required fields present' });
+    expect(check(review, 'video')?.status).toBe('needs_review');
+    expect(review.decision).toBe('escalated');
+    expect(vision.calls).toHaveLength(0);
+  });
+
   it('0.87 is under the tier-2 bar of 0.90', async () => {
     const { world, deps } = setup({ job: { budget_cents: 24000 }, proof: twoPhotos, confidence: 0.87 });
     await seedVerifiedIdentity(world);

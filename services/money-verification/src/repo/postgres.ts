@@ -72,7 +72,7 @@ function taskTypeOf(r: Row): string {
 }
 
 function proofSchemaOf(r: Row): ProofSchema {
-  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; geofence_m?: unknown; fields?: unknown }>(
+  const p = json<{ photos?: { min?: unknown; must_show?: unknown }; video?: unknown; files?: unknown; geofence_m?: unknown; fields?: unknown }>(
     r.proof_schema ?? r.proof_requirement,
     {},
   );
@@ -80,6 +80,8 @@ function proofSchemaOf(r: Row): ProofSchema {
     photos: {
       min: p.photos?.min == null ? 0 : num(p.photos.min),
       must_show: Array.isArray(p.photos?.must_show) ? p.photos.must_show.map(String) : [],
+      // video or files with no photos block: a non-photo proof (an empty requirement still means photos)
+      requested: p.photos != null || (p.video == null && p.files == null),
     },
   };
   if (p.geofence_m != null) schema.geofence_m = num(p.geofence_m);

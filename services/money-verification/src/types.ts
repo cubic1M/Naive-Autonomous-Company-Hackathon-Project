@@ -20,7 +20,11 @@ export type JobStatus =
 export type TaskType = 'notarization' | 'inspection' | (string & {});
 
 export interface ProofSchema {
-  photos: { min: number; must_show: string[] };
+  /**
+   * `requested` is false when the proof requirement asked for video or files and no photos (contracts/tools.ts makes
+   * `photos` optional); absent means photos were asked for. The tier's photo minimum applies only to photo proofs.
+   */
+  photos: { min: number; must_show: string[]; requested?: boolean };
   geofence_m?: number;
   fields?: { name: string; type: 'string' | 'number' | 'boolean' }[];
 }

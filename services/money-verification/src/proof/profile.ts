@@ -11,7 +11,8 @@
  *
  * `risk_class` (low | standard | high) overrides the budget tier; a certification still forces tier 2; the
  * customer's own proof requirement (photos.min, must_show, geofence_m, fields) always applies on top, the photo
- * minimum by max. `required_tier` is not read here: it is the minimum worker tier (eligibility.ts).
+ * minimum by max, and only for a photo proof (a video- or files-only requirement has no tier photo minimum).
+ * `required_tier` is not read here: it is the minimum worker tier (eligibility.ts).
  */
 import type { Job } from '../types.js';
 
@@ -98,8 +99,13 @@ export function verificationProfile(job: Job): VerificationProfile {
 
   const rules = TIER_RULES[tier];
   const customerMin = job.proof_schema.photos.min;
-  const minPhotos = Math.max(rules.minPhotos, customerMin);
-  if (customerMin > rules.minPhotos) notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
+  const photosRequested = job.proof_schema.photos.requested !== false;
+  const minPhotos = photosRequested ? Math.max(rules.minPhotos, customerMin) : customerMin;
+  if (!photosRequested) {
+    notes.push('the proof requirement asks for video or files, not photos: no tier photo minimum; such a proof goes to a human');
+  } else if (customerMin > rules.minPhotos) {
+    notes.push(`customer requires ${customerMin} photos (tier minimum ${rules.minPhotos})`);
+  }
 
   return { tier, ...rules, minPhotos, certificationRequired, notes };
 }

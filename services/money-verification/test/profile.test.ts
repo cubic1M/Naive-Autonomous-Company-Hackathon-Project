@@ -111,6 +111,16 @@ describe('verificationProfile: certification, risk class, floors, customer requi
     expect(verificationProfile(job({ budget_cents: 6000, proof_schema: { photos: { min: 0, must_show: [] } } })).minPhotos).toBe(1);
   });
 
+  it('a video- or files-only proof requirement gets no tier photo minimum, and the note says a human reviews it', () => {
+    const videoOnly = { photos: { min: 0, must_show: [], requested: false } };
+    for (const budget_cents of [3000, 6000, 30000]) {
+      const p = verificationProfile(job({ budget_cents, proof_schema: videoOnly }));
+      expect(p.minPhotos).toBe(0);
+      expect(p.notes.join(' ')).toMatch(/video or files, not photos: no tier photo minimum; such a proof goes to a human/);
+    }
+    expect(verificationProfile(job({ budget_cents: 30000, proof_schema: videoOnly })).tier).toBe(2);
+  });
+
   it('describeProfile reads as one line of evidence', () => {
     const text = describeProfile(verificationProfile(job({ budget_cents: 30000 })));
     expect(text).toMatch(/^tier 2/);
